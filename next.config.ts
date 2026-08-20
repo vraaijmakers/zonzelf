@@ -1,15 +1,9 @@
 import type { NextConfig } from "next";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
-// VERSION at the repo root is the single source of truth for the version number.
-// Read at build time so both server and client components can use it.
-const version = readFileSync(join(process.cwd(), "VERSION"), "utf8").trim();
-
+// Version is read directly off disk at request time (see src/lib/version.ts)
+// rather than injected here — next.config.ts's `env` key is build-time-only
+// bundle text-replacement and silently no-ops on dynamically-rendered routes.
 const nextConfig: NextConfig = {
-  env: {
-    NEXT_PUBLIC_APP_VERSION: version,
-  },
   // Self-hosted staging runs the build as a standalone Node server in
   // Docker (see Dockerfile) rather than on Vercel — this trims the output
   // to just the files that server needs.

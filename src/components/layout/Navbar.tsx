@@ -3,20 +3,40 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Sun, Menu, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
+import SignOutButton from '@/components/admin/SignOutButton'
 
 const NAV_LINKS = [
   { href: '/guides',      label: 'Guides' },
   { href: '/calculators', label: 'Calculators' },
   { href: '/resources',   label: 'Resources' },
+  { href: '/roadmap',     label: 'Roadmap' },
   { href: '/dashboard',   label: 'My Dashboard' },
 ]
+
+type NavbarUser = { email: string } | null
 
 export default function Navbar() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const [user, setUser] = useState<NavbarUser>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user ? { email: data.user.email ?? '' } : null)
+    })
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ? { email: session.user.email ?? '' } : null)
+    })
+
+    return () => subscription.subscription.unsubscribe()
+  }, [])
 
   return (
     <header className="border-b bg-white sticky top-0 z-50">
@@ -44,16 +64,25 @@ export default function Navbar() {
           ))}
         </nav>
 
-        <div className="hidden md:flex items-center gap-2">
-          <Link href="/auth/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-            Sign in
-          </Link>
-          <Link
-            href="/auth/signup"
-            className={cn(buttonVariants({ size: 'sm' }), 'bg-yellow-500 hover:bg-yellow-600 text-white')}
-          >
-            Get started
-          </Link>
+        <div className="hidden md:flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="text-sm text-gray-600 max-w-[12rem] truncate">{user.email}</span>
+              <SignOutButton className="text-sm text-gray-600 hover:text-gray-900 transition-colors" />
+            </>
+          ) : (
+            <>
+              <Link href="/auth/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+                Sign in
+              </Link>
+              <Link
+                href="/auth/signup"
+                className={cn(buttonVariants({ size: 'sm' }), 'bg-yellow-500 hover:bg-yellow-600 text-white')}
+              >
+                Get started
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile toggle */}
@@ -75,20 +104,27 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
-          <div className="flex gap-2 pt-2 border-t mt-1">
-            <Link
-              href="/auth/login"
-              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'flex-1 justify-center')}
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/auth/signup"
-              className={cn(buttonVariants({ size: 'sm' }), 'flex-1 justify-center bg-yellow-500 hover:bg-yellow-600 text-white')}
-            >
-              Get started
-            </Link>
-          </div>
+          {user ? (
+            <div className="flex items-center justify-between pt-2 border-t mt-1">
+              <span className="text-sm text-gray-600 truncate">{user.email}</span>
+              <SignOutButton className="text-sm text-gray-600 hover:text-gray-900 transition-colors" />
+            </div>
+          ) : (
+            <div className="flex gap-2 pt-2 border-t mt-1">
+              <Link
+                href="/auth/login"
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'flex-1 justify-center')}
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/auth/signup"
+                className={cn(buttonVariants({ size: 'sm' }), 'flex-1 justify-center bg-yellow-500 hover:bg-yellow-600 text-white')}
+              >
+                Get started
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </header>
