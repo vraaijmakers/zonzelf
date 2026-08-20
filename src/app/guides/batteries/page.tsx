@@ -69,7 +69,7 @@ export default function BatteriesGuidePage() {
         <h1 className="text-3xl font-bold mb-3">Battery Types for DIY Solar</h1>
         <p className="text-lg text-gray-600">
           Four battery chemistries dominate DIY solar: LiFePO4, AGM, Gel, and Flooded Lead-Acid.
-          They all store energy but behave very differently. Here's what actually matters when choosing.
+          They all store energy but behave very differently. Here&apos;s what actually matters when choosing.
         </p>
       </div>
 
@@ -151,7 +151,7 @@ export default function BatteriesGuidePage() {
         </div>
         <p className="text-gray-700 mb-4">
           LiFePO4 is the safest lithium chemistry — unlike laptop or EV batteries (NMC/NCA),
-          it doesn't catch fire or experience thermal runaway under normal use. It's been the
+          it doesn&apos;t catch fire or experience thermal runaway under normal use. It&apos;s been the
           standard for serious off-grid builds for the last few years, and prices have dropped significantly.
         </p>
         <p className="text-gray-700 mb-4">
@@ -194,9 +194,9 @@ export default function BatteriesGuidePage() {
         </div>
         <p className="text-gray-700 mb-4">
           AGM is a sealed lead-acid battery where the electrolyte is absorbed into fiberglass mats.
-          It doesn't spill, doesn't need water, and can be mounted in any orientation.
-          It's widely available, works with any charge controller, and requires no special settings beyond
-          selecting "AGM" on your charge controller.
+          It doesn&apos;t spill, doesn&apos;t need water, and can be mounted in any orientation.
+          It&apos;s widely available, works with any charge controller, and requires no special settings beyond
+          selecting &quot;AGM&quot; on your charge controller.
         </p>
         <p className="text-gray-700 mb-4">
           The biggest gotcha: <strong>you can only use 50% of the rated capacity</strong> before degradation
@@ -231,7 +231,7 @@ export default function BatteriesGuidePage() {
           <Badge variant="secondary">Niche use</Badge>
         </div>
         <p className="text-gray-700 mb-4">
-          Gel batteries suspend the electrolyte in silica gel. They're more tolerant of deep discharge
+          Gel batteries suspend the electrolyte in silica gel. They&apos;re more tolerant of deep discharge
           and partial state of charge than AGM, handle high temperatures slightly better, and have
           a longer cycle life. However, they have one critical limitation: they must be charged slowly.
           Charging too fast permanently damages the gel structure.
@@ -261,7 +261,7 @@ export default function BatteriesGuidePage() {
           <Badge variant="secondary">Large systems only</Badge>
         </div>
         <p className="text-gray-700 mb-4">
-          Flooded (or "wet cell") lead-acid is the oldest battery technology and still used in large
+          Flooded (or &quot;wet cell&quot;) lead-acid is the oldest battery technology and still used in large
           off-grid systems — think remote cabins, farms, telecom towers. The cells contain liquid
           electrolyte that you top up with distilled water every 1–3 months.
           They must be installed in a <strong>vented enclosure</strong> because charging produces hydrogen gas.
@@ -301,8 +301,8 @@ export default function BatteriesGuidePage() {
           degradation, and potentially fire.
         </p>
         <p className="text-gray-700">
-          The same applies to batteries of significantly different ages. If you're adding capacity,
-          buy a new matched bank and wire it separately — don't mix old and new.
+          The same applies to batteries of significantly different ages. If you&apos;re adding capacity,
+          buy a new matched bank and wire it separately — don&apos;t mix old and new.
         </p>
       </section>
 
