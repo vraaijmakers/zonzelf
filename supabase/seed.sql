@@ -23,8 +23,8 @@ values
    'planned', 0, true, 40),
 
   (0, 'infrastructure', 'Staging environment',
-   'Second Supabase project + Vercel preview environment for the staging branch.',
-   'in_development', 30, true, 50),
+   'Self-hosted Docker container behind nginx on the VPN-only staging box, auto-deployed from the staging branch. Shares the one Supabase project with local dev.',
+   'in_production', 100, true, 50),
 
   (1, 'monitoring', 'Local monitoring agent',
    'Brand-agnostic MODBUS/serial agent (Python, runs on a Pi/PC) posting to /api/ingest. Differentiator #2.',
