@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Sun } from 'lucide-react'
+import { clean } from '@/lib/version'
 
 export default function Footer() {
   return (
@@ -49,6 +50,8 @@ export default function Footer() {
       </div>
       <div className="border-t text-center text-xs text-gray-400 py-4">
         ZonZelf — Community-built, for the community
+        <span className="mx-2">·</span>
+        <span>v{clean()}</span>
       </div>
     </footer>
   )
