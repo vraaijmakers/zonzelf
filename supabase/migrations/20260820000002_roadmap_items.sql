@@ -80,3 +80,8 @@ create policy "roadmap_items: admins update"
 create policy "roadmap_items: admins delete"
   on public.roadmap_items for delete
   using (public.is_admin());
+
+-- Same reason as profiles.sql — RLS needs a table-level GRANT underneath it,
+-- and this project doesn't hand those out automatically for new tables.
+grant select on public.roadmap_items to anon, authenticated;
+grant insert, update, delete on public.roadmap_items to authenticated;
