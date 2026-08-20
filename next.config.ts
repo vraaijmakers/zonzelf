@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: version,
   },
+  // Self-hosted staging runs the build as a standalone Node server in
+  // Docker (see Dockerfile) rather than on Vercel — this trims the output
+  // to just the files that server needs.
+  output: "standalone",
 };
 
 export default nextConfig;
