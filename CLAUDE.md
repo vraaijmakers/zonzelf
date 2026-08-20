@@ -108,7 +108,6 @@ zonzelf-app/
 ├── CLAUDE.md               # this file
 ├── AGENTS.md               # Next.js 16 agent rules (auto-generated — commit changes with your work)
 ├── VERSION                 # single source of truth for the version number
-├── next.config.ts          # injects VERSION as NEXT_PUBLIC_APP_VERSION at build time
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx      # root layout — Navbar + Footer + fonts
@@ -249,12 +248,19 @@ once per release, in the `develop → staging` PR, committed as
 | New feature, backwards-compatible | MINOR |
 | Bug fix or small improvement | PATCH |
 
-`next.config.ts` reads `VERSION` at build time and injects it as `NEXT_PUBLIC_APP_VERSION`, so
-it works in both server and client components. `src/lib/version.ts` exposes it: `clean()`
-returns `0.2.0` for the public footer, `full()` appends the environment suffix (`-dev`, `-rc`)
-for admin screens, and `appEnv()` gives the resolved environment. Environment comes from
-`NEXT_PUBLIC_APP_ENV`, falling back to Vercel's `NEXT_PUBLIC_VERCEL_ENV` (`preview` → staging).
+`src/lib/version.ts` reads `VERSION` directly off disk at request time — **server-only**, only
+import it from Server Components, Server Actions, or Route Handlers. It exposes `clean()`
+(`0.2.0`, public footer), `full()` (`0.2.0-dev`/`-rc`, admin screens), and `appEnv()`.
+Environment comes from `APP_ENV`, falling back to Vercel's `VERCEL_ENV` (`preview` → staging).
 **Never let an env suffix reach a public page** — the footer uses `clean()`.
+
+Deliberately does **not** go through `next.config.ts`'s `env` key. That key is documented as
+build-time bundle text-replacement (Next's own docs mark it `version: legacy`) — it never sets
+a real `process.env` value at runtime. That's invisible on a statically-prerendered page (the
+literal is baked into the HTML at build time) but silently falls back to nothing on any
+dynamically-rendered route — which is exactly what `/roadmap` and `/admin` are. Caught by
+actually curling those routes, not by the build passing. **A green build does not prove a
+dynamic route works — request it.**
 
 ### Release flow
 
