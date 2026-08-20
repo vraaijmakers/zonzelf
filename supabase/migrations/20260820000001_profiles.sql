@@ -57,3 +57,10 @@ create policy "profiles: admins update roles"
   on public.profiles for update
   using (public.is_admin())
   with check (public.is_admin());
+
+-- RLS policies alone don't grant access — Postgres checks the table-level
+-- GRANT first. This project has "Automatically expose new tables" off (a
+-- deliberate lockdown), so every new table needs this written explicitly.
+-- Without it, requireAdmin()'s own-row lookup in src/lib/admin.ts returns
+-- permission-denied and silently redirects every admin away from /admin.
+grant select, update on public.profiles to authenticated;
