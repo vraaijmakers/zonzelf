@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -101,10 +101,15 @@ export default function LoadCalculatorPage() {
   ])
   const [efficiency, setEfficiency] = useState(0.8)
   const [scanningId, setScanningId] = useState<number | null>(null)
+  const [showProPrompt, setShowProPrompt] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scanTargetId = useRef<number | null>(null)
 
+  // Will be replaced with real session check once Supabase auth is wired up
+  const isPro = false
+
   const handleScanClick = (id: number) => {
+    if (!isPro) { setShowProPrompt(true); return }
     scanTargetId.current = id
     fileInputRef.current?.click()
   }
@@ -231,13 +236,19 @@ export default function LoadCalculatorPage() {
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleScanClick(a.id)}
-                                title="Scan appliance label"
-                                className="text-gray-300 hover:text-blue-400 transition-colors"
+                                title={isPro ? 'Scan appliance label' : 'Pro feature — scan label'}
+                                className={`transition-colors ${
+                                  isPro
+                                    ? 'text-gray-300 hover:text-blue-400'
+                                    : 'text-gray-200 hover:text-yellow-500'
+                                }`}
                                 disabled={scanningId === a.id}
                               >
                                 {scanningId === a.id
                                   ? <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                                  : <Camera className="w-4 h-4" />}
+                                  : isPro
+                                  ? <Camera className="w-4 h-4" />
+                                  : <Lock className="w-3.5 h-3.5" />}
                               </button>
                               <button
                                 onClick={() => remove(a.id)}
@@ -277,20 +288,65 @@ export default function LoadCalculatorPage() {
             onChange={handleScanFile}
           />
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button
               onClick={addRow}
               className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 transition-colors"
             >
               <Plus className="w-4 h-4" /> Add row
             </button>
-            <button
-              onClick={() => { addRow(); setTimeout(() => handleScanClick(nextId - 1), 50) }}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
-            >
-              <Camera className="w-4 h-4" /> Scan label
-            </button>
+
+            {isPro ? (
+              <button
+                onClick={() => { addRow(); setTimeout(() => handleScanClick(nextId - 1), 50) }}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                <Camera className="w-4 h-4" /> Scan label
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowProPrompt(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg border-yellow-300 text-yellow-700 hover:bg-yellow-50 transition-colors"
+              >
+                <Camera className="w-4 h-4" />
+                Scan label
+                <span className="text-xs bg-yellow-500 text-white px-1.5 py-0.5 rounded-full font-medium">Pro</span>
+              </button>
+            )}
           </div>
+
+          {/* Pro upsell modal */}
+          {showProPrompt && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowProPrompt(false)}>
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+                <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Camera className="w-6 h-6 text-yellow-600" />
+                </div>
+                <h3 className="text-lg font-bold text-center mb-2">Label Scan — Pro Feature</h3>
+                <p className="text-sm text-gray-600 text-center mb-4">
+                  Walk around your home, photograph each appliance nameplate, and let ZonZelf read the wattage automatically — no guessing.
+                </p>
+                <ul className="text-sm text-gray-600 space-y-1.5 mb-5">
+                  <li className="flex items-center gap-2"><span className="text-green-500">✓</span> Works on any appliance nameplate</li>
+                  <li className="flex items-center gap-2"><span className="text-green-500">✓</span> Reads BTU, SEER, amps×volts automatically</li>
+                  <li className="flex items-center gap-2"><span className="text-green-500">✓</span> Mobile camera or desktop upload</li>
+                  <li className="flex items-center gap-2"><span className="text-green-500">✓</span> Saves your load list to your project</li>
+                </ul>
+                <a
+                  href="/auth/signup"
+                  className="block w-full text-center bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2.5 rounded-lg transition-colors"
+                >
+                  Create a free account
+                </a>
+                <button
+                  onClick={() => setShowProPrompt(false)}
+                  className="block w-full text-center text-sm text-gray-400 hover:text-gray-600 mt-3"
+                >
+                  Continue without scanning
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Presets grouped */}
           <Card>
