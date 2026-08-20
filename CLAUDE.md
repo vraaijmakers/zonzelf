@@ -89,7 +89,17 @@ Phase 2+ distraction.
 - **Supabase** — Postgres, Auth, RLS, storage (`@supabase/supabase-js`, `@supabase/ssr`)
 - **Anthropic SDK** (`@anthropic-ai/sdk`) — currently powering `/api/scan-label`
 - **lucide-react** icons · `clsx` + `tailwind-merge` via `cn()` in `src/lib/utils.ts`
-- Hosting: **Vercel** (app/API) + **Supabase** (DB/auth). CI: GitHub Actions.
+- Hosting: **TBD** — not yet set up anywhere. A self-hosted Docker staging instance is
+  planned on the seecago.com VPN box (same pattern as the BOND platform: shared nginx
+  reverse proxy, container on the `webapps-docker` network, VPN-only — no public
+  reachability). No production host chosen yet. **Do not write "Vercel" here again without
+  it actually being configured** — it was previously listed as hosting with nothing behind
+  it (no `.vercel` dir, no deploy step in CI, no linked account) and misled a session.
+- CI: GitHub Actions (`ci.yml` — lint + build on every push/PR). Staging deploys
+  automatically on push to `staging` via `deploy-staging.yml`, run by a self-hosted runner
+  ("zonzelf-staging") on the seecago.com VPN box. See that workflow file's header comment
+  for one-time runner setup, and `docker-compose.staging.yml`'s header for the app
+  container / reverse-proxy details.
 
 > **Next.js 16 is not the Next.js in your training data.** `AGENTS.md` is imported above and
 > is non-negotiable: read `node_modules/next/dist/docs/` before writing routing, caching,
@@ -230,7 +240,7 @@ The repo has **one branch (`main`) and 7 commits, all pushed straight to `main`.
 |---|---|---|---|
 | `feature/*` | `development` | `0.x.x-dev` | One feature or fix, cut from `develop` |
 | `develop` | `development` | `0.x.x-dev` | Integration — all feature PRs land here |
-| `staging` | `staging` | `0.x.x-rc` | Vercel preview / pre-release QA |
+| `staging` | `staging` | `0.x.x-rc` | Self-hosted staging (VPN-only) / pre-release QA |
 | `main` | `production` | `0.x.x` | Production only — `zonzelf.com` |
 
 **Know which branch an environment deploys.** BOND lost days to work that looked "vanished"
