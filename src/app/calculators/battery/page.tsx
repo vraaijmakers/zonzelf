@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Battery, Info, ChevronDown, ChevronUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
 
 const BATTERY_TYPES = [
   {
@@ -45,13 +47,22 @@ const BATTERY_TYPES = [
 ]
 
 export default function BatterySizingPage() {
-  const [dailyKwh, setDailyKwh] = useState(3.5)
-  const [days, setDays] = useState(2)
-  const [voltage, setVoltage] = useState(24)
-  const [selectedType, setSelectedType] = useState('lifepo4')
+  const [savedKwh, setDailyKwh, kwhMeta] = usePersistentState('zonzelf:battery:dailyKwh', 3.5)
+  const [days, setDays] = usePersistentState('zonzelf:battery:days', 2)
+  const [voltage, setVoltage] = usePersistentState('zonzelf:battery:voltage', 24)
+  const [selectedType, setSelectedType] = usePersistentState('zonzelf:battery:type', 'lifepo4')
   const [showTypes, setShowTypes] = useState(false)
 
-  const battery = BATTERY_TYPES.find(b => b.id === selectedType)!
+  const loadSummary = useLoadSummary()
+  // The battery bank has to cover losses, so this step uses the adjusted figure.
+  const fromLoadCalc = loadSummary ? round2(loadSummary.adjustedKwh) : null
+
+  // Until this page has a saved value of its own, follow the load calculator.
+  // Once the user edits the field (or clicks the chip below) their value wins,
+  // and the chip is what offers them the newer load-calculator number.
+  const dailyKwh = !kwhMeta.restored && fromLoadCalc !== null ? fromLoadCalc : savedKwh
+
+  const battery = BATTERY_TYPES.find(b => b.id === selectedType) ?? BATTERY_TYPES[0]
 
   const usableKwh  = dailyKwh * days
   const totalKwh   = usableKwh / battery.dod
@@ -62,7 +73,7 @@ export default function BatterySizingPage() {
     <div className="max-w-4xl mx-auto px-4 py-12">
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-          <a href="/calculators" className="hover:underline">Calculators</a>
+          <Link href="/calculators" className="hover:underline">Calculators</Link>
           <span>›</span>
           <span>Battery Sizing</span>
         </div>
@@ -92,10 +103,18 @@ export default function BatterySizingPage() {
                     className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
                   <span className="text-sm text-gray-500">kWh/day</span>
-                  <a href="/calculators/load" className="text-xs text-yellow-700 hover:underline ml-auto">
+                  <Link href="/calculators/load" className="text-xs text-yellow-700 hover:underline ml-auto">
                     Calculate from appliances →
-                  </a>
+                  </Link>
                 </div>
+                {fromLoadCalc !== null && Math.abs(fromLoadCalc - dailyKwh) > 0.01 && (
+                  <button
+                    onClick={() => setDailyKwh(fromLoadCalc)}
+                    className="mt-2 text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1 hover:bg-yellow-100 transition-colors"
+                  >
+                    Use {fromLoadCalc.toFixed(2)} kWh from your load calculator →
+                  </button>
+                )}
               </div>
 
               <div>
@@ -241,7 +260,7 @@ export default function BatterySizingPage() {
                 <p>
                   <strong className="text-gray-700">Inverter cutoff:</strong> Set your low-voltage
                   disconnect to stop discharge at your DoD limit.
-                  For {voltage}V {battery.name.split(' ')[0]}, that's typically{' '}
+                  For {voltage}V {battery.name.split(' ')[0]}, that&apos;s typically{' '}
                   <strong className="text-gray-700">
                     {voltage === 12
                       ? battery.id === 'lifepo4' ? '12.0V' : '11.8V'
@@ -256,7 +275,7 @@ export default function BatterySizingPage() {
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Next step</p>
-            <a
+            <Link
               href="/calculators/panels"
               className="flex items-center justify-between p-3 rounded-lg border hover:border-yellow-400 hover:bg-yellow-50 transition-colors"
             >
@@ -265,7 +284,7 @@ export default function BatterySizingPage() {
                 <p className="text-xs text-gray-500">How many solar panels do you need?</p>
               </div>
               <Badge variant="secondary" className="text-xs">Step 3</Badge>
-            </a>
+            </Link>
           </div>
         </div>
       </div>

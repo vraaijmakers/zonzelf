@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
 
 interface Appliance {
   id: number
@@ -90,16 +92,23 @@ const PRESET_GROUPS = [
 // Flat list for type inference
 const PRESETS = PRESET_GROUPS.flatMap(g => g.items)
 
-let nextId = 1
+const DEFAULT_APPLIANCES: Appliance[] = [
+  { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4 },
+  { id: 2, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1 },
+  { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
+  { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1 },
+]
+
+// Ids only have to be unique within the current list, which may have been
+// restored from a previous session.
+const nextIdFor = (rows: Appliance[]) =>
+  rows.reduce((max, row) => Math.max(max, row.id), 0) + 1
 
 export default function LoadCalculatorPage() {
-  const [appliances, setAppliances] = useState<Appliance[]>([
-    { id: nextId++, name: 'LED light bulb', watts: 10, hours: 5, qty: 4 },
-    { id: nextId++, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1 },
-    { id: nextId++, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
-    { id: nextId++, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1 },
-  ])
-  const [efficiency, setEfficiency] = useState(0.8)
+  const [appliances, setAppliances, , clearAppliances] =
+    usePersistentState<Appliance[]>('zonzelf:load:appliances', DEFAULT_APPLIANCES)
+  const [efficiency, setEfficiency, , clearEfficiency] =
+    usePersistentState('zonzelf:load:efficiency', 0.8)
   const [scanningId, setScanningId] = useState<number | null>(null)
   const [showProPrompt, setShowProPrompt] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -137,11 +146,19 @@ export default function LoadCalculatorPage() {
     }
   }
 
-  const addRow = () =>
-    setAppliances(a => [...a, { id: nextId++, name: '', watts: 0, hours: 0, qty: 1 }])
+  const addRow = () => {
+    const id = nextIdFor(appliances)
+    setAppliances(a => [...a, { id, name: '', watts: 0, hours: 0, qty: 1 }])
+    return id
+  }
 
   const addPreset = (preset: typeof PRESETS[0]) =>
-    setAppliances(a => [...a, { id: nextId++, ...preset, qty: 1 }])
+    setAppliances(a => [...a, { id: nextIdFor(a), ...preset, qty: 1 }])
+
+  const resetAll = () => {
+    clearAppliances()
+    clearEfficiency()
+  }
 
   const update = (id: number, field: keyof Appliance, value: string | number) =>
     setAppliances(a => a.map(row => row.id === id ? { ...row, [field]: value } : row))
@@ -153,12 +170,21 @@ export default function LoadCalculatorPage() {
   const totalKwh = totalWh / 1000
   const adjustedKwh = totalKwh / efficiency
 
+  // Publish the result so the battery and panel calculators can pick it up.
+  useEffect(() => {
+    publishLoadSummary({
+      rawKwh: round2(totalKwh),
+      efficiency,
+      adjustedKwh: round2(adjustedKwh),
+    })
+  }, [totalKwh, efficiency, adjustedKwh])
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-          <a href="/calculators" className="hover:underline">Calculators</a>
+          <Link href="/calculators" className="hover:underline">Calculators</Link>
           <span>›</span>
           <span>Load Calculator</span>
         </div>
@@ -296,9 +322,17 @@ export default function LoadCalculatorPage() {
               <Plus className="w-4 h-4" /> Add row
             </button>
 
+            <button
+              onClick={resetAll}
+              title="Clear your list and start from the default appliances"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 border rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" /> Reset
+            </button>
+
             {isPro ? (
               <button
-                onClick={() => { addRow(); setTimeout(() => handleScanClick(nextId - 1), 50) }}
+                onClick={() => handleScanClick(addRow())}
                 className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
               >
                 <Camera className="w-4 h-4" /> Scan label
@@ -446,7 +480,7 @@ export default function LoadCalculatorPage() {
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Next step</p>
-            <a
+            <Link
               href="/calculators/battery"
               className="flex items-center justify-between p-3 rounded-lg border hover:border-yellow-400 hover:bg-yellow-50 transition-colors group"
             >
@@ -455,7 +489,7 @@ export default function LoadCalculatorPage() {
                 <p className="text-xs text-gray-500">How many kWh of storage do you need?</p>
               </div>
               <Badge variant="secondary" className="text-xs">Step 2</Badge>
-            </a>
+            </Link>
           </div>
         </div>
       </div>

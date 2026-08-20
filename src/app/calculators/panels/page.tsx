@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import Link from 'next/link'
 import { Sun, Info } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
 
 const PEAK_SUN_EXAMPLES = [
   { region: 'Netherlands / Belgium', hours: 2.5 },
@@ -21,10 +22,20 @@ const PEAK_SUN_EXAMPLES = [
 const PANEL_SIZES = [100, 200, 300, 400, 410, 450, 500, 600]
 
 export default function PanelSizingPage() {
-  const [dailyKwh, setDailyKwh]     = useState(3.5)
-  const [peakSun, setPeakSun]       = useState(3.0)
-  const [efficiency, setEfficiency] = useState(0.8)
-  const [panelWatt, setPanelWatt]   = useState(400)
+  const [savedKwh, setDailyKwh, kwhMeta] = usePersistentState('zonzelf:panels:dailyKwh', 3.5)
+  const [peakSun, setPeakSun]            = usePersistentState('zonzelf:panels:peakSun', 3.0)
+  const [savedEff, setEfficiency, effMeta] = usePersistentState('zonzelf:panels:efficiency', 0.8)
+  const [panelWatt, setPanelWatt]        = usePersistentState('zonzelf:panels:panelWatt', 400)
+
+  const loadSummary = useLoadSummary()
+  // This page applies system efficiency itself, so it takes the raw appliance
+  // total — feeding it the adjusted figure would count the losses twice.
+  const fromLoadCalc = loadSummary ? round2(loadSummary.rawKwh) : null
+
+  // Until this page has saved values of its own, follow the load calculator, so
+  // both steps agree. Editing a field here takes over from then on.
+  const dailyKwh = !kwhMeta.restored && fromLoadCalc !== null ? fromLoadCalc : savedKwh
+  const efficiency = !effMeta.restored && loadSummary ? loadSummary.efficiency : savedEff
 
   const totalWattsNeeded = (dailyKwh * 1000) / (peakSun * efficiency)
   const panelsNeeded     = Math.ceil(totalWattsNeeded / panelWatt)
@@ -34,7 +45,7 @@ export default function PanelSizingPage() {
     <div className="max-w-4xl mx-auto px-4 py-12">
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-          <a href="/calculators" className="hover:underline">Calculators</a>
+          <Link href="/calculators" className="hover:underline">Calculators</Link>
           <span>›</span>
           <span>Panel Sizing</span>
         </div>
@@ -62,10 +73,18 @@ export default function PanelSizingPage() {
                     className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
                   <span className="text-sm text-gray-500">kWh/day</span>
-                  <a href="/calculators/load" className="text-xs text-yellow-700 hover:underline ml-auto">
+                  <Link href="/calculators/load" className="text-xs text-yellow-700 hover:underline ml-auto">
                     Calculate from appliances →
-                  </a>
+                  </Link>
                 </div>
+                {fromLoadCalc !== null && Math.abs(fromLoadCalc - dailyKwh) > 0.01 && (
+                  <button
+                    onClick={() => setDailyKwh(fromLoadCalc)}
+                    className="mt-2 text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1 hover:bg-yellow-100 transition-colors"
+                  >
+                    Use {fromLoadCalc.toFixed(2)} kWh from your load calculator →
+                  </button>
+                )}
               </div>
 
               <div>
@@ -209,7 +228,7 @@ export default function PanelSizingPage() {
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Also useful</p>
-            <a
+            <Link
               href="/calculators/awg"
               className="flex items-center justify-between p-3 rounded-lg border hover:border-yellow-400 hover:bg-yellow-50 transition-colors"
             >
@@ -218,7 +237,7 @@ export default function PanelSizingPage() {
                 <p className="text-xs text-gray-500">Size your cables correctly</p>
               </div>
               <Badge variant="secondary" className="text-xs">Step 4</Badge>
-            </a>
+            </Link>
           </div>
         </div>
       </div>

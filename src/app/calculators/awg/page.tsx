@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import Link from 'next/link'
+import { usePersistentState } from '@/lib/calc-storage'
 import { Cable, Info, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -33,11 +34,11 @@ function awgLabel(awg: number) {
 }
 
 export default function AwgCalculatorPage() {
-  const [amps, setAmps]         = useState(30)
-  const [lengthFt, setLengthFt] = useState(10)
-  const [useMetric, setUseMetric] = useState(false)
-  const [voltage, setVoltage]   = useState(24)
-  const [maxDrop, setMaxDrop]   = useState(3)  // % voltage drop
+  const [amps, setAmps]           = usePersistentState('zonzelf:awg:amps', 30)
+  const [lengthFt, setLengthFt]   = usePersistentState('zonzelf:awg:lengthFt', 10)
+  const [useMetric, setUseMetric] = usePersistentState('zonzelf:awg:useMetric', false)
+  const [voltage, setVoltage]     = usePersistentState('zonzelf:awg:voltage', 24)
+  const [maxDrop, setMaxDrop]     = usePersistentState('zonzelf:awg:maxDrop', 3)  // % voltage drop
 
   const lengthDisplay = useMetric ? lengthFt * 0.3048 : lengthFt
   const lengthInFt    = useMetric ? (lengthDisplay as number) / 0.3048 : lengthFt
@@ -63,7 +64,7 @@ export default function AwgCalculatorPage() {
     <div className="max-w-4xl mx-auto px-4 py-12">
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-          <a href="/calculators" className="hover:underline">Calculators</a>
+          <Link href="/calculators" className="hover:underline">Calculators</Link>
           <span>›</span>
           <span>AWG Calculator</span>
         </div>
