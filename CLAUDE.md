@@ -95,7 +95,11 @@ Phase 2+ distraction.
   reachability). No production host chosen yet. **Do not write "Vercel" here again without
   it actually being configured** — it was previously listed as hosting with nothing behind
   it (no `.vercel` dir, no deploy step in CI, no linked account) and misled a session.
-- CI: GitHub Actions (`ci.yml` — lint + build on every push/PR; no deploy step yet).
+- CI: GitHub Actions (`ci.yml` — lint + build on every push/PR). Staging deploys
+  automatically on push to `staging` via `deploy-staging.yml`, run by a self-hosted runner
+  ("zonzelf-staging") on the seecago.com VPN box. See that workflow file's header comment
+  for one-time runner setup, and `docker-compose.staging.yml`'s header for the app
+  container / reverse-proxy details.
 
 > **Next.js 16 is not the Next.js in your training data.** `AGENTS.md` is imported above and
 > is non-negotiable: read `node_modules/next/dist/docs/` before writing routing, caching,
