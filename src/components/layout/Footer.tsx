@@ -5,7 +5,7 @@ import { clean } from '@/lib/version'
 export default function Footer() {
   return (
     <footer className="border-t bg-gray-50 mt-auto">
-      <div className="max-w-6xl mx-auto px-4 py-10 grid grid-cols-2 md:grid-cols-4 gap-8">
+      <div className="max-w-6xl mx-auto px-4 py-10 grid grid-cols-2 md:grid-cols-5 gap-8">
         <div className="col-span-2 md:col-span-1">
           <div className="flex items-center gap-2 font-bold text-yellow-600 mb-2">
             <Sun className="w-5 h-5" />
@@ -45,6 +45,15 @@ export default function Footer() {
             <li><Link href="/auth/login" className="hover:underline">Sign in</Link></li>
             <li><Link href="/dashboard" className="hover:underline">My Projects</Link></li>
             <li><Link href="/dashboard/monitoring" className="hover:underline">Monitoring</Link></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 className="font-semibold text-sm mb-3">Legal</h4>
+          <ul className="space-y-2 text-sm text-gray-600">
+            <li><Link href="/disclaimer" className="hover:underline">Disclaimer</Link></li>
+            <li><Link href="/terms" className="hover:underline">Terms of Service</Link></li>
+            <li><Link href="/privacy" className="hover:underline">Privacy Policy</Link></li>
           </ul>
         </div>
       </div>

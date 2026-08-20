@@ -6,6 +6,7 @@ import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw } from 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
+import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 
 interface Appliance {
   id: number
@@ -194,6 +195,8 @@ export default function LoadCalculatorPage() {
           for sizing your battery bank and solar panels.
         </p>
       </div>
+
+      <CalculatorDisclaimer />
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Main table */}
