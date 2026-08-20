@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Trash2, Zap, Info, Wind } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -38,6 +38,9 @@ const PRESET_GROUPS = [
       { name: 'Central AC (2 ton)',         watts: 2500, hours: 8 },
       { name: 'Central AC (3 ton)',         watts: 3500, hours: 8 },
       { name: 'Central AC (4 ton)',         watts: 4700, hours: 8 },
+      { name: 'Central AC (5 ton)',         watts: 6000, hours: 8 },
+      { name: 'Central AC (6 ton)',         watts: 7200, hours: 8 },
+      { name: 'Central AC (7.5 ton)',       watts: 9000, hours: 8 },
     ],
   },
   {
@@ -97,6 +100,37 @@ export default function LoadCalculatorPage() {
     { id: nextId++, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1 },
   ])
   const [efficiency, setEfficiency] = useState(0.8)
+  const [scanningId, setScanningId] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const scanTargetId = useRef<number | null>(null)
+
+  const handleScanClick = (id: number) => {
+    scanTargetId.current = id
+    fileInputRef.current?.click()
+  }
+
+  const handleScanFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    const id = scanTargetId.current
+    if (!file || !id) return
+    e.target.value = ''
+
+    setScanningId(id)
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      const res = await fetch('/api/scan-label', { method: 'POST', body: formData })
+      if (!res.ok) throw new Error('scan failed')
+      const data = await res.json()
+      if (data.name)  update(id, 'name',  data.name)
+      if (data.watts) update(id, 'watts', data.watts)
+      if (data.hours) update(id, 'hours', data.hours)
+    } catch {
+      alert('Could not read label. Try a clearer photo of the nameplate.')
+    } finally {
+      setScanningId(null)
+    }
+  }
 
   const addRow = () =>
     setAppliances(a => [...a, { id: nextId++, name: '', watts: 0, hours: 0, qty: 1 }])
@@ -194,12 +228,24 @@ export default function LoadCalculatorPage() {
                               : `${Math.round(wh)} Wh`}
                           </td>
                           <td className="px-2 py-2">
-                            <button
-                              onClick={() => remove(a.id)}
-                              className="text-gray-300 hover:text-red-400 transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleScanClick(a.id)}
+                                title="Scan appliance label"
+                                className="text-gray-300 hover:text-blue-400 transition-colors"
+                                disabled={scanningId === a.id}
+                              >
+                                {scanningId === a.id
+                                  ? <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                                  : <Camera className="w-4 h-4" />}
+                              </button>
+                              <button
+                                onClick={() => remove(a.id)}
+                                className="text-gray-300 hover:text-red-400 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -221,12 +267,28 @@ export default function LoadCalculatorPage() {
             </CardContent>
           </Card>
 
+          {/* Hidden file input for label scanning */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleScanFile}
+          />
+
           <div className="flex gap-2">
             <button
               onClick={addRow}
               className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 transition-colors"
             >
               <Plus className="w-4 h-4" /> Add row
+            </button>
+            <button
+              onClick={() => { addRow(); setTimeout(() => handleScanClick(nextId - 1), 50) }}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+            >
+              <Camera className="w-4 h-4" /> Scan label
             </button>
           </div>
 
