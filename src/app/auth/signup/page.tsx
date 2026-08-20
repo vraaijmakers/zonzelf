@@ -1,8 +1,18 @@
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import LoginForm from '@/components/auth/LoginForm'
 
 export default async function SignupPage(props: PageProps<'/auth/signup'>) {
   const params = await props.searchParams
   const next = typeof params.next === 'string' ? params.next : '/'
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (user) {
+    redirect(next)
+  }
 
   return (
     <div className="max-w-sm mx-auto px-4 py-20">
