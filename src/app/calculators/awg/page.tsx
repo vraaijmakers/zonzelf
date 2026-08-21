@@ -83,9 +83,10 @@ export default function AwgCalculatorPage() {
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
-                <label className="block text-sm font-medium mb-1">Current (amps)</label>
+                <label htmlFor="awg-amps" className="block text-sm font-medium mb-1">Current (amps)</label>
                 <div className="flex items-center gap-3">
                   <input
+                    id="awg-amps"
                     type="number" value={amps}
                     onChange={e => setAmps(parseFloat(e.target.value) || 0)}
                     min="1" max="400"
@@ -99,11 +100,12 @@ export default function AwgCalculatorPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="awg-length" className="block text-sm font-medium mb-1">
                   One-way cable length
                 </label>
                 <div className="flex items-center gap-3">
                   <input
+                    id="awg-length"
                     type="number"
                     value={useMetric ? +(lengthFt * 0.3048).toFixed(1) : lengthFt}
                     onChange={e => {
@@ -115,6 +117,7 @@ export default function AwgCalculatorPage() {
                   />
                   <button
                     onClick={() => setUseMetric(!useMetric)}
+                    aria-label={`Switch to ${useMetric ? 'feet' : 'meters'}`}
                     className="text-sm px-3 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
                   >
                     {useMetric ? 'meters' : 'feet'} ↕
@@ -125,11 +128,12 @@ export default function AwgCalculatorPage() {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">System voltage</label>
+              <div role="group" aria-labelledby="awg-voltage-label">
+                <span id="awg-voltage-label" className="block text-sm font-medium mb-1">System voltage</span>
                 <div className="flex gap-2">
                   {[12, 24, 48, 120, 240].map(v => (
                     <button key={v} onClick={() => setVoltage(v)}
+                      aria-pressed={voltage === v}
                       className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                         voltage === v ? 'bg-yellow-500 text-white border-yellow-500' : 'border-gray-200 hover:border-yellow-300'
                       }`}
@@ -141,10 +145,11 @@ export default function AwgCalculatorPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="awg-maxdrop" className="block text-sm font-medium mb-1">
                   Max allowed voltage drop: <span className="text-yellow-700">{maxDrop}%</span>
                 </label>
                 <input
+                  id="awg-maxdrop"
                   type="range" min="1" max="5" step="0.5"
                   value={maxDrop}
                   onChange={e => setMaxDrop(parseFloat(e.target.value))}

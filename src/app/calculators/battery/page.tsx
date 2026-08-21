@@ -94,11 +94,12 @@ export default function BatterySizingPage() {
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="battery-daily-kwh" className="block text-sm font-medium mb-1">
                   Daily energy consumption (kWh)
                 </label>
                 <div className="flex items-center gap-3">
                   <input
+                    id="battery-daily-kwh"
                     type="number"
                     value={dailyKwh}
                     onChange={e => setDailyKwh(parseFloat(e.target.value) || 0)}
@@ -120,18 +121,19 @@ export default function BatterySizingPage() {
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">
+              <div role="group" aria-labelledby="battery-days-label">
+                <span id="battery-days-label" className="block text-sm font-medium mb-1">
                   Days of autonomy
                   <span className="ml-1 font-normal text-gray-400 text-xs">
                     (days to run without sun)
                   </span>
-                </label>
+                </span>
                 <div className="flex gap-2">
                   {[1, 2, 3, 5, 7].map(d => (
                     <button
                       key={d}
                       onClick={() => setDays(d)}
+                      aria-pressed={days === d}
                       className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                         days === d
                           ? 'bg-yellow-500 text-white border-yellow-500'
@@ -141,7 +143,9 @@ export default function BatterySizingPage() {
                       {d} {d === 1 ? 'day' : 'days'}
                     </button>
                   ))}
+                  <label className="sr-only" htmlFor="battery-days-custom">Custom number of days</label>
                   <input
+                    id="battery-days-custom"
                     type="number"
                     value={days}
                     onChange={e => setDays(parseInt(e.target.value) || 1)}
@@ -151,13 +155,14 @@ export default function BatterySizingPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">System voltage</label>
+              <div role="group" aria-labelledby="battery-voltage-label">
+                <span id="battery-voltage-label" className="block text-sm font-medium mb-1">System voltage</span>
                 <div className="flex gap-2">
                   {[12, 24, 48].map(v => (
                     <button
                       key={v}
                       onClick={() => setVoltage(v)}
+                      aria-pressed={voltage === v}
                       className={`px-4 py-1.5 rounded-lg text-sm border transition-colors ${
                         voltage === v
                           ? 'bg-yellow-500 text-white border-yellow-500'
@@ -177,7 +182,19 @@ export default function BatterySizingPage() {
 
           {/* Battery type selector */}
           <Card>
-            <CardHeader className="pb-2 cursor-pointer" onClick={() => setShowTypes(!showTypes)}>
+            <CardHeader
+              className="pb-2 cursor-pointer"
+              onClick={() => setShowTypes(!showTypes)}
+              role="button"
+              tabIndex={0}
+              aria-expanded={showTypes}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setShowTypes(!showTypes)
+                }
+              }}
+            >
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Battery className="w-4 h-4 text-yellow-600" />

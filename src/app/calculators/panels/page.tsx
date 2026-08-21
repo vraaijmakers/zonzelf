@@ -64,11 +64,12 @@ export default function PanelSizingPage() {
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="panels-daily-kwh" className="block text-sm font-medium mb-1">
                   Daily energy need (kWh)
                 </label>
                 <div className="flex items-center gap-3">
                   <input
+                    id="panels-daily-kwh"
                     type="number"
                     value={dailyKwh}
                     onChange={e => setDailyKwh(parseFloat(e.target.value) || 0)}
@@ -91,12 +92,13 @@ export default function PanelSizingPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="panels-peak-sun" className="block text-sm font-medium mb-1">
                   Peak sun hours
                   <span className="ml-1 font-normal text-gray-400 text-xs">(hours of equivalent full sun per day)</span>
                 </label>
                 <div className="flex items-center gap-3 mb-3">
                   <input
+                    id="panels-peak-sun"
                     type="number"
                     value={peakSun}
                     onChange={e => setPeakSun(parseFloat(e.target.value) || 0)}
@@ -127,11 +129,12 @@ export default function PanelSizingPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="panels-efficiency" className="block text-sm font-medium mb-1">
                   System efficiency
                   <span className="ml-1 font-normal text-gray-400 text-xs">{Math.round(efficiency * 100)}%</span>
                 </label>
                 <input
+                  id="panels-efficiency"
                   type="range" min="0.6" max="0.95" step="0.05"
                   value={efficiency}
                   onChange={e => setEfficiency(parseFloat(e.target.value))}
@@ -142,13 +145,14 @@ export default function PanelSizingPage() {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2">Panel wattage</label>
+              <div role="group" aria-labelledby="panels-wattage-label">
+                <span id="panels-wattage-label" className="block text-sm font-medium mb-2">Panel wattage</span>
                 <div className="flex flex-wrap gap-2">
                   {PANEL_SIZES.map(w => (
                     <button
                       key={w}
                       onClick={() => setPanelWatt(w)}
+                      aria-pressed={panelWatt === w}
                       className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                         panelWatt === w
                           ? 'bg-yellow-500 text-white border-yellow-500'
@@ -158,7 +162,9 @@ export default function PanelSizingPage() {
                       {w}W
                     </button>
                   ))}
+                  <label className="sr-only" htmlFor="panels-wattage-custom">Custom panel wattage</label>
                   <input
+                    id="panels-wattage-custom"
                     type="number"
                     value={panelWatt}
                     onChange={e => setPanelWatt(parseInt(e.target.value) || 100)}
