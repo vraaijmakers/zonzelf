@@ -80,14 +80,34 @@ values
    'Manual screen reader pass (VoiceOver/NVDA) across every page, a systematic color-contrast check beyond the pages already spot-checked, and testing with real assistive-technology users.',
    'planned', 0, true, 64),
 
+  (1, 'onboarding', 'Guides: expertise-level profile field + filtering',
+   'Add a skill_level column to profiles (beginner/intermediate/advanced), a place in account settings to set it, and use it to filter or reorder the /guides index — the "beginner" tags already exist on every guide card, this just closes the loop so a returning user sees their level first. Needs its own migration + RLS policy, same pattern as the existing role column.',
+   'planned', 0, true, 63),
+
+  (1, 'onboarding', 'Ask installation environment up front (cabin/house/boat/camper/unheated shed)',
+   'A single early question — where is this system going? — unlocks environment-specific risk warnings we currently bury in guide prose and hope people read: cold-charge damage on LiFePO4 in an unheated shed, corrosion/vibration concerns on a boat, weight limits on a camper. Surface the relevant warnings inline wherever the answer is known, instead of listing every risk on every guide regardless of relevance.',
+   'planned', 0, true, 91),
+
   -- Phase 2 — account & ops foundation
   (2, 'infrastructure', 'User dashboard shell',
    '/dashboard ("My Projects") does not exist yet. Needed before Live Monitoring can be un-disabled on the homepage.',
    'planned', 0, true, 72),
 
-  (2, 'admin', 'Admin portal: scrapers, SEO, memberships, payments',
-   'The remaining /admin sidebar sections beyond the roadmap board — currently "Soon" stubs in src/app/admin/layout.tsx.',
+  (2, 'admin', 'Admin portal: SEO, memberships, payments',
+   'The remaining /admin sidebar sections beyond the roadmap board and battery review — currently "Soon" stubs in src/app/admin/layout.tsx.',
    'planned', 0, false, 74),
+
+  (2, 'admin', 'Admin: battery model review (approve/reject scraped rows)',
+   'src/app/admin/batteries — lists battery_models rows pending review with automated sanity checks (capacity_kwh vs voltage x Ah, price/kWh and DoD range checks for the stated chemistry, multi-unit bundle detection from the model name, source-domain plausibility, near-duplicate grouping) shown as pass/warn/fail per row, plus approve/reject/unpublish actions. The checks catch scraper mistakes, not physics correctness — a human still opens source_url and spot-checks before approving. Same logic is meant to seed "Battery scraper: agent-assisted review" later.',
+   'in_test', 90, false, 75),
+
+  (2, 'calculators', 'Battery calculator: flag when the panel array can''t recharge the bank in the available sun',
+   'The battery and panel calculators size storage (kWh) and generation (kWh/day) independently, but never check whether the charge current the array can actually deliver is enough to refill the battery bank within the site''s peak sun hours. A user can size a "correct" battery bank and a "correct" array and still end up under-charging every day. Add a check on the battery calculator (or a shared summary) comparing array output over peak sun hours against the daily kWh drawn from the battery, and warn when the recharge doesn''t close the loop.',
+   'planned', 0, true, 90),
+
+  (2, 'calculators', 'battery_models: track charge-temperature range and self-heating so vendor listings can flag cold-climate risk',
+   'The battery calculator lists real vendor models (brand/model/capacity/price) but nothing about charge-temperature range or self-heating. Add those columns, have the scraper capture them where the source datasheet states it, and show an explicit "cold-charge protection: confirmed / not stated" badge per model instead of leaving users to go find the datasheet themselves. Sequence after the in-flight Epoch/SOK/Enjoybot scraper branch merges, not concurrently with it.',
+   'planned', 0, true, 92),
 
   (2, 'calculators', 'Battery spec data pipeline (scraper)',
    'battery_models table + scripts/scrape-*.ts. Collects real battery model specs (brand, capacity, voltage, DoD) from manufacturer sites so the battery calculator can eventually recommend "4x EG4 LL-S 100Ah" instead of just a kWh number. Rows land unpublished; an admin review step (part of the admin scrapers item) gates anything reaching a visitor. Started with EG4 only — robots.txt ruled out Renogy (explicitly disallows AI crawlers); SOK and Battle Born are next.',
