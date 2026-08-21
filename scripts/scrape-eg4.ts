@@ -12,41 +12,11 @@
 // crawl-delay — this script sleeps 10s between every request to honor that.
 
 import * as cheerio from 'cheerio'
-import { createClient } from '@supabase/supabase-js'
+import { type ParsedBattery, fetchHtml, sleep, getServiceRoleClient, upsertBatteries } from './lib/scrape-common'
 
 const SITE = 'https://eg4electronics.com'
 const CATEGORY_URL = `${SITE}/categories/batteries`
 const CRAWL_DELAY_MS = 10_000
-const USER_AGENT = 'ZonZelfBot/0.1 (+https://zonzelf.com; battery spec research)'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (.env.local)')
-}
-const supabase = createClient(supabaseUrl, serviceRoleKey)
-
-type ParsedBattery = {
-  brand: string
-  model: string
-  sku: string | null
-  chemistry: 'lifepo4'
-  voltage: number
-  capacity_ah: number
-  capacity_kwh: number
-  dod_rated: number | null
-  source_url: string
-}
-
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
-  if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`)
-  return res.text()
-}
 
 async function discoverProductUrls(): Promise<string[]> {
   const html = await fetchHtml(CATEGORY_URL)
@@ -65,7 +35,7 @@ async function discoverProductUrls(): Promise<string[]> {
   return [...urls]
 }
 
-function parseProduct(html: string, url: string): ParsedBattery | null {
+export function parseProduct(html: string, url: string): ParsedBattery | null {
   const $ = cheerio.load(html)
 
   const title = $('h1').first().text().trim()
@@ -119,6 +89,7 @@ function parseProduct(html: string, url: string): ParsedBattery | null {
     capacity_ah,
     capacity_kwh: Math.round((voltage * capacity_ah / 1000) * 100) / 100,
     dod_rated,
+    price_usd: null,
     source_url: url,
   }
 }
@@ -142,22 +113,16 @@ async function main() {
     if (i < productUrls.length - 1) await sleep(CRAWL_DELAY_MS)
   }
 
-  console.log(`\nParsed ${parsed.length}/${productUrls.length} products. Upserting as unpublished rows...`)
-  for (const battery of parsed) {
-    const { error } = await supabase
-      .from('battery_models')
-      .upsert({ ...battery, scraped_at: new Date().toISOString() }, { onConflict: 'source_url' })
-    if (error) {
-      console.error(`  insert failed for ${battery.source_url}: ${error.message}`)
-    } else {
-      console.log(`  ✓ ${battery.brand} ${battery.model} (${battery.voltage}V ${battery.capacity_ah}Ah)`)
-    }
-  }
-
-  console.log('\nDone. Rows are unpublished (is_published = false) pending admin review.')
+  console.log(`\nParsed ${parsed.length}/${productUrls.length} products.`)
+  const supabase = getServiceRoleClient()
+  await upsertBatteries(supabase, parsed)
 }
 
-main().catch(err => {
-  console.error(err)
-  process.exit(1)
-})
+// Only run when executed directly — importing this file for parseProduct
+// (e.g. from a test) must not trigger a live scrape as a side effect.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(err => {
+    console.error(err)
+    process.exit(1)
+  })
+}
