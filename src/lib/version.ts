@@ -14,7 +14,7 @@ import { join } from 'node:path'
  * a real process.env value. That's invisible on statically-prerendered
  * pages (the replaced literal is baked into the HTML) but silently falls
  * back to nothing on any dynamically-rendered route, which is exactly what
- * /roadmap and /admin are. Reading the file directly here works identically
+ * /admin/roadmap and /admin are. Reading the file directly here works identically
  * in both cases.
  *
  * Environments (APP_ENV, falling back to Vercel's VERCEL_ENV):
