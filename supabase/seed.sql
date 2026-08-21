@@ -90,7 +90,7 @@ values
 
   -- Phase 2 — account & ops foundation
   (2, 'infrastructure', 'User dashboard shell',
-   '/dashboard ("My Projects") does not exist yet. Needed before Live Monitoring can be un-disabled on the homepage.',
+   '/dashboard ("My Projects") does not exist yet. Needed before Live Monitoring can be un-disabled on the homepage. Also the fix for calculator inputs only being saved to the browser''s localStorage today — not tied to the logged-in account at all, so two accounts in the same browser see the same data, and the same account in two different browsers sees none of it.',
    'planned', 0, true, 72),
 
   (2, 'admin', 'Admin portal: SEO, memberships, payments',
