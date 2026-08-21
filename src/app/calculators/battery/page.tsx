@@ -5,9 +5,17 @@ import Link from 'next/link'
 import { Battery, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
+import { usePersistentState, useLoadSummary, usePanelSummary, round2 } from '@/lib/calc-storage'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
+import ChargeLoopNotice from '@/components/ChargeLoopNotice'
 import { createClient } from '@/lib/supabase/client'
+import {
+  BATTERY_TYPES,
+  lvdGuidance,
+  sizeBatteryBank,
+  voltageFamily,
+  type BatteryChemistryId,
+} from '@/lib/calculators/battery'
 
 type BatteryModelMatch = {
   id: number
@@ -20,63 +28,19 @@ type BatteryModelMatch = {
   source_url: string
 }
 
-// Real battery packs are 12.8V/25.6V/51.2V nominal, not the rounded 12/24/48
-// the system-voltage picker above uses — bucket by family instead of an
-// exact match, or every published row would silently never match.
-function voltageFamily(v: number): 12 | 24 | 48 {
-  if (v < 18) return 12
-  if (v < 36) return 24
-  return 48
-}
 
-const BATTERY_TYPES = [
-  {
-    id: 'lifepo4',
-    name: 'LiFePO4 (Lithium)',
-    dod: 0.8,
-    efficiency: 0.97,
-    cycles: '3,000–6,000',
-    color: 'green',
-    notes: 'Best choice for most off-grid systems. High DoD, long life, safe chemistry. Higher upfront cost.',
-  },
-  {
-    id: 'agm',
-    name: 'AGM (Sealed Lead-Acid)',
-    dod: 0.5,
-    efficiency: 0.85,
-    cycles: '400–800',
-    color: 'blue',
-    notes: 'Reliable and widely available. Lower DoD means you need more capacity for the same usable energy.',
-  },
-  {
-    id: 'gel',
-    name: 'Gel (Sealed Lead-Acid)',
-    dod: 0.5,
-    efficiency: 0.85,
-    cycles: '500–1,000',
-    color: 'blue',
-    notes: 'Similar to AGM but more tolerant of partial charge. Slightly better cycle life. Slower charge rate.',
-  },
-  {
-    id: 'flooded',
-    name: 'Flooded Lead-Acid (FLA)',
-    dod: 0.5,
-    efficiency: 0.80,
-    cycles: '500–1,200',
-    color: 'yellow',
-    notes: 'Cheapest upfront. Requires regular maintenance (water topping). Must be vented. Often used in large off-grid systems.',
-  },
-]
 
 export default function BatterySizingPage() {
   const [savedKwh, setDailyKwh, kwhMeta] = usePersistentState('zonzelf:battery:dailyKwh', 3.5)
   const [days, setDays] = usePersistentState('zonzelf:battery:days', 2)
   const [voltage, setVoltage] = usePersistentState('zonzelf:battery:voltage', 24)
-  const [selectedType, setSelectedType] = usePersistentState('zonzelf:battery:type', 'lifepo4')
+  const [selectedType, setSelectedType] = usePersistentState<BatteryChemistryId>('zonzelf:battery:type', 'lifepo4')
   const [showTypes, setShowTypes] = useState(false)
 
   const loadSummary = useLoadSummary()
+  const panelSummary = usePanelSummary()
   // The battery bank has to cover losses, so this step uses the adjusted figure.
+  // System efficiency is applied once on the load calculator — not again here.
   const fromLoadCalc = loadSummary ? round2(loadSummary.adjustedKwh) : null
 
   // Until this page has a saved value of its own, follow the load calculator.
@@ -85,11 +49,14 @@ export default function BatterySizingPage() {
   const dailyKwh = !kwhMeta.restored && fromLoadCalc !== null ? fromLoadCalc : savedKwh
 
   const battery = BATTERY_TYPES.find(b => b.id === selectedType) ?? BATTERY_TYPES[0]
-
-  const usableKwh  = dailyKwh * days
-  const totalKwh   = usableKwh / battery.dod
-  const totalAh    = (totalKwh * 1000) / voltage
-  const usableAh   = totalAh * battery.dod
+  const family = voltageFamily(voltage)
+  const lvd = lvdGuidance(battery.id, family)
+  const { usableKwh, totalKwh, totalAh, usableAh } = sizeBatteryBank({
+    dailyKwh,
+    days,
+    voltage,
+    dod: battery.dod,
+  })
 
   const [allModels, setAllModels] = useState<BatteryModelMatch[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
@@ -141,6 +108,13 @@ export default function BatterySizingPage() {
 
       <CalculatorDisclaimer />
 
+      <div className="mb-6">
+        <ChargeLoopNotice
+          dailyNeedKwh={dailyKwh}
+          estimatedDailyKwh={panelSummary ? panelSummary.estimatedDailyKwh : null}
+        />
+      </div>
+
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
 
@@ -160,7 +134,7 @@ export default function BatterySizingPage() {
                     step="0.1" min="0"
                     className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
-                  <span className="text-sm text-gray-500">kWh/day</span>
+                  <span className="text-sm text-gray-500">kWh/day (adjusted)</span>
                   <Link href="/calculators/load" className="text-xs text-yellow-700 hover:underline ml-auto">
                     Calculate from appliances →
                   </Link>
@@ -170,7 +144,7 @@ export default function BatterySizingPage() {
                     onClick={() => setDailyKwh(fromLoadCalc)}
                     className="mt-2 text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1 hover:bg-yellow-100 transition-colors"
                   >
-                    Use {fromLoadCalc.toFixed(2)} kWh from your load calculator →
+                    Use {fromLoadCalc.toFixed(2)} kWh adjusted from your load calculator →
                   </button>
                 )}
               </div>
@@ -273,6 +247,7 @@ export default function BatterySizingPage() {
                       <span className="font-medium text-sm">{b.name}</span>
                       <div className="flex gap-2 text-xs">
                         <Badge variant="secondary">DoD {Math.round(b.dod * 100)}%</Badge>
+                        <Badge variant="secondary">{Math.round(b.roundTripEfficiency * 100)}% RT</Badge>
                         <Badge variant="secondary">{b.cycles} cycles</Badge>
                       </div>
                     </div>
@@ -290,7 +265,7 @@ export default function BatterySizingPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Battery className="w-4 h-4 text-yellow-600" />
-                Recommended bank
+                Starting estimate
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -332,16 +307,27 @@ export default function BatterySizingPage() {
               <div className="flex gap-2 text-xs text-gray-500">
                 <Info className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
                 <p>
-                  <strong className="text-gray-700">Inverter cutoff:</strong> Set your low-voltage
-                  disconnect to stop discharge at your DoD limit.
-                  For {voltage}V {battery.name.split(' ')[0]}, that&apos;s typically{' '}
-                  <strong className="text-gray-700">
-                    {voltage === 12
-                      ? battery.id === 'lifepo4' ? '12.0V' : '11.8V'
-                      : voltage === 24
-                      ? battery.id === 'lifepo4' ? '24.0V' : '23.6V'
-                      : battery.id === 'lifepo4' ? '48.0V' : '47.2V'}
-                  </strong>.
+                  <strong className="text-gray-700">Inverter cutoff (rest voltage):</strong>{' '}
+                  {lvd.preferSocMeter ? (
+                    <>
+                      Do not use a single voltage to enforce {Math.round(battery.dod * 100)}% DoD
+                      on LiFePO4 — the curve is too flat. Use the BMS SoC% or a shunt. A rough
+                      20% SoC rest floor is{' '}
+                      <strong className="text-gray-700">
+                        {lvd.restVolts.min.toFixed(1)}–{lvd.restVolts.max.toFixed(1)} V
+                      </strong>{' '}
+                      on a {family}V pack. 12.0 V on a 12 V LiFePO4 pack is near empty, not 80% DoD.
+                    </>
+                  ) : (
+                    <>
+                      Rest voltage at {Math.round(battery.dod * 100)}% DoD is about{' '}
+                      <strong className="text-gray-700">
+                        {lvd.restVolts.min.toFixed(1)}–{lvd.restVolts.max.toFixed(1)} V
+                      </strong>{' '}
+                      on a {family}V pack. Measure at rest. 11.8 V under load (12 V bank) is
+                      already deeper than 50% DoD.
+                    </>
+                  )}
                 </p>
               </div>
             </CardContent>

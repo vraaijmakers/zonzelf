@@ -136,4 +136,23 @@ export function publishLoadSummary(summary: LoadSummary) {
   writeStored(LOAD_SUMMARY_KEY, summary)
 }
 
+export const PANEL_SUMMARY_KEY = 'zonzelf:panels:summary'
+
+export interface PanelSummary {
+  /** Adjusted daily need the array was sized against (kWh). */
+  dailyNeedKwh: number
+  peakSun: number
+  estimatedDailyKwh: number
+  arrayWp: number
+}
+
+export function usePanelSummary(): PanelSummary | null {
+  const [summary] = usePersistentState<PanelSummary | null>(PANEL_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishPanelSummary(summary: PanelSummary) {
+  writeStored(PANEL_SUMMARY_KEY, summary)
+}
+
 export const round2 = (n: number) => Math.round(n * 100) / 100

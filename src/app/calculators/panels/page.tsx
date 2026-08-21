@@ -1,46 +1,62 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { Sun, Info } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
+import { usePersistentState, useLoadSummary, publishPanelSummary, round2 } from '@/lib/calc-storage'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
-
-const PEAK_SUN_EXAMPLES = [
-  { region: 'Netherlands / Belgium', hours: 2.5 },
-  { region: 'UK / Ireland',          hours: 2.8 },
-  { region: 'Germany / Austria',     hours: 3.0 },
-  { region: 'France / Spain (N)',    hours: 4.0 },
-  { region: 'Spain / Italy (S)',     hours: 5.0 },
-  { region: 'Texas / Arizona (US)',  hours: 5.5 },
-  { region: 'California (US)',       hours: 5.2 },
-  { region: 'Florida (US)',          hours: 5.0 },
-  { region: 'Canada (S)',            hours: 3.5 },
-  { region: 'Australia (avg)',       hours: 5.5 },
-]
-
-const PANEL_SIZES = [100, 200, 300, 400, 410, 450, 500, 600]
+import ChargeLoopNotice from '@/components/ChargeLoopNotice'
+import { PANEL_SIZES, PEAK_SUN_EXAMPLES, sizePanelArray } from '@/lib/calculators/panels'
 
 export default function PanelSizingPage() {
   const [savedKwh, setDailyKwh, kwhMeta] = usePersistentState('zonzelf:panels:dailyKwh', 3.5)
   const [peakSun, setPeakSun]            = usePersistentState('zonzelf:panels:peakSun', 3.0)
-  const [savedEff, setEfficiency, effMeta] = usePersistentState('zonzelf:panels:efficiency', 0.8)
+  const [useWorstMonth, setUseWorstMonth] = usePersistentState('zonzelf:panels:useWorstMonth', false)
   const [panelWatt, setPanelWatt]        = usePersistentState('zonzelf:panels:panelWatt', 400)
 
   const loadSummary = useLoadSummary()
-  // This page applies system efficiency itself, so it takes the raw appliance
-  // total — feeding it the adjusted figure would count the losses twice.
-  const fromLoadCalc = loadSummary ? round2(loadSummary.rawKwh) : null
+  // Efficiency is applied once on the load calculator. This page consumes
+  // the adjusted figure and does not apply a second loss factor.
+  const fromLoadCalc = loadSummary ? round2(loadSummary.adjustedKwh) : null
 
-  // Until this page has saved values of its own, follow the load calculator, so
-  // both steps agree. Editing a field here takes over from then on.
   const dailyKwh = !kwhMeta.restored && fromLoadCalc !== null ? fromLoadCalc : savedKwh
-  const efficiency = !effMeta.restored && loadSummary ? loadSummary.efficiency : savedEff
 
-  const totalWattsNeeded = (dailyKwh * 1000) / (peakSun * efficiency)
-  const panelsNeeded     = Math.ceil(totalWattsNeeded / panelWatt)
-  const actualOutput     = panelsNeeded * panelWatt * peakSun * efficiency / 1000
+  const sized = sizePanelArray({ dailyKwh, peakSun, panelWatt })
+  const {
+    totalWattsNeeded,
+    panelsNeeded,
+    arrayWp,
+    estimatedDailyKwh: actualOutput,
+    surplusPct,
+  } = sized
+
+  useEffect(() => {
+    if (dailyKwh <= 0 || peakSun <= 0) return
+    publishPanelSummary({
+      dailyNeedKwh: round2(dailyKwh),
+      peakSun,
+      estimatedDailyKwh: round2(actualOutput),
+      arrayWp,
+    })
+  }, [dailyKwh, peakSun, actualOutput, arrayWp])
+
+  const matchingRegion = PEAK_SUN_EXAMPLES.find(
+    ex => ex.annual === peakSun || ex.worst === peakSun
+  )
+
+  function selectRegion(annual: number, worst: number) {
+    setPeakSun(useWorstMonth ? worst : annual)
+  }
+
+  function toggleWorstMonth() {
+    const next = !useWorstMonth
+    setUseWorstMonth(next)
+    if (matchingRegion) {
+      setPeakSun(next ? matchingRegion.worst : matchingRegion.annual)
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
@@ -53,19 +69,24 @@ export default function PanelSizingPage() {
         <h1 className="text-3xl font-bold mb-2">Solar Panel Sizing</h1>
         <p className="text-gray-600">
           How many panels do you need? The key variable is <strong>peak sun hours</strong> —
-          the daily equivalent of full-strength sunlight at your location.
+          the daily equivalent of full-strength sunlight at your location. Regional figures
+          below are <strong>annual averages</strong>; off-grid builds should size for the
+          darkest month.
         </p>
         <p className="text-sm text-gray-500 mt-2">
-          This sizes daily energy output (kWh) — not the charging current your panels deliver to
-          the battery at any given moment. See{' '}
+          This sizes daily energy harvest (kWh) against the adjusted need from the load
+          calculator — losses are not applied a second time. See{' '}
           <Link href="/guides/how-it-works" className="text-yellow-700 hover:underline">
             how a solar system actually works
-          </Link>{' '}
-          to see where that current fits in.
+          </Link>.
         </p>
       </div>
 
       <CalculatorDisclaimer />
+
+      <div className="mb-6">
+        <ChargeLoopNotice dailyNeedKwh={dailyKwh} estimatedDailyKwh={actualOutput} />
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
@@ -73,7 +94,7 @@ export default function PanelSizingPage() {
             <CardContent className="pt-5 space-y-5">
               <div>
                 <label htmlFor="panels-daily-kwh" className="block text-sm font-medium mb-1">
-                  Daily energy need (kWh)
+                  Daily energy the system must deliver (kWh)
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -89,12 +110,16 @@ export default function PanelSizingPage() {
                     Calculate from appliances →
                   </Link>
                 </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Use the load calculator&apos;s adjusted number (losses already included).
+                  If you type a number here, it is treated as that generation target.
+                </p>
                 {fromLoadCalc !== null && Math.abs(fromLoadCalc - dailyKwh) > 0.01 && (
                   <button
                     onClick={() => setDailyKwh(fromLoadCalc)}
                     className="mt-2 text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1 hover:bg-yellow-100 transition-colors"
                   >
-                    Use {fromLoadCalc.toFixed(2)} kWh from your load calculator →
+                    Use {fromLoadCalc.toFixed(2)} kWh adjusted from your load calculator →
                   </button>
                 )}
               </div>
@@ -102,7 +127,9 @@ export default function PanelSizingPage() {
               <div>
                 <label htmlFor="panels-peak-sun" className="block text-sm font-medium mb-1">
                   Peak sun hours
-                  <span className="ml-1 font-normal text-gray-400 text-xs">(hours of equivalent full sun per day)</span>
+                  <span className="ml-1 font-normal text-gray-400 text-xs">
+                    ({useWorstMonth ? 'worst month' : 'annual average'} — hours of equivalent full sun per day)
+                  </span>
                 </label>
                 <div className="flex items-center gap-3 mb-3">
                   <input
@@ -115,42 +142,45 @@ export default function PanelSizingPage() {
                   />
                   <span className="text-sm text-gray-500">hours/day</span>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs font-medium text-gray-500 mb-2">Common values by region</p>
-                  <div className="grid grid-cols-2 gap-1">
-                    {PEAK_SUN_EXAMPLES.map(ex => (
-                      <button
-                        key={ex.region}
-                        onClick={() => setPeakSun(ex.hours)}
-                        className={`text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                          peakSun === ex.hours
-                            ? 'bg-yellow-100 text-yellow-800 font-medium'
-                            : 'hover:bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {ex.region}
-                        <span className="float-right font-mono">{ex.hours}h</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="panels-efficiency" className="block text-sm font-medium mb-1">
-                  System efficiency
-                  <span className="ml-1 font-normal text-gray-400 text-xs">{Math.round(efficiency * 100)}%</span>
+                <label className="flex items-center gap-2 text-sm text-gray-700 mb-3">
+                  <input
+                    type="checkbox"
+                    checked={useWorstMonth}
+                    onChange={toggleWorstMonth}
+                    className="rounded border-gray-300 accent-yellow-500"
+                  />
+                  Size for the darkest month (safer for off-grid)
                 </label>
-                <input
-                  id="panels-efficiency"
-                  type="range" min="0.6" max="0.95" step="0.05"
-                  value={efficiency}
-                  onChange={e => setEfficiency(parseFloat(e.target.value))}
-                  className="w-full accent-yellow-500"
-                />
-                <p className="text-xs text-gray-400">
-                  Includes inverter, wiring, and temperature losses. 80% is a safe default.
-                </p>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs font-medium text-gray-500 mb-2">
+                    {useWorstMonth ? 'Worst-month' : 'Annual average'} values by region
+                  </p>
+                  <div className="grid grid-cols-2 gap-1">
+                    {PEAK_SUN_EXAMPLES.map(ex => {
+                      const hours = useWorstMonth ? ex.worst : ex.annual
+                      const selected = peakSun === hours && matchingRegion?.region === ex.region
+                      return (
+                        <button
+                          key={ex.region}
+                          onClick={() => selectRegion(ex.annual, ex.worst)}
+                          className={`text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                            selected
+                              ? 'bg-yellow-100 text-yellow-800 font-medium'
+                              : 'hover:bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {ex.region}
+                          <span className="float-right font-mono">{hours}h</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Annual averages hide winter. Netherlands ~2.5 h year-round is closer to 0.9 h
+                    in December. These are typical figures, not a solar-resource dataset for
+                    your roof.
+                  </p>
+                </div>
               </div>
 
               <div role="group" aria-labelledby="panels-wattage-label">
@@ -185,13 +215,12 @@ export default function PanelSizingPage() {
           </Card>
         </div>
 
-        {/* Results */}
         <div className="space-y-4">
           <Card className="border-yellow-200 bg-yellow-50">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Sun className="w-4 h-4 text-yellow-600" />
-                Array recommendation
+                Starting estimate
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -204,15 +233,17 @@ export default function PanelSizingPage() {
               <div className="border-t pt-3">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total array size</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {(panelsNeeded * panelWatt / 1000).toFixed(1)} kWp
+                  {(arrayWp / 1000).toFixed(1)} kWp
                 </p>
-                <p className="text-xs text-gray-500">{(panelsNeeded * panelWatt).toLocaleString()} watts peak</p>
+                <p className="text-xs text-gray-500">{arrayWp.toLocaleString()} watts peak</p>
               </div>
 
               <div className="border-t pt-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Estimated daily output</p>
-                <p className="text-xl font-bold text-green-700">{actualOutput.toFixed(1)} kWh</p>
-                <p className="text-xs text-gray-500">at {peakSun}h peak sun · {Math.round(efficiency * 100)}% efficiency</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Estimated daily harvest</p>
+                <p className="text-xl font-bold text-gray-800">{actualOutput.toFixed(1)} kWh</p>
+                <p className="text-xs text-gray-500">
+                  at {peakSun}h peak sun · compared against the adjusted daily need
+                </p>
               </div>
 
               <div className="border-t pt-3 text-xs text-gray-500 space-y-1">
@@ -221,9 +252,11 @@ export default function PanelSizingPage() {
                   <span className="font-medium text-gray-700">{Math.round(totalWattsNeeded)}W</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Surplus vs target</span>
-                  <span className="font-medium text-green-700">
-                    +{((actualOutput - dailyKwh) / dailyKwh * 100).toFixed(0)}%
+                  <span>Vs daily need</span>
+                  <span className="font-medium text-gray-700">
+                    {surplusPct == null
+                      ? '—'
+                      : `${surplusPct >= 0 ? '+' : ''}${surplusPct.toFixed(0)}%`}
                   </span>
                 </div>
               </div>
@@ -237,7 +270,8 @@ export default function PanelSizingPage() {
                 <p>
                   <strong className="text-gray-700">Oversizing is normal.</strong> Adding 20–30%
                   extra panel capacity is common — it compensates for cloudy days, shading,
-                  panel aging, and high charge controller overhead.
+                  panel aging, and charge-controller overhead. Do not buy from this number
+                  until you have checked roof space, inverter limits, and local code.
                 </p>
               </div>
             </CardContent>

@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
+import { loadTotals, PRESET_GROUPS, PRESETS } from '@/lib/calculators/load'
 
 interface Appliance {
   id: number
@@ -16,88 +17,11 @@ interface Appliance {
   qty: number
 }
 
-const PRESET_GROUPS = [
-  {
-    label: 'Lighting & fans',
-    items: [
-      { name: 'LED light bulb',     watts: 10,  hours: 5 },
-      { name: 'LED tube light',     watts: 20,  hours: 6 },
-      { name: 'Ceiling fan',        watts: 60,  hours: 8 },
-      { name: 'Bathroom exhaust',   watts: 30,  hours: 2 },
-    ],
-  },
-  {
-    label: 'Cooling (A/C)',
-    icon: 'ac',
-    items: [
-      { name: 'Window AC (5,000 BTU)',      watts: 450,  hours: 8 },
-      { name: 'Window AC (8,000 BTU)',      watts: 700,  hours: 8 },
-      { name: 'Window AC (12,000 BTU)',     watts: 1100, hours: 8 },
-      { name: 'Portable AC (10,000 BTU)',   watts: 1000, hours: 8 },
-      { name: 'Mini-split (9,000 BTU)',     watts: 860,  hours: 10 },
-      { name: 'Mini-split (12,000 BTU)',    watts: 1100, hours: 10 },
-      { name: 'Mini-split (18,000 BTU)',    watts: 1600, hours: 10 },
-      { name: 'Mini-split (24,000 BTU)',    watts: 2100, hours: 10 },
-      { name: 'Central AC (2 ton)',         watts: 2500, hours: 8 },
-      { name: 'Central AC (3 ton)',         watts: 3500, hours: 8 },
-      { name: 'Central AC (4 ton)',         watts: 4700, hours: 8 },
-      { name: 'Central AC (5 ton)',         watts: 6000, hours: 8 },
-      { name: 'Central AC (6 ton)',         watts: 7200, hours: 8 },
-      { name: 'Central AC (7.5 ton)',       watts: 9000, hours: 8 },
-    ],
-  },
-  {
-    label: 'Kitchen',
-    items: [
-      { name: 'Mini fridge',        watts: 80,   hours: 24 },
-      { name: 'Full-size fridge',   watts: 150,  hours: 24 },
-      { name: 'Microwave',          watts: 1000, hours: 0.5 },
-      { name: 'Coffee maker',       watts: 900,  hours: 0.25 },
-      { name: 'Toaster',            watts: 850,  hours: 0.1 },
-      { name: 'Induction cooktop',  watts: 1800, hours: 1 },
-    ],
-  },
-  {
-    label: 'Entertainment & office',
-    items: [
-      { name: 'TV (32")',           watts: 40,  hours: 4 },
-      { name: 'TV (55")',           watts: 100, hours: 4 },
-      { name: 'Laptop',             watts: 65,  hours: 6 },
-      { name: 'Desktop PC',         watts: 200, hours: 4 },
-      { name: 'Phone charger',      watts: 10,  hours: 2 },
-      { name: 'Router / modem',     watts: 15,  hours: 24 },
-    ],
-  },
-  {
-    label: 'Water & utility',
-    items: [
-      { name: 'Water pump (small)', watts: 300, hours: 1 },
-      { name: 'Water pump (1 HP)',  watts: 750, hours: 2 },
-      { name: 'Washing machine',    watts: 500, hours: 1 },
-      { name: 'Clothes dryer',      watts: 5000, hours: 0.75 },
-      { name: 'Dishwasher',         watts: 1200, hours: 1 },
-      { name: 'Water heater (elec)',watts: 4000, hours: 1 },
-    ],
-  },
-  {
-    label: 'Other',
-    items: [
-      { name: 'CPAP machine',       watts: 30,  hours: 8 },
-      { name: 'Power tool (drill)', watts: 600, hours: 0.5 },
-      { name: 'EV charger (L1)',    watts: 1400, hours: 6 },
-      { name: 'EV charger (L2)',    watts: 7200, hours: 2 },
-    ],
-  },
-]
-
-// Flat list for type inference
-const PRESETS = PRESET_GROUPS.flatMap(g => g.items)
-
 const DEFAULT_APPLIANCES: Appliance[] = [
   { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4 },
   { id: 2, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1 },
   { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
-  { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1 },
+  { id: 4, name: 'Mini fridge',    watts: 80, hours: 8, qty: 1 },
 ]
 
 // Ids only have to be unique within the current list, which may have been
@@ -167,9 +91,7 @@ export default function LoadCalculatorPage() {
   const remove = (id: number) =>
     setAppliances(a => a.filter(row => row.id !== id))
 
-  const totalWh = appliances.reduce((sum, a) => sum + a.watts * a.hours * a.qty, 0)
-  const totalKwh = totalWh / 1000
-  const adjustedKwh = totalKwh / efficiency
+  const { totalWh, rawKwh: totalKwh, adjustedKwh } = loadTotals(appliances, efficiency)
 
   // Publish the result so the battery and panel calculators can pick it up.
   useEffect(() => {
@@ -191,8 +113,8 @@ export default function LoadCalculatorPage() {
         </div>
         <h1 className="text-3xl font-bold mb-2">Load Calculator</h1>
         <p className="text-gray-600">
-          Add every appliance you want to run. The total daily kWh is the foundation
-          for sizing your battery bank and solar panels.
+          Add every appliance you want to run. System losses are applied once here —
+          battery and panel sizing use the adjusted number, not a second efficiency slider.
         </p>
       </div>
 
@@ -413,7 +335,11 @@ export default function LoadCalculatorPage() {
                             ? 'border-blue-200 hover:border-blue-400 hover:bg-blue-50'
                             : 'border-gray-200 hover:border-yellow-400 hover:bg-yellow-50'}`}
                       >
-                        {p.name} <span className="text-gray-400">{p.watts >= 1000 ? `${(p.watts/1000).toFixed(1)}kW` : `${p.watts}W`}</span>
+                        {p.name}{' '}
+                        <span className="text-gray-400">
+                          {p.watts >= 1000 ? `${(p.watts/1000).toFixed(1)}kW` : `${p.watts}W`}
+                          {p.cycling ? ' · duty cycle' : ''}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -453,14 +379,18 @@ export default function LoadCalculatorPage() {
                   className="w-full accent-yellow-500"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Accounts for inverter losses, wiring, and battery inefficiency. 80% is a safe default.
+                  Inverter, wiring, and battery losses — applied once. 80% is a safe default.
+                  Do not apply this again on the battery or panel calculators.
                 </p>
               </div>
 
               <div className="border-t pt-3 bg-white rounded-lg p-3">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Adjusted daily need</p>
                 <p className="text-3xl font-bold text-gray-900">{adjustedKwh.toFixed(2)} kWh</p>
-                <p className="text-xs text-gray-500">Use this number for battery and panel sizing</p>
+                <p className="text-xs text-gray-500">
+                  Starting estimate of what the system must deliver. Battery and panel
+                  sizing pick this up automatically.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -482,6 +412,15 @@ export default function LoadCalculatorPage() {
                   conditioning is typically 40–60% of total daily energy use in summer. A single
                   mini-split running 10 hrs/day adds 8–16 kWh — plan your battery and panel
                   array around this first, then add everything else.
+                </p>
+              </div>
+              <div className="flex gap-2 text-xs text-gray-500 border-t pt-3">
+                <Info className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
+                <p>
+                  <strong className="text-gray-700">Fridges cycle:</strong> Presets marked
+                  “duty cycle” use typical compressor run-time (~8 h/day), not nameplate watts
+                  × 24. A 150 W fridge is closer to 1.2 kWh/day than 3.6 kWh. Check the
+                  Energy Guide label if you have one.
                 </p>
               </div>
             </CardContent>

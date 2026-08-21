@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "scrape:eg4": "tsx --env-file=.env.local scripts/scrape-eg4.ts",
     "scrape:victron": "tsx --env-file=.env.local scripts/scrape-victron.ts",
     "scrape:sungoldpower": "tsx --env-file=.env.local scripts/scrape-sungoldpower.ts"
@@ -36,6 +38,7 @@
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

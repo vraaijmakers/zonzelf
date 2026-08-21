@@ -6,8 +6,9 @@ export default function CalculatorDisclaimer() {
     <div className="flex items-start gap-2 text-sm text-yellow-900 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 mb-6">
       <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 shrink-0" />
       <span>
-        This tool gives a starting estimate, not professional advice — verify against your
-        equipment specs and local electrical code before you build. See our{' '}
+        Starting estimate only — do not buy cable, batteries, or panels from this
+        number until you have checked your equipment specs and the electrical code
+        that applies where you live. See our{' '}
         <Link href="/disclaimer" className="underline hover:no-underline">disclaimer</Link>.
       </span>
     </div>

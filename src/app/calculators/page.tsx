@@ -14,21 +14,21 @@ const CALCULATORS = [
     icon: Battery,
     slug: 'battery',
     title: 'Battery Bank Sizing',
-    description: 'Given your daily kWh, number of days of autonomy, and battery chemistry (with DoD), get the Ah and kWh you need.',
+    description: 'Given your adjusted daily kWh, days of autonomy, and chemistry (with DoD), get a starting Ah and kWh estimate — not a shopping list.',
     level: 'Step 2',
   },
   {
     icon: Sun,
     slug: 'panels',
     title: 'Solar Panel Sizing',
-    description: 'Enter your daily kWh need and local peak sun hours to get recommended panel wattage and array size.',
+    description: 'Enter your adjusted daily kWh and local peak sun hours (annual or worst month) for a starting array size. Warns if the array cannot cover the daily draw.',
     level: 'Step 3',
   },
   {
     icon: Cable,
     slug: 'awg',
     title: 'Cable AWG Calculator',
-    description: 'Input amps, cable length (one way), and voltage. Get the recommended AWG gauge with voltage drop percentage.',
+    description: 'Input amps, one-way length, and voltage. Starting AWG from a cited NEC 75°C table (optional chassis mode) plus voltage drop.',
     level: 'Any time',
   },
 ]
@@ -39,7 +39,8 @@ export default function CalculatorsPage() {
       <div className="mb-10">
         <h1 className="text-3xl font-bold mb-2">Calculators</h1>
         <p className="text-gray-600">
-          Use these in order (load → battery → panels) to size your system from scratch. The AWG calculator can be used anytime.
+          Use these in order (load → battery → panels) to size a starting estimate from scratch.
+        Losses are applied once on the load calculator; the AWG tool can be used anytime.
         </p>
       </div>
 
@@ -69,7 +70,8 @@ export default function CalculatorsPage() {
       </div>
 
       <p className="text-sm text-gray-500 mt-8 text-center">
-        All calculators run in your browser — no data is sent anywhere. Results are estimates; always verify with a qualified electrician for final installation.
+        All calculators run in your browser — no data is sent anywhere. Results are starting
+        estimates, not a specification. Verify with a qualified electrician before you buy or wire.
       </p>
     </div>
   )

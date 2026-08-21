@@ -411,10 +411,10 @@ export default function HowItWorksGuidePage() {
           <Link href="/calculators/awg" className="text-zon-gold-deep hover:underline">AWG cable calculator</Link>.
         </p>
         <Note>
-          One gap this guide surfaced: neither calculator currently checks whether your panel
-          array can actually recharge your battery bank within your site&apos;s peak sun hours —
-          you can size a &quot;correct&quot; battery and a &quot;correct&quot; array independently
-          and still end up under-charging every day. That check is on the roadmap.
+          The battery and panel calculators now warn when the array cannot replace the
+          daily draw in the available sun — a bank that looks right can still empty if
+          the array is short. Size load → battery → panels in that order so the check
+          has both numbers.
         </Note>
       </section>
 
