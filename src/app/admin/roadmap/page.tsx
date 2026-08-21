@@ -19,11 +19,7 @@ export default async function AdminRoadmapPage() {
     <div>
       <h1 className="text-2xl font-bold mb-1">Roadmap</h1>
       <p className="text-sm text-gray-600 mb-6">
-        Full management view. See the read-only{' '}
-        <a href="/roadmap" className="text-yellow-700 hover:underline">
-          /roadmap
-        </a>{' '}
-        page (admin-only — the &quot;visible&quot; flag no longer controls public access).
+        Full management view — the &quot;visible&quot; flag no longer controls public access.
       </p>
 
       <NewRoadmapItemForm />
