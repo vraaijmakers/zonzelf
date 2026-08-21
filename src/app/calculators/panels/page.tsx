@@ -5,6 +5,7 @@ import { Sun, Info } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
+import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 
 const PEAK_SUN_EXAMPLES = [
   { region: 'Netherlands / Belgium', hours: 2.5 },
@@ -55,6 +56,8 @@ export default function PanelSizingPage() {
           the daily equivalent of full-strength sunlight at your location.
         </p>
       </div>
+
+      <CalculatorDisclaimer />
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">

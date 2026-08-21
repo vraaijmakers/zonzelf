@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePersistentState } from '@/lib/calc-storage'
+import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { Cable, Info, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -74,6 +75,8 @@ export default function AwgCalculatorPage() {
           Uses <strong>one-way</strong> length — the calculator accounts for the full round trip.
         </p>
       </div>
+
+      <CalculatorDisclaimer />
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
