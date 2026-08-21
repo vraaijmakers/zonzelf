@@ -13,8 +13,6 @@ import Logo from '@/components/layout/Logo'
 const NAV_LINKS = [
   { href: '/guides',      label: 'Guides' },
   { href: '/calculators', label: 'Calculators' },
-  { href: '/resources',   label: 'Resources' },
-  { href: '/dashboard',   label: 'My Dashboard' },
 ]
 
 type NavbarUser = { email: string } | null
