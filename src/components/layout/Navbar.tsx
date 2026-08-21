@@ -12,9 +12,7 @@ import SignOutButton from '@/components/admin/SignOutButton'
 const NAV_LINKS = [
   { href: '/guides',      label: 'Guides' },
   { href: '/calculators', label: 'Calculators' },
-  { href: '/resources',   label: 'Resources' },
   { href: '/roadmap',     label: 'Roadmap' },
-  { href: '/dashboard',   label: 'My Dashboard' },
 ]
 
 type NavbarUser = { email: string } | null
