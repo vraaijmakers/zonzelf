@@ -1,34 +1,38 @@
--- Seed data for local development (`supabase db reset` applies this
--- automatically). Reflects the actual roadmap as of 2026-08-20 (post
--- reprioritization) so the board isn't empty on first load. Safe to re-run
--- — it's insert-only against a table that starts empty in a fresh reset.
+-- Roadmap re-prioritization, 2026-08-20 session: design-system/font fix, legal
+-- pages, accessibility baseline + widget, roadmap admin-gating, dead-link
+-- cleanup, and the Resources page all shipped as open PRs; monitoring is
+-- deliberately pushed later (sequencing choice, not a change to the Blue
+-- Ocean Contract's differentiator #2 — see CLAUDE.md).
 --
--- Keep this in sync with supabase/migrations/20260820000003_roadmap_priorities_update.sql,
--- which applies the same end state as an incremental patch against an
--- already-seeded environment (migrations run before this file on a reset,
--- so that migration's UPDATEs are no-ops here — the values below are
--- written directly instead).
+-- Incremental patch for an already-seeded environment (e.g. staging, which
+-- won't get a fresh `supabase db reset`): updates existing rows by title
+-- (safe no-op if a title doesn't match) and inserts the newly identified
+-- backlog. Keep in sync with supabase/seed.sql, which encodes this same end
+-- state directly for a fresh local reset — migrations run before seed.sql,
+-- so these UPDATEs would be no-ops against an empty table there.
+
+update public.roadmap_items
+  set status = 'in_test', dev_percent_complete = 90,
+      description = 'Supabase auth, profiles/role table, gated /admin shell, this roadmap board (admin-only — reversed from public read partway through).'
+  where title = 'Roadmap board + admin portal foundation';
+
+update public.roadmap_items
+  set status = 'in_test', dev_percent_complete = 90
+  where title = 'Design token pass';
+
+-- Monitoring and the community layer that depends on it move later.
+update public.roadmap_items
+  set phase = 3
+  where title = 'Local monitoring agent';
+
+update public.roadmap_items
+  set phase = 4
+  where title = 'Community data aggregation';
 
 insert into public.roadmap_items
   (phase, category, title, description, status, dev_percent_complete, is_public, display_order)
 values
-  -- Phase 0 — foundation
-  (0, 'infrastructure', 'CLAUDE.md operating contract',
-   'Blue Ocean Contract as a scope gate, locked design tokens, branch/version workflow, session-correction rules.',
-   'in_production', 100, true, 10),
-
-  (0, 'infrastructure', 'Branch workflow + CI',
-   'develop/staging/main branch protection, GitHub Actions build+lint gate on every PR.',
-   'in_production', 100, true, 20),
-
-  (0, 'admin', 'Roadmap board + admin portal foundation',
-   'Supabase auth, profiles/role table, gated /admin shell, this roadmap board (admin-only — reversed from public read partway through).',
-   'in_test', 90, true, 30),
-
-  (0, 'infrastructure', 'Design token pass',
-   'Wire --zon-* tokens into globals.css and shadcn primitives; fix the circular --font-sans bug.',
-   'in_test', 90, true, 40),
-
+  -- Phase 0 — shipped today, open PRs pending merge
   (0, 'infrastructure', 'Legal foundation (disclaimer, terms, privacy)',
    'Disclaimer, Terms of Service, and Privacy Policy pages, linked from the footer and calculator pages. Marked in-code as a draft pending lawyer review.',
    'in_test', 80, true, 42),
@@ -45,10 +49,7 @@ values
    'Built /resources: YouTube channels, community forums, and manufacturer docs, verified live before publishing rather than recalled from memory.',
    'in_test', 100, true, 48),
 
-  (0, 'infrastructure', 'Staging environment',
-   'Self-hosted Docker container behind nginx on the VPN-only staging box, auto-deployed from the staging branch. Shares the one Supabase project with local dev.',
-   'in_production', 100, true, 50),
-
+  -- Phase 0 — trust/honesty gaps identified today, not started
   (0, 'onboarding', 'Fix /guides index dead links',
    '5 of 6 cards on the guides index link to pages that do not exist yet (only Battery Types is real): depth-of-discharge, wiring, grounding, inverter-settings, glossary.',
    'planned', 0, true, 52),
@@ -66,10 +67,6 @@ values
    'planned', 0, false, 58),
 
   -- Phase 1 — content completeness (onboarding differentiator)
-  (1, 'onboarding', 'Guided beginner onboarding',
-   'Plain-English explainers woven into guides and calculators, not a separate wizard. Differentiator #1.',
-   'planned', 0, true, 60),
-
   (1, 'onboarding', 'Remaining guide pages',
    'wiring, depth-of-discharge, grounding, inverter-settings, glossary — currently only battery-types has a real page.',
    'planned', 0, true, 62),
@@ -87,17 +84,7 @@ values
    'The remaining /admin sidebar sections beyond the roadmap board — currently "Soon" stubs in src/app/admin/layout.tsx.',
    'planned', 0, false, 74),
 
-  -- Phase 3 — monitoring (pushed later, 2026-08-20: sequencing choice, not a
-  -- change to differentiator #2 in the Blue Ocean Contract)
-  (3, 'monitoring', 'Local monitoring agent',
-   'Brand-agnostic MODBUS/serial agent (Python, runs on a Pi/PC) posting to /api/ingest. Differentiator #2.',
-   'planned', 0, true, 80),
-
+  -- Phase 3 — monitoring (pushed later per 2026-08-20 direction)
   (3, 'monitoring', 'Monitoring dashboard UI + /api/ingest',
    'The user-facing live monitoring screen and the ingest endpoint the local agent posts to. Depends on the dashboard shell.',
-   'planned', 0, true, 82),
-
-  -- Phase 4 — community (depends on monitoring data existing)
-  (4, 'community', 'Community data aggregation',
-   'Opt-in anonymized aggregate stats ("systems like yours averaged X peak sun hours"). Differentiator #3.',
-   'planned', 0, true, 90);
+   'planned', 0, true, 82);
