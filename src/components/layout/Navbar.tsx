@@ -13,7 +13,6 @@ const NAV_LINKS = [
   { href: '/guides',      label: 'Guides' },
   { href: '/calculators', label: 'Calculators' },
   { href: '/resources',   label: 'Resources' },
-  { href: '/roadmap',     label: 'Roadmap' },
   { href: '/dashboard',   label: 'My Dashboard' },
 ]
 
