@@ -128,3 +128,35 @@
     @apply font-sans;
   }
 }
+
+/* Accessibility widget states — toggled via data attributes on <html> by
+   AccessibilityWidget. Kept independent of the design-token work so this
+   works whether or not that's merged yet. */
+html[data-a11y-text="large"] {
+  font-size: 112.5%;
+}
+html[data-a11y-text="larger"] {
+  font-size: 125%;
+}
+
+html[data-a11y-contrast="high"] body {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+html[data-a11y-contrast="high"] a {
+  text-decoration: underline !important;
+}
+html[data-a11y-contrast="high"] button,
+html[data-a11y-contrast="high"] [role="button"] {
+  outline: 2px solid #000000 !important;
+  outline-offset: 1px;
+}
+
+html[data-a11y-motion="reduce"] *,
+html[data-a11y-motion="reduce"] *::before,
+html[data-a11y-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
