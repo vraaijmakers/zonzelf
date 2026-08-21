@@ -134,7 +134,7 @@ export default function BatterySizingPage() {
                     step="0.1" min="0"
                     className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
-                  <span className="text-sm text-gray-500">kWh/day (adjusted)</span>
+                  <span className="text-sm text-gray-500">kWh/day, including losses</span>
                   <Link href="/calculators/load" className="text-xs text-yellow-700 hover:underline ml-auto">
                     Calculate from appliances →
                   </Link>
@@ -144,7 +144,7 @@ export default function BatterySizingPage() {
                     onClick={() => setDailyKwh(fromLoadCalc)}
                     className="mt-2 text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1 hover:bg-yellow-100 transition-colors"
                   >
-                    Use {fromLoadCalc.toFixed(2)} kWh adjusted from your load calculator →
+                    Use {fromLoadCalc.toFixed(2)} kWh (including losses) from your load calculator →
                   </button>
                 )}
               </div>
@@ -246,8 +246,7 @@ export default function BatterySizingPage() {
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-medium text-sm">{b.name}</span>
                       <div className="flex gap-2 text-xs">
-                        <Badge variant="secondary">DoD {Math.round(b.dod * 100)}%</Badge>
-                        <Badge variant="secondary">{Math.round(b.roundTripEfficiency * 100)}% RT</Badge>
+                        <Badge variant="secondary">Use {Math.round(b.dod * 100)}%</Badge>
                         <Badge variant="secondary">{b.cycles} cycles</Badge>
                       </div>
                     </div>
@@ -278,7 +277,9 @@ export default function BatterySizingPage() {
               <div className="border-t pt-3">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Usable capacity</p>
                 <p className="text-xl font-bold text-gray-800">{usableKwh.toFixed(1)} kWh</p>
-                <p className="text-xs text-gray-500">{Math.round(usableAh)} Ah usable ({Math.round(battery.dod * 100)}% DoD)</p>
+                <p className="text-xs text-gray-500">
+                  {Math.round(usableAh)} Ah you can actually use (stop at {Math.round(battery.dod * 100)}% empty)
+                </p>
               </div>
 
               <div className="border-t pt-3 text-xs text-gray-500 space-y-1">
@@ -291,8 +292,8 @@ export default function BatterySizingPage() {
                   <span className="font-medium text-gray-700">{days}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Max depth of discharge</span>
-                  <span className="font-medium text-gray-700">{Math.round(battery.dod * 100)}%</span>
+                  <span>Stop at (leave the rest in the battery)</span>
+                  <span className="font-medium text-gray-700">{Math.round(battery.dod * 100)}% used</span>
                 </div>
                 <div className="flex justify-between">
                   <span>System voltage</span>
@@ -303,32 +304,61 @@ export default function BatterySizingPage() {
           </Card>
 
           <Card>
-            <CardContent className="pt-4">
-              <div className="flex gap-2 text-xs text-gray-500">
+            <CardContent className="pt-4 space-y-2">
+              <div className="flex gap-2 text-sm text-gray-600">
                 <Info className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
-                <p>
-                  <strong className="text-gray-700">Inverter cutoff (rest voltage):</strong>{' '}
+                <div className="space-y-2">
                   {lvd.preferSocMeter ? (
                     <>
-                      Do not use a single voltage to enforce {Math.round(battery.dod * 100)}% DoD
-                      on LiFePO4 — the curve is too flat. Use the BMS SoC% or a shunt. A rough
-                      20% SoC rest floor is{' '}
-                      <strong className="text-gray-700">
-                        {lvd.restVolts.min.toFixed(1)}–{lvd.restVolts.max.toFixed(1)} V
-                      </strong>{' '}
-                      on a {family}V pack. 12.0 V on a 12 V LiFePO4 pack is near empty, not 80% DoD.
+                      <p>
+                        <strong className="text-gray-800">When to stop using the battery</strong>
+                      </p>
+                      <p>
+                        Lithium (LiFePO4) voltage barely moves until the battery is almost empty,
+                        so one “stop at X volts” setting cannot mean “leave 20% in the battery.”
+                      </p>
+                      <p>
+                        Tell the inverter — the box that turns battery power into wall power —
+                        to stop based on <strong className="text-gray-800">percent remaining</strong>.
+                        That number comes from the battery&apos;s built-in manager (BMS) or a
+                        battery monitor, not from voltage.
+                      </p>
+                      <p>
+                        If you only have a voltage setting: around{' '}
+                        <strong className="text-gray-800">
+                          {lvd.restVolts.min.toFixed(1)}–{lvd.restVolts.max.toFixed(1)} V
+                        </strong>{' '}
+                        on your {family}V pack, measured with everything off. Dropping to{' '}
+                        {family.toFixed(1)} V means the pack is nearly empty.
+                      </p>
                     </>
                   ) : (
                     <>
-                      Rest voltage at {Math.round(battery.dod * 100)}% DoD is about{' '}
-                      <strong className="text-gray-700">
-                        {lvd.restVolts.min.toFixed(1)}–{lvd.restVolts.max.toFixed(1)} V
-                      </strong>{' '}
-                      on a {family}V pack. Measure at rest. 11.8 V under load (12 V bank) is
-                      already deeper than 50% DoD.
+                      <p>
+                        <strong className="text-gray-800">When to stop using the battery</strong>
+                      </p>
+                      <p>
+                        Lead-acid lasts much longer if you only use about half of what&apos;s on
+                        the label. Check the voltage after the system has sat still for an hour
+                        or two — nothing charging, nothing running.
+                      </p>
+                      <p>
+                        On your {family}V bank that&apos;s about{' '}
+                        <strong className="text-gray-800">
+                          {lvd.restVolts.min.toFixed(1)}–{lvd.restVolts.max.toFixed(1)} V
+                        </strong>
+                        . If it reads {(11.8 * (family / 12)).toFixed(1)} V <em>while things are
+                        running</em>, you&apos;ve already gone past halfway — that shortens the
+                        battery&apos;s life.
+                      </p>
                     </>
                   )}
-                </p>
+                  <p>
+                    <Link href="/guides/batteries" className="text-yellow-700 hover:underline">
+                      Why this depends on battery type →
+                    </Link>
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

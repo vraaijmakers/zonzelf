@@ -338,7 +338,7 @@ export default function LoadCalculatorPage() {
                         {p.name}{' '}
                         <span className="text-gray-400">
                           {p.watts >= 1000 ? `${(p.watts/1000).toFixed(1)}kW` : `${p.watts}W`}
-                          {p.cycling ? ' · duty cycle' : ''}
+                          {p.cycling ? ' · typical run' : ''}
                         </span>
                       </button>
                     ))}
@@ -360,7 +360,7 @@ export default function LoadCalculatorPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Raw load</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">From your appliances</p>
                 <p className="text-2xl font-bold text-yellow-700">{totalKwh.toFixed(2)} kWh</p>
                 <p className="text-xs text-gray-500">{Math.round(totalWh)} Wh</p>
               </div>
@@ -385,7 +385,7 @@ export default function LoadCalculatorPage() {
               </div>
 
               <div className="border-t pt-3 bg-white rounded-lg p-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Adjusted daily need</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">What the system must deliver</p>
                 <p className="text-3xl font-bold text-gray-900">{adjustedKwh.toFixed(2)} kWh</p>
                 <p className="text-xs text-gray-500">
                   Starting estimate of what the system must deliver. Battery and panel
@@ -417,10 +417,10 @@ export default function LoadCalculatorPage() {
               <div className="flex gap-2 text-xs text-gray-500 border-t pt-3">
                 <Info className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
                 <p>
-                  <strong className="text-gray-700">Fridges cycle:</strong> Presets marked
-                  “duty cycle” use typical compressor run-time (~8 h/day), not nameplate watts
-                  × 24. A 150 W fridge is closer to 1.2 kWh/day than 3.6 kWh. Check the
-                  Energy Guide label if you have one.
+                  <strong className="text-gray-700">Fridges don&apos;t run all day:</strong> Presets
+                  marked “typical run” already account for the compressor switching off.
+                  A 150 W fridge is closer to 1.2 kWh/day than 3.6 kWh. Check the sticker
+                  on yours if you have one.
                 </p>
               </div>
             </CardContent>

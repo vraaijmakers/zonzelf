@@ -74,8 +74,8 @@ export default function PanelSizingPage() {
           darkest month.
         </p>
         <p className="text-sm text-gray-500 mt-2">
-          This sizes daily energy harvest (kWh) against the adjusted need from the load
-          calculator — losses are not applied a second time. See{' '}
+          This sizes how much energy the panels need to make each day, using the load
+          calculator&apos;s number that already includes inverter and wiring losses. See{' '}
           <Link href="/guides/how-it-works" className="text-yellow-700 hover:underline">
             how a solar system actually works
           </Link>.
@@ -111,15 +111,16 @@ export default function PanelSizingPage() {
                   </Link>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
-                  Use the load calculator&apos;s adjusted number (losses already included).
-                  If you type a number here, it is treated as that generation target.
+                  Use the load calculator number that already includes losses. If you type
+                  a figure here yourself, treat it as “what the panels must produce,” not
+                  the raw appliance total.
                 </p>
                 {fromLoadCalc !== null && Math.abs(fromLoadCalc - dailyKwh) > 0.01 && (
                   <button
                     onClick={() => setDailyKwh(fromLoadCalc)}
                     className="mt-2 text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1 hover:bg-yellow-100 transition-colors"
                   >
-                    Use {fromLoadCalc.toFixed(2)} kWh adjusted from your load calculator →
+                    Use {fromLoadCalc.toFixed(2)} kWh (including losses) from your load calculator →
                   </button>
                 )}
               </div>
@@ -231,24 +232,24 @@ export default function PanelSizingPage() {
               </div>
 
               <div className="border-t pt-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total array size</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total panel size</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {(arrayWp / 1000).toFixed(1)} kWp
+                  {(arrayWp / 1000).toFixed(1)} kW peak
                 </p>
-                <p className="text-xs text-gray-500">{arrayWp.toLocaleString()} watts peak</p>
+                <p className="text-xs text-gray-500">{arrayWp.toLocaleString()} watts at full sun</p>
               </div>
 
               <div className="border-t pt-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Estimated daily harvest</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Estimated energy per sunny day</p>
                 <p className="text-xl font-bold text-gray-800">{actualOutput.toFixed(1)} kWh</p>
                 <p className="text-xs text-gray-500">
-                  at {peakSun}h peak sun · compared against the adjusted daily need
+                  at {peakSun} hours of full-strength sun, compared with what you use
                 </p>
               </div>
 
               <div className="border-t pt-3 text-xs text-gray-500 space-y-1">
                 <div className="flex justify-between">
-                  <span>Min array needed</span>
+                  <span>Smallest panel set that covers the day</span>
                   <span className="font-medium text-gray-700">{Math.round(totalWattsNeeded)}W</span>
                 </div>
                 <div className="flex justify-between">

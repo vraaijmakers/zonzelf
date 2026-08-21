@@ -82,8 +82,8 @@ export default function AwgCalculatorPage() {
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
                   {mode === 'conduit'
-                    ? 'NEC Table 310.16 (2020), 75°C copper column, ≤3 current-carrying conductors, 30°C ambient. Default — use this for anything in a wall, conduit, or loft. NEN 1010 / IEC 60364 use mm²: convert and verify locally.'
-                    : 'SAE-style chassis ratings for short, well-ventilated DC runs (battery interconnects). Never use these for in-wall wiring — they will undersize the cable relative to building code.'}
+                    ? 'Use this for cables in a wall, conduit, or loft. Figures follow the US electrical code for copper wire. In the Netherlands the code uses mm² instead of AWG — convert, then have an electrician check.'
+                    : 'Only for short, open battery cables (the thick ones between batteries). Do not use this for anything in a wall — it will pick a cable that is too thin for building code.'}
                 </p>
               </div>
 
@@ -100,8 +100,9 @@ export default function AwgCalculatorPage() {
                   <span className="text-sm text-gray-500">A</span>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
-                  Use the maximum continuous current, not peak. For solar: panel Isc × 1.25 safety factor
-                  (NEC 690.8 language) — that 1.25 is on the current you type, not extra on the table.
+                  The highest current the cable will carry all the time, not a brief surge.
+                  For solar panels: the short-circuit current on the label (Isc) × 1.25 —
+                  type that bigger number here.
                 </p>
               </div>
 
@@ -236,7 +237,7 @@ export default function AwgCalculatorPage() {
                     <p className="text-5xl font-bold text-gray-800">AWG {awgLabel(recommended.awg)}</p>
                     <p className="text-sm text-gray-600 mt-1">
                       {mode === 'conduit' ? recommended.conduitAmps : recommended.chassisAmps}A
-                      {' '}{mode === 'conduit' ? 'NEC 75°C' : 'chassis'}
+                      {' '}{mode === 'conduit' ? 'in-wall rating' : 'battery-cable rating'}
                     </p>
                   </div>
                   <div className="border-t pt-3 text-xs space-y-1.5 text-gray-600">
