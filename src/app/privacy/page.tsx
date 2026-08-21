@@ -83,7 +83,12 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="Contact">
-        <p>Questions about this policy or your data? Reach out via the contact details on our GitHub repository.</p>
+        <p>
+          [TODO: publish a real, monitored contact channel here — an email address or a contact
+          form — before this page is relied on. It should not point people at the source code
+          repository. This matters more here than elsewhere on the site: GDPR data-access and
+          deletion requests need a reachable channel.]
+        </p>
       </Section>
     </div>
   )

@@ -115,7 +115,11 @@ export default function TermsPage() {
       </Section>
 
       <Section title="Contact">
-        <p>Questions about these terms? Reach out via the contact details on our GitHub repository.</p>
+        <p>
+          [TODO: publish a real, monitored contact channel here — an email address or a contact
+          form — before this page is relied on. It should not point people at the source code
+          repository.]
+        </p>
       </Section>
     </div>
   )
