@@ -6,6 +6,7 @@ import { Battery, Info, ChevronDown, ChevronUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
+import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 
 const BATTERY_TYPES = [
   {
@@ -83,6 +84,8 @@ export default function BatterySizingPage() {
           of backup you want, and your battery chemistry.
         </p>
       </div>
+
+      <CalculatorDisclaimer />
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
