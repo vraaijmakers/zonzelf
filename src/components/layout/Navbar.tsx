@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Sun, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import SignOutButton from '@/components/admin/SignOutButton'
+import Logo from '@/components/layout/Logo'
 
 const NAV_LINKS = [
   { href: '/guides',      label: 'Guides' },
@@ -39,12 +40,9 @@ export default function Navbar() {
   }, [])
 
   return (
-    <header className="border-b bg-white sticky top-0 z-50">
+    <header className="border-b bg-zon-paper sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl text-yellow-600">
-          <Sun className="w-6 h-6" />
-          ZonZelf
-        </Link>
+        <Logo />
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
@@ -55,8 +53,8 @@ export default function Navbar() {
               className={cn(
                 'px-4 py-2 rounded-md text-sm font-medium transition-colors',
                 pathname.startsWith(href)
-                  ? 'bg-yellow-50 text-yellow-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-zon-gold-tint text-zon-gold-deep'
+                  : 'text-zon-body hover:bg-zon-rule-soft'
               )}
             >
               {label}
@@ -67,8 +65,8 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-3">
           {user ? (
             <>
-              <span className="text-sm text-gray-600 max-w-[12rem] truncate">{user.email}</span>
-              <SignOutButton className="text-sm text-gray-600 hover:text-gray-900 transition-colors" />
+              <span className="text-sm text-zon-body max-w-[12rem] truncate">{user.email}</span>
+              <SignOutButton className="text-sm text-zon-body hover:text-zon-ink transition-colors" />
             </>
           ) : (
             <>
@@ -77,7 +75,7 @@ export default function Navbar() {
               </Link>
               <Link
                 href="/auth/signup"
-                className={cn(buttonVariants({ size: 'sm' }), 'bg-yellow-500 hover:bg-yellow-600 text-white')}
+                className={cn(buttonVariants({ size: 'sm' }), 'bg-zon-gold hover:bg-zon-gold-deep text-zon-ink')}
               >
                 Get started
               </Link>
@@ -98,21 +96,21 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden border-t px-4 py-3 flex flex-col gap-1 bg-white">
+        <div className="md:hidden border-t px-4 py-3 flex flex-col gap-1 bg-zon-paper">
           {NAV_LINKS.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
               onClick={() => setOpen(false)}
-              className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100"
+              className="px-3 py-2 rounded-md text-sm font-medium text-zon-body hover:bg-zon-rule-soft"
             >
               {label}
             </Link>
           ))}
           {user ? (
             <div className="flex items-center justify-between pt-2 border-t mt-1">
-              <span className="text-sm text-gray-600 truncate">{user.email}</span>
-              <SignOutButton className="text-sm text-gray-600 hover:text-gray-900 transition-colors" />
+              <span className="text-sm text-zon-body truncate">{user.email}</span>
+              <SignOutButton className="text-sm text-zon-body hover:text-zon-ink transition-colors" />
             </div>
           ) : (
             <div className="flex gap-2 pt-2 border-t mt-1">
@@ -124,7 +122,7 @@ export default function Navbar() {
               </Link>
               <Link
                 href="/auth/signup"
-                className={cn(buttonVariants({ size: 'sm' }), 'flex-1 justify-center bg-yellow-500 hover:bg-yellow-600 text-white')}
+                className={cn(buttonVariants({ size: 'sm' }), 'flex-1 justify-center bg-zon-gold hover:bg-zon-gold-deep text-zon-ink')}
               >
                 Get started
               </Link>
