@@ -3,9 +3,10 @@
 -- reprioritization) so the board isn't empty on first load. Safe to re-run
 -- — it's insert-only against a table that starts empty in a fresh reset.
 --
--- Keep this in sync with supabase/migrations/20260820000003_roadmap_priorities_update.sql
--- and 20260820000005_roadmap_battery_data_pipeline.sql, which apply the same
--- end state as incremental patches against an already-seeded environment
+-- Keep this in sync with supabase/migrations/20260820000003_roadmap_priorities_update.sql,
+-- 20260820000005_roadmap_battery_data_pipeline.sql, and
+-- 20260821000002_roadmap_scraper_autonomy.sql, which apply the same end
+-- state as incremental patches against an already-seeded environment
 -- (migrations run before this file on a reset, so those migrations'
 -- UPDATEs/INSERTs are no-ops here — the values below are written directly
 -- instead).
@@ -92,6 +93,10 @@ values
    'battery_models table + scripts/scrape-*.ts. Collects real battery model specs (brand, capacity, voltage, DoD) from manufacturer sites so the battery calculator can eventually recommend "4x EG4 LL-S 100Ah" instead of just a kWh number. Rows land unpublished; an admin review step (part of the admin scrapers item) gates anything reaching a visitor. Started with EG4 only — robots.txt ruled out Renogy (explicitly disallows AI crawlers); SOK and Battle Born are next.',
    'in_development', 20, false, 76),
 
+  (2, 'calculators', 'Battery scraper: re-scrape scheduling + published-row review gate',
+   'The upsert currently overwrites an already-published row''s data on every re-run with no re-review step — fix that first, since a scheduled job silently changing a live price/spec would break the "scraped data isn''t trusted until reviewed" rule. Then add a scheduled re-scrape (GitHub Actions, weekly/monthly — battery specs don''t change daily) for the three known brands (EG4, Victron, SunGoldPower). Scrapers are manual-only today.',
+   'planned', 0, false, 77),
+
   -- Phase 3 — monitoring (pushed later, 2026-08-20: sequencing choice, not a
   -- change to differentiator #2 in the Blue Ocean Contract)
   (3, 'monitoring', 'Local monitoring agent',
@@ -101,6 +106,14 @@ values
   (3, 'monitoring', 'Monitoring dashboard UI + /api/ingest',
    'The user-facing live monitoring screen and the ingest endpoint the local agent posts to. Depends on the dashboard shell.',
    'planned', 0, true, 82),
+
+  (3, 'calculators', 'Battery scraper: brand discovery + LLM extraction',
+   'Replace hand-written per-brand parsers with LLM extraction at scrape time (same pattern as /api/scan-label), so adding a brand stops requiring bespoke code — each of EG4/Victron/SunGoldPower needed real investigative work to get right, which doesn''t scale. A discovery step finds candidate brand sites; robots.txt is auto-checked and an AI-crawler disallow (ClaudeBot/GPTBot) auto-skips the brand, matching the Renogy precedent. A human still adds a new domain to a reviewed "cleared brands" list before its first scrape — Terms of Service often has no-scraping language robots.txt doesn''t capture, and that judgment call stays manual even as extraction and discovery automate.',
+   'planned', 0, false, 85),
+
+  (3, 'calculators', 'Battery scraper: agent-assisted review',
+   'Second-pass automated reviewer (capacity_kwh matches voltage x Ah, source_url actually supports the scraped numbers, not a near-duplicate of an existing row) that runs before a human spot-check. Downstream of the publish decision rather than upstream of hitting an external site, so a wrong call has a much smaller blast radius than an autonomous scrape/discovery mistake. Human review stays in the loop until the agent is trusted; the admin review UI (see "Admin portal: scrapers...") is the human side of this either way.',
+   'planned', 0, false, 86),
 
   -- Phase 4 — community (depends on monitoring data existing)
   (4, 'community', 'Community data aggregation',
