@@ -27,8 +27,8 @@ const FEATURES = [
     title: 'Resource Library',
     description: 'Curated YouTube channels, forum threads, and manufacturer docs — vetted by the community.',
     href: '/resources',
-    badge: 'Soon',
-    enabled: false,
+    badge: 'Free',
+    enabled: true,
   },
   {
     icon: Wifi,
