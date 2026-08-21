@@ -174,13 +174,48 @@ export default function BatteriesGuidePage() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cons</p>
             <Con text="Higher upfront cost ($400–600/kWh)" />
             <Con text="Needs a BMS — most batteries include one, but verify" />
-            <Con text="Don't charge below freezing without a self-heating BMS" />
+            <Con text="Charging stops (or worse, damages cells) below freezing unless the BMS and battery are rated for it — see below" />
             <Con text="Cell voltage curve is very flat — harder to gauge state of charge from voltage alone" />
           </div>
         </div>
-        <Card className="border-blue-100 bg-blue-50">
+        <Card className="border-blue-100 bg-blue-50 mb-4">
+          <CardContent className="pt-3 pb-3 space-y-2">
+            <Warn text="Charging LiFePO4 below 0°C (32°F) causes permanent lithium plating damage — this only applies to charging, not discharging; a healthy LiFePO4 bank can still supply power down to around -20°C (-4°F)." />
+            <p className="text-sm text-gray-700 pl-6">
+              Most reputable batteries have a BMS that protects the cells by simply refusing to
+              charge below freezing — which stops the damage, but also means your solar stops
+              reaching the battery for however long it stays that cold, unless the battery is
+              specifically <strong>self-heating</strong> (an internal heater that warms the cells
+              enough to resume charging — a feature, not a given). Cheaper or unbranded packs may
+              skip low-temperature charge protection entirely, in which case the damage happens
+              silently with no fault indicated until capacity has already dropped.
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-amber-100 bg-amber-50">
           <CardContent className="pt-3 pb-3">
-            <Warn text="Charging LiFePO4 at temperatures below 0°C (32°F) causes permanent lithium plating damage. If your batteries are in an unheated space in winter, look for self-heating models or add a low-temp cutoff to your charge controller." />
+            <p className="text-sm font-semibold text-amber-800 mb-2">
+              Installing in an unheated space? (shed, garage, boat, unconditioned outbuilding)
+            </p>
+            <p className="text-sm text-gray-700 mb-2">
+              Don&apos;t assume a battery has cold-charge protection because it&apos;s LiFePO4 —
+              check the datasheet for these before you buy, not after:
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
+              <li><strong>Charge temperature range</strong> — listed separately from the discharge
+                range. If the datasheet only gives one operating-temperature range, ask the
+                vendor which one it is.</li>
+              <li><strong>Self-heating</strong> — stated explicitly (&quot;low-temp heating&quot;,
+                &quot;self-heating BMS&quot;) or not present at all. Don&apos;t infer it from
+                marketing photos of snow.</li>
+              <li><strong>Low-temp charge cutoff</strong> — confirms the BMS will refuse to charge
+                below its rated minimum rather than passing current through regardless.</li>
+            </ul>
+            <p className="text-sm text-gray-700 mt-2">
+              If none of that is confirmed, plan around it: insulate or lightly heat the battery
+              enclosure, or size the bank so it can coast through the coldest stretch on stored
+              charge without needing to accept a charge while below freezing.
+            </p>
           </CardContent>
         </Card>
       </section>
