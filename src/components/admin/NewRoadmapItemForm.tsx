@@ -21,19 +21,25 @@ export default function NewRoadmapItemForm() {
       }
       className="grid gap-3 sm:grid-cols-2 bg-gray-50 border rounded-lg p-4 mb-8"
     >
+      <label htmlFor="roadmap-title" className="sr-only">Title</label>
       <input
+        id="roadmap-title"
         name="title"
         required
         placeholder="Title"
         className="rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-yellow-400 sm:col-span-2"
       />
+      <label htmlFor="roadmap-description" className="sr-only">Description</label>
       <textarea
+        id="roadmap-description"
         name="description"
         placeholder="Description (optional)"
         rows={2}
         className="rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-yellow-400 sm:col-span-2"
       />
+      <label htmlFor="roadmap-category" className="sr-only">Category</label>
       <select
+        id="roadmap-category"
         name="category"
         defaultValue="infrastructure"
         className="rounded-lg border px-3 py-2 text-sm bg-white"
@@ -44,7 +50,9 @@ export default function NewRoadmapItemForm() {
           </option>
         ))}
       </select>
+      <label htmlFor="roadmap-phase" className="sr-only">Phase</label>
       <input
+        id="roadmap-phase"
         name="phase"
         type="number"
         defaultValue={0}

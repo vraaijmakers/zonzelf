@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/admin'
 import { groupByPhase, STATUS_LABEL, STATUS_STYLE, type RoadmapItem } from '@/lib/roadmap'
 
 export const metadata = {
@@ -7,9 +8,8 @@ export const metadata = {
 }
 
 export default async function PublicRoadmapPage() {
+  await requireAdmin()
   const supabase = await createClient()
-  // RLS restricts this to is_public = true rows for anonymous/non-admin
-  // visitors — no extra filter needed here.
   const { data } = await supabase
     .from('roadmap_items')
     .select('id, phase, category, title, description, status, dev_percent_complete, is_public, display_order')
@@ -24,7 +24,7 @@ export default async function PublicRoadmapPage() {
     <div className="max-w-3xl mx-auto px-4 py-16">
       <h1 className="text-3xl font-bold mb-2">Roadmap</h1>
       <p className="text-gray-600 mb-10">
-        What we&apos;re building, in the open. See the{' '}
+        Internal view of what we&apos;re building next, and what&apos;s already shipped. See the{' '}
         <span className="italic">Blue Ocean Contract</span> in our repo for why some obvious
         ideas aren&apos;t here.
       </p>
