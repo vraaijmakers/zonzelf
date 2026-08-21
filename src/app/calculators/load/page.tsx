@@ -231,6 +231,7 @@ export default function LoadCalculatorPage() {
                               type="number"
                               value={a.watts || ''}
                               onChange={e => update(a.id, 'watts', parseFloat(e.target.value) || 0)}
+                              aria-label={a.name ? `Watts for ${a.name}` : 'Watts'}
                               className="w-16 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0"
                             />
@@ -240,6 +241,7 @@ export default function LoadCalculatorPage() {
                               type="number"
                               value={a.hours || ''}
                               onChange={e => update(a.id, 'hours', parseFloat(e.target.value) || 0)}
+                              aria-label={a.name ? `Hours per day for ${a.name}` : 'Hours per day'}
                               className="w-16 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0" max="24" step="0.5"
                             />
@@ -249,6 +251,7 @@ export default function LoadCalculatorPage() {
                               type="number"
                               value={a.qty || ''}
                               onChange={e => update(a.id, 'qty', parseInt(e.target.value) || 1)}
+                              aria-label={a.name ? `Quantity of ${a.name}` : 'Quantity'}
                               className="w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="1"
                             />
@@ -263,6 +266,7 @@ export default function LoadCalculatorPage() {
                               <button
                                 onClick={() => handleScanClick(a.id)}
                                 title={isPro ? 'Scan appliance label' : 'Pro feature — scan label'}
+                                aria-label={isPro ? 'Scan appliance label' : 'Pro feature — scan label'}
                                 className={`transition-colors ${
                                   isPro
                                     ? 'text-gray-300 hover:text-blue-400'
@@ -278,6 +282,7 @@ export default function LoadCalculatorPage() {
                               </button>
                               <button
                                 onClick={() => remove(a.id)}
+                                aria-label={a.name ? `Remove ${a.name}` : 'Remove row'}
                                 className="text-gray-300 hover:text-red-400 transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -441,6 +446,7 @@ export default function LoadCalculatorPage() {
                   min="0.6" max="0.95" step="0.05"
                   value={efficiency}
                   onChange={e => setEfficiency(parseFloat(e.target.value))}
+                  aria-label="System efficiency"
                   className="w-full accent-yellow-500"
                 />
                 <p className="text-xs text-gray-400 mt-1">
