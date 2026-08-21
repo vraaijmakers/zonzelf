@@ -82,9 +82,9 @@ export default function AccessibilityPage() {
           <Mail className="w-4 h-4 text-gray-500 mt-0.5 shrink-0" />
           <span>
             If you hit a barrier using ZonZelf with a screen reader, keyboard-only navigation, or
-            any other assistive technology, we want to know — reach out via the contact details
-            on our GitHub repository. Accessibility bugs are treated as real bugs, not
-            nice-to-haves.
+            any other assistive technology, we want to know. Accessibility bugs are treated as
+            real bugs, not nice-to-haves. [TODO: publish a real, monitored contact channel here —
+            an email address or a contact form.]
           </span>
         </p>
       </Section>
