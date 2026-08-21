@@ -41,7 +41,9 @@ export default function LoginForm({ next }: { next: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      <label htmlFor="login-email" className="sr-only">Email address</label>
       <input
+        id="login-email"
         type="email"
         required
         value={email}
