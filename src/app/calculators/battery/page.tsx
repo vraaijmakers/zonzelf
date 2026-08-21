@@ -129,6 +129,14 @@ export default function BatterySizingPage() {
           How much battery storage do you need? Enter your daily consumption, how many days
           of backup you want, and your battery chemistry.
         </p>
+        <p className="text-sm text-gray-500 mt-2">
+          This sizes storage capacity (kWh) — not the charging current from your panels or the
+          cable/controller amp ratings. See{' '}
+          <Link href="/guides/how-it-works" className="text-yellow-700 hover:underline">
+            how a solar system actually works
+          </Link>{' '}
+          for how charging and supplying the house fit together.
+        </p>
       </div>
 
       <CalculatorDisclaimer />
