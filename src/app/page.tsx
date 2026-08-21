@@ -71,8 +71,8 @@ export default function HomePage() {
             Your solar system,<br className="hidden md:block" /> built by you
           </h1>
           <p className="text-lg text-zon-body max-w-2xl mx-auto mb-8">
-            Free calculators, plain-English guides, and live monitoring tools for anyone
-            setting up an off-grid or hybrid solar system — no engineering degree required.
+            Free calculators and plain-English guides for anyone setting up an off-grid
+            or hybrid solar system — no engineering degree required.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/guides" className={cn(buttonVariants({ size: 'lg' }), 'bg-zon-gold hover:bg-zon-gold-deep text-zon-ink')}>
@@ -150,24 +150,6 @@ export default function HomePage() {
               </Link>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Monitoring CTA */}
-      <section className="max-w-6xl mx-auto px-4 py-16 text-center">
-        <div className="bg-zon-night rounded-2xl p-10 text-white">
-          <Wifi className="w-10 h-10 text-zon-gold-light mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-3">Monitor your system live</h2>
-          <p className="text-white/70 max-w-xl mx-auto mb-6">
-            Connect Victron, Sun Gold, or any MODBUS inverter. See solar watts, battery state-of-charge,
-            and load in real time — from your phone or browser.
-          </p>
-          <p className="text-xs text-white/40 mb-6 italic">
-            ZonZelf — from Dutch <em>zon</em> (sun) + <em>zelf</em> (self). Your energy, yourself.
-          </p>
-          <Link href="/auth/signup" className={cn(buttonVariants(), 'bg-zon-gold hover:bg-zon-gold-deep text-zon-ink')}>
-            Create a free account
-          </Link>
         </div>
       </section>
     </div>

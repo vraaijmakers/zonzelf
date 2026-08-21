@@ -13,7 +13,7 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "ZonZelf — Your Solar System, Your Way",
   description:
-    "Plan, install, and monitor your own solar system. Free calculators, guides, and community tools for off-grid and hybrid solar builders. From the Dutch 'zon' (sun) + 'zelf' (self).",
+    "Plan, install, and maintain your own solar system. Free calculators, guides, and community tools for off-grid and hybrid solar builders. From the Dutch 'zon' (sun) + 'zelf' (self).",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
