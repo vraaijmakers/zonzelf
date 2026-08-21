@@ -9,7 +9,7 @@ export default function Footer() {
         <div className="col-span-2 md:col-span-1">
           <Logo className="mb-2" />
           <p className="text-sm text-zon-muted">
-            Free tools and guides for DIY solar builders — from first panel to full system monitoring.
+            Free tools and guides for DIY solar builders — from first panel to a working system.
           </p>
         </div>
 
