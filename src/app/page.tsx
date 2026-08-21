@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Sun, Calculator, BookOpen, Wifi, ChevronRight, Zap, Battery, Cable } from 'lucide-react'
+import { Calculator, BookOpen, Wifi, ChevronRight, Battery } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,7 @@ const FEATURES = [
     description: 'Guides on battery types, wiring, grounding, DoD rules, and inverter settings — written for humans, not engineers.',
     href: '/guides',
     badge: 'Free',
+    enabled: true,
   },
   {
     icon: Calculator,
@@ -19,28 +20,30 @@ const FEATURES = [
     description: 'Size your battery bank, solar array, and cable gauge. Enter your loads and get real numbers.',
     href: '/calculators',
     badge: 'Free',
+    enabled: true,
   },
   {
     icon: BookOpen,
     title: 'Resource Library',
     description: 'Curated YouTube channels, forum threads, and manufacturer docs — vetted by the community.',
     href: '/resources',
-    badge: 'Free',
+    badge: 'Soon',
+    enabled: false,
   },
   {
     icon: Wifi,
     title: 'Live Monitoring',
     description: 'Connect your inverter (Victron, Sun Gold, Growatt) and watch solar, load, and battery in real time.',
     href: '/dashboard/monitoring',
-    badge: 'Account',
+    badge: 'Soon',
+    enabled: false,
   },
 ]
 
+// Only guides that actually have a page live here. Add an entry back once
+// its /guides/<slug> page ships — see the guides index for the full list.
 const GUIDES = [
   { icon: Battery, title: 'Battery Types Explained',  subtitle: 'AGM vs LiFePO4 vs Gel — what actually matters',       href: '/guides/batteries' },
-  { icon: Cable,   title: 'Cable AWG Sizing',         subtitle: 'Which gauge wire for which current and distance',       href: '/guides/wiring' },
-  { icon: Zap,     title: 'Depth of Discharge',       subtitle: "Don't kill your batteries — set your inverter right",  href: '/guides/depth-of-discharge' },
-  { icon: Sun,     title: 'Grounding Your System',    subtitle: 'Where earth grounding goes and what devices you need',  href: '/guides/grounding' },
 ]
 
 export default function HomePage() {
@@ -86,9 +89,9 @@ export default function HomePage() {
       <section className="max-w-6xl mx-auto px-4 py-16">
         <h2 className="text-2xl font-bold mb-8 text-center text-zon-ink">Everything you need in one place</h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {FEATURES.map(({ icon: Icon, title, description, href, badge }) => (
-            <Link key={href} href={href} className="group">
-              <Card className="h-full hover:shadow-md transition-shadow">
+          {FEATURES.map(({ icon: Icon, title, description, href, badge, enabled }) => {
+            const card = (
+              <Card className={`h-full transition-shadow ${enabled ? 'hover:shadow-md' : 'opacity-60'}`}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between mb-2">
                     <div className="w-10 h-10 rounded-lg bg-zon-gold-tint flex items-center justify-center">
@@ -106,8 +109,17 @@ export default function HomePage() {
                   <CardDescription>{description}</CardDescription>
                 </CardContent>
               </Card>
-            </Link>
-          ))}
+            )
+            return enabled ? (
+              <Link key={href} href={href} className="group">
+                {card}
+              </Link>
+            ) : (
+              <div key={href} className="cursor-not-allowed" aria-disabled="true">
+                {card}
+              </div>
+            )
+          })}
         </div>
       </section>
 

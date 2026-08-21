@@ -31,7 +31,6 @@ export default function Footer() {
             <li><Link href="/calculators/battery" className="hover:underline">Battery Sizing</Link></li>
             <li><Link href="/calculators/panels" className="hover:underline">Panel Sizing</Link></li>
             <li><Link href="/calculators/awg" className="hover:underline">AWG Calculator</Link></li>
-            <li><Link href="/resources" className="hover:underline">YouTube & Links</Link></li>
           </ul>
         </div>
 
@@ -40,8 +39,6 @@ export default function Footer() {
           <ul className="space-y-2 text-sm text-zon-body">
             <li><Link href="/auth/signup" className="hover:underline">Get started</Link></li>
             <li><Link href="/auth/login" className="hover:underline">Sign in</Link></li>
-            <li><Link href="/dashboard" className="hover:underline">My Projects</Link></li>
-            <li><Link href="/dashboard/monitoring" className="hover:underline">Monitoring</Link></li>
           </ul>
         </div>
 
