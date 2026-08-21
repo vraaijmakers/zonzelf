@@ -1,12 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { Battery, Info, ChevronDown, ChevronUp } from 'lucide-react'
+import { Battery, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
+import { createClient } from '@/lib/supabase/client'
+
+type BatteryModelMatch = {
+  id: number
+  brand: string
+  model: string
+  voltage: number
+  capacity_ah: number
+  capacity_kwh: number
+  price_usd: number | null
+  source_url: string
+}
+
+// Real battery packs are 12.8V/25.6V/51.2V nominal, not the rounded 12/24/48
+// the system-voltage picker above uses — bucket by family instead of an
+// exact match, or every published row would silently never match.
+function voltageFamily(v: number): 12 | 24 | 48 {
+  if (v < 18) return 12
+  if (v < 36) return 24
+  return 48
+}
 
 const BATTERY_TYPES = [
   {
@@ -70,6 +91,31 @@ export default function BatterySizingPage() {
   const totalAh    = (totalKwh * 1000) / voltage
   const usableAh   = totalAh * battery.dod
 
+  const [allModels, setAllModels] = useState<BatteryModelMatch[]>([])
+  const [modelsLoading, setModelsLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const supabase = createClient()
+    supabase
+      .from('battery_models')
+      .select('id, brand, model, voltage, capacity_ah, capacity_kwh, price_usd, source_url')
+      .eq('chemistry', battery.id)
+      .order('capacity_kwh', { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) console.error('Failed to load battery models:', error.message)
+        setAllModels(error ? [] : (data ?? []))
+        setModelsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [battery.id])
+
+  const matchingModels = useMemo(
+    () => allModels.filter(m => voltageFamily(m.voltage) === voltage),
+    [allModels, voltage]
+  )
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
       <div className="mb-8">
@@ -82,6 +128,14 @@ export default function BatterySizingPage() {
         <p className="text-gray-600">
           How much battery storage do you need? Enter your daily consumption, how many days
           of backup you want, and your battery chemistry.
+        </p>
+        <p className="text-sm text-gray-500 mt-2">
+          This sizes storage capacity (kWh) — not the charging current from your panels or the
+          cable/controller amp ratings. See{' '}
+          <Link href="/guides/how-it-works" className="text-yellow-700 hover:underline">
+            how a solar system actually works
+          </Link>{' '}
+          for how charging and supplying the house fit together.
         </p>
       </div>
 
@@ -308,6 +362,59 @@ export default function BatterySizingPage() {
           </div>
         </div>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Battery className="w-4 h-4 text-yellow-600" />
+            Real battery models — {voltage}V {battery.name}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {modelsLoading ? (
+            <p className="text-sm text-gray-400">Loading published battery models…</p>
+          ) : matchingModels.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No published {voltage}V {battery.name} models yet — this list grows as scraped
+              models are reviewed and published.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {matchingModels.map(m => {
+                const units = Math.ceil(totalKwh / m.capacity_kwh)
+                const totalPrice = m.price_usd != null ? units * m.price_usd : null
+                return (
+                  <div
+                    key={m.id}
+                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 rounded-lg border border-gray-200"
+                  >
+                    <div>
+                      <a
+                        href={m.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium hover:underline inline-flex items-center gap-1"
+                      >
+                        {m.brand} {m.model}
+                        <ExternalLink className="w-3 h-3 text-gray-400" aria-hidden="true" />
+                      </a>
+                      <p className="text-xs text-gray-500">
+                        {m.voltage}V · {m.capacity_ah}Ah · {m.capacity_kwh} kWh each
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <Badge variant="secondary">You need {units}</Badge>
+                      <span className="text-sm text-gray-600">
+                        {totalPrice != null ? `~$${totalPrice.toLocaleString()}` : 'Price not published'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

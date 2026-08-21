@@ -1,9 +1,17 @@
 import Link from 'next/link'
-import { Battery, Cable, Zap, Sun, BookOpen, Settings, ChevronRight } from 'lucide-react'
+import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
 const GUIDES = [
+  {
+    icon: Workflow,
+    slug: 'how-it-works',
+    title: 'How a Solar System Works',
+    description: 'Start from a single panel and a light bulb and build up: why you need a charge controller, why you need a battery, and what "charging" vs. "supplying the house" actually means.',
+    tags: ['fundamentals', 'beginner'],
+    readTime: '14 min',
+  },
   {
     icon: Battery,
     slug: 'batteries',

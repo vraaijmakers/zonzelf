@@ -55,6 +55,14 @@ export default function PanelSizingPage() {
           How many panels do you need? The key variable is <strong>peak sun hours</strong> —
           the daily equivalent of full-strength sunlight at your location.
         </p>
+        <p className="text-sm text-gray-500 mt-2">
+          This sizes daily energy output (kWh) — not the charging current your panels deliver to
+          the battery at any given moment. See{' '}
+          <Link href="/guides/how-it-works" className="text-yellow-700 hover:underline">
+            how a solar system actually works
+          </Link>{' '}
+          to see where that current fits in.
+        </p>
       </div>
 
       <CalculatorDisclaimer />
