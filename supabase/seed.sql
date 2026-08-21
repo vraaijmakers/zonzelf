@@ -3,11 +3,12 @@
 -- reprioritization) so the board isn't empty on first load. Safe to re-run
 -- — it's insert-only against a table that starts empty in a fresh reset.
 --
--- Keep this in sync with supabase/migrations/20260820000003_roadmap_priorities_update.sql,
--- which applies the same end state as an incremental patch against an
--- already-seeded environment (migrations run before this file on a reset,
--- so that migration's UPDATEs are no-ops here — the values below are
--- written directly instead).
+-- Keep this in sync with supabase/migrations/20260820000003_roadmap_priorities_update.sql
+-- and 20260820000005_roadmap_battery_data_pipeline.sql, which apply the same
+-- end state as incremental patches against an already-seeded environment
+-- (migrations run before this file on a reset, so those migrations'
+-- UPDATEs/INSERTs are no-ops here — the values below are written directly
+-- instead).
 
 insert into public.roadmap_items
   (phase, category, title, description, status, dev_percent_complete, is_public, display_order)
@@ -86,6 +87,10 @@ values
   (2, 'admin', 'Admin portal: scrapers, SEO, memberships, payments',
    'The remaining /admin sidebar sections beyond the roadmap board — currently "Soon" stubs in src/app/admin/layout.tsx.',
    'planned', 0, false, 74),
+
+  (2, 'calculators', 'Battery spec data pipeline (scraper)',
+   'battery_models table + scripts/scrape-*.ts. Collects real battery model specs (brand, capacity, voltage, DoD) from manufacturer sites so the battery calculator can eventually recommend "4x EG4 LL-S 100Ah" instead of just a kWh number. Rows land unpublished; an admin review step (part of the admin scrapers item) gates anything reaching a visitor. Started with EG4 only — robots.txt ruled out Renogy (explicitly disallows AI crawlers); SOK and Battle Born are next.',
+   'in_development', 20, false, 76),
 
   -- Phase 3 — monitoring (pushed later, 2026-08-20: sequencing choice, not a
   -- change to differentiator #2 in the Blue Ocean Contract)
