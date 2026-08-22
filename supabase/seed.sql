@@ -64,8 +64,8 @@ values
   -- cluster is honestly in_production.
 
   (0, 'calculators', 'Calculators: correct inverter cutoff voltages',
-   'The battery calculator currently tells a 12V LiFePO4 user to set LVD at 12.0V for 80% DoD — that is near empty on a 4S 12.8V pack; 80% DoD is roughly 12.8–13.0V rest. Lead-acid 50% DoD at 11.8V is also low (rest is closer to 12.1–12.2V). Cite manufacturer / chemistry tables, distinguish rest vs loaded voltage, and stop inventing a single "typical" number that contradicts the DoD the rest of the page teaches. Highest-severity educational bug from the 2026-08-21 audit.',
-   'planned', 0, true, 51),
+   'Fixed: the battery calculator invented its own LVD numbers (12.0V for 12V LiFePO4 at 80% DoD — actually near-empty) instead of using the ones already correct in /guides/depth-of-discharge. Calculator now shares src/lib/battery-chemistry.ts with that guide and gives chemistry-specific copy (lithium: use the BMS, voltage is not a reliable proxy; lead-acid: resting-voltage band, explicit sag-under-load warning) instead of one invented number. Still blocked on the separate "licensed electrician/engineer sign-off" item before this counts as reviewed.',
+   'in_test', 90, true, 51),
 
   (0, 'calculators', 'Calculators: AWG ampacity from a cited electrical code',
    'The AWG table uses chassis-wiring ratings (AWG 10 = 55A, AWG 12 = 41A). NEC 310.16 / typical THHN in conduit is ~30A / 20A; NEN 1010 / IEC 60364 are the relevant codes for the EU/NL audience. max_amps_bundle exists in the table and is unused. No insulation type, temperature, bundling, DC vs AC, or fuse-must-protect-the-wire. Voltage-drop math is fine; the recommendation is not. Default to the conservative (in-conduit / code) table, or offer chassis vs in-conduit as two modes. Cite the source on the page.',
