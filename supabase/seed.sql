@@ -16,6 +16,20 @@
 -- (migrations run before this file on a reset, so those migrations'
 -- UPDATEs/INSERTs are no-ops here — the values below are written directly
 -- instead).
+--
+-- THIS FILE IS NOT A BACKUP. It is a hand-maintained reconstruction, and on
+-- 2026-08-22 it was found to have silently drifted from the live board in
+-- four places: one item created through /admin/roadmap ("Run a full security
+-- scan") existed here not at all, and three display_order values had never
+-- matched. Nothing detects that drift on its own — the admin Server Actions
+-- write straight to the database, and a `db reset` only ever proves this file
+-- agrees with the migrations, never that either agrees with reality.
+--
+-- Before editing the board, and again after, run:
+--
+--     npm run dump:roadmap
+--
+-- and diff it against this file. See scripts/dump-roadmap.ts.
 
 insert into public.roadmap_items
   (phase, category, title, description, status, dev_percent_complete, is_public, display_order)
@@ -83,8 +97,8 @@ values
    'The regional presets (Netherlands 2.5h, etc.) are annual figures. December in NL is closer to 1h. No worst-month, no tilt, no shading. Fine as a first estimate if the page says so; currently it does not. Label them annual, and offer a worst-month input so a beginner does not size an array that only works in June.',
    'planned', 0, true, 55),
 
-  (0, 'calculators', 'Calculators: demote "Recommended" copy until engineer-reviewed',
-   'Result cards say "Recommended gauge" / "Recommended bank" in large green type. Combined with chassis ampacity and wrong LVD numbers, that reads as a specification, not a starting estimate. Until the electrician/engineer sign-off item is done, the UI should say "rough starting estimate — do not buy from this number" with the same visual weight as the number itself. Product-liability item; pairs with the disclaimer, does not replace it.',
+  (0, 'calculators', 'Calculators: show the derivation, never a bare recommendation',
+   'Permanent design principle, not a temporary measure pending sign-off. US product-liability law splits on whether information is a "product": Winter v. G.P. Putnam''s Sons (9th Cir. 1991) held a book''s informational content is not, and that publishers owe no general duty to verify accuracy — that is where the guides sit. Saloomey v. Jeppesen and Brocklesby held aeronautical charts ARE products, because a chart mechanically converts data into an output the user acts on directly in a hazardous activity. "Recommended gauge: AWG 10" in large green type is the chart, not the book. Every calculator must show the code table, show the arithmetic, cite the source, and teach the user to derive the answer — never emit a bare authoritative number. This is differentiator #1 (plain English is the product) executed properly; the liability fix and the product goal are the same move. Pairs with the disclaimer and the electrician sign-off, replaces neither.',
    'planned', 0, true, 56),
 
   (0, 'calculators', 'Calculators: licensed electrician/engineer sign-off',
@@ -104,11 +118,11 @@ values
    'planned', 0, false, 60),
 
   (0, 'infrastructure', 'Legal: confirm entity and jurisdiction',
-   'Terms of Service governing-law section is an explicit TODO pending a confirmed legal entity and jurisdiction.',
+   'Decided 2026-08-22: US LLC, US-first audience, NEC 310.16 as the governing electrical code. Remaining work is execution, not the decision — file the LLC and name it plus the governing law in the Terms "Governing law" section, which is still a visible [TODO] in src/app/terms/page.tsx. Operating as a natural person means unlimited personal liability; this is a hard gate before collecting an email or a dollar.',
    'planned', 0, false, 61),
 
   (0, 'infrastructure', 'Legal: professional review before production',
-   'Disclaimer/terms/privacy/accessibility are a first draft, not lawyer-reviewed, and currently show [TODO] placeholders to visitors. Before production, counsel must review: governing law and legal entity, liability language vs the confidence of calculator "Recommended" copy, GDPR/AVG (lawful basis, processor list including Supabase + Anthropic vision for /api/scan-label, retention, US transfers, cookie assessment, DSR channel), and consumer-law risk of advertising Pro/subscriptions/monitoring that do not exist yet. Visible TODOs must be gone before zonzelf.com is public.',
+   'Production gate. US counsel reviews the disclaimer, terms, and privacy pages against the US LLC and NEC framing: liability language measured against the confidence of calculator output (see "Calculators: show the derivation"), clickwrap assent, affiliate disclosure, and the FTC endorsement rules. GDPR/AVG still applies to EU visitors even with a US entity — lawful basis, processor list (Supabase, plus Anthropic vision for /api/scan-label), retention, US transfers, and a DSR channel all still need answering, but as a visitor-facing obligation rather than the entity-level exposure the EU Product Liability Directive would have been. Visible [TODO] placeholders must be gone before zonzelf.com is public.',
    'planned', 0, false, 62),
 
   (0, 'infrastructure', 'Auth: sanitize the next= redirect (open redirect)',
@@ -143,10 +157,18 @@ values
    'Production gate before any battery_models row is published (the public battery calculator already lists them). The upsert currently overwrites an already-published row''s data on every re-run with no re-review step — a scheduled job silently changing a live price/spec would break the "scraped data isn''t trusted until reviewed" rule. Fix overwrite-protection first. Then, later, add a scheduled re-scrape (GitHub Actions, weekly/monthly — battery specs don''t change daily) for the known brands. Scrapers are manual-only today.',
    'planned', 0, false, 70),
 
+  (0, 'infrastructure', 'Form the US LLC + liability insurance',
+   'Hard gate before collecting any email or any money. File the LLC (~$150-800 first year incl. registered agent, ~$100-300/yr after) and bind cover before launch: media liability averages ~$930/yr for a publisher, tech E&O runs $500-3,000/yr. Stage the spend against revenue milestones rather than paying it all upfront. Until this exists, ZonZelf is Vincent personally, with unlimited personal liability, publishing electrical guidance.',
+   'planned', 0, false, 71),
+
+  (0, 'infrastructure', 'Clickwrap assent for terms and disclaimer',
+   'The disclaimer is currently a footer link. Courts treat browsewrap as weak evidence of assent — a disclaimer nobody affirmatively accepted is much harder to rely on, and US courts have struck down all-encompassing waivers as overbroad. Add an explicit "I have read and accept" checkbox at signup (and before any paid tier), storing the timestamp and the version of the terms accepted. This is what makes the disclaimer worth having; it does not replace fixing the calculators.',
+   'planned', 0, false, 72),
+
   -- Phase 1 — content completeness (onboarding differentiator)
   (1, 'onboarding', 'Guided beginner onboarding',
    'Plain-English explainers woven into guides and calculators, not a separate wizard. Differentiator #1.',
-   'planned', 0, true, 60),
+   'planned', 0, true, 70),
 
   (1, 'onboarding', 'Remaining guide pages',
    'wiring, depth-of-discharge, grounding, inverter-settings, glossary. how-it-works and battery-types have shipped. Do not re-link from the index or footer until each page exists (see "Fix /guides index dead links").',
@@ -171,6 +193,16 @@ values
   (1, 'calculators', 'Battery listings: series/parallel, not just "you need N"',
    'Published models show `You need ${ceil(totalKwh / capacity_kwh)}`. That is a kWh count, not a wiring plan: 2S2P vs 4P, current sharing, and that mixing 12.8V packs to make 24V is a different problem. If we show prices this becomes shopping advice. Teach the topology, or stop implying N identical units in parallel is the answer.',
    'planned', 0, true, 94),
+
+  (1, 'onboarding', 'Affiliate disclosure + FTC-compliant link policy',
+   'Affiliate is now the primary revenue line, and the FTC requires disclosure that is clear and conspicuous — near the link, before the click, not buried in a footer or a separate page. Needs a standing disclosure component on any page carrying affiliate links, a policy page explaining what is and is not paid placement, and a rule that a component is never recommended because it pays better. On a site whose entire moat is beginner trust, an undisclosed affiliate link costs more than it earns.',
+   'planned', 0, true, 96),
+
+  -- Created by the operator through /admin/roadmap, recovered from the live
+  -- database on 2026-08-22 — it had never existed in seed.sql or any migration.
+  (1, 'infrastructure', 'Run a full security scan',
+   'Make sure all components and services conform to the latest security standards.',
+   'planned', 0, true, 100),
 
   (1, 'infrastructure', 'Docs hygiene: CLAUDE.md, TECH-STACK, .env.example',
    'Internal. CLAUDE.md still lists /admin as unbuilt and the architecture tree is stale. TECH-STACK.md still says Vercel + Prisma. .env.example still says "set these in Vercel" and first claims the service-role key is unused, then describes the scrapers using it. The next session will follow the stale files. Not user-facing; do it when touching those files, not as its own heroic rewrite.',
@@ -204,11 +236,11 @@ values
   -- Phase 3 — monitoring (pushed later, 2026-08-20: sequencing choice, not a
   -- change to differentiator #2 in the Blue Ocean Contract)
   (3, 'monitoring', 'Local monitoring agent',
-   'Brand-agnostic MODBUS/serial agent (Python, runs on a Pi/PC) posting to /api/ingest. Differentiator #2.',
-   'planned', 0, true, 80),
+   'Brand-agnostic MODBUS/serial agent (Python, runs on a Pi/PC) posting to /api/ingest. Differentiator #2. Deliberately free: the agent is open and forkable by design, so it cannot carry a subscription — Solar Assistant''s $149 dongle is precisely the lock-in ZonZelf is choosing not to have. Its value is the daily active users it creates, which is what makes affiliate and content revenue work.',
+   'planned', 0, true, 60),
 
   (3, 'monitoring', 'Monitoring dashboard UI + /api/ingest',
-   'The user-facing live monitoring screen and the ingest endpoint the local agent posts to. Depends on the dashboard shell.',
+   'The user-facing live monitoring screen and the ingest endpoint the local agent posts to. Depends on the dashboard shell. Free feature — see "Local monitoring agent". Paid tiers are deferred until there is evidence users will pay, and are not assumed by the plan.',
    'planned', 0, true, 82),
 
   (3, 'calculators', 'Battery scraper: brand discovery + LLM extraction',
@@ -222,4 +254,4 @@ values
   -- Phase 4 — community (depends on monitoring data existing)
   (4, 'community', 'Community data aggregation',
    'Opt-in anonymized aggregate stats ("systems like yours averaged X peak sun hours"). Differentiator #3.',
-   'planned', 0, true, 90);
+   'planned', 0, true, 80);
