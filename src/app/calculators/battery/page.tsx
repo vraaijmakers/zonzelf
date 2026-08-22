@@ -6,6 +6,7 @@ import { Battery, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-reac
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
+import { CUTOFF_PROFILES, cutoffBand, formatBand, type ChemistryId } from '@/lib/battery-chemistry'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { createClient } from '@/lib/supabase/client'
 
@@ -29,7 +30,17 @@ function voltageFamily(v: number): 12 | 24 | 48 {
   return 48
 }
 
-const BATTERY_TYPES = [
+interface BatteryType {
+  id: ChemistryId
+  name: string
+  dod: number
+  efficiency: number
+  cycles: string
+  color: string
+  notes: string
+}
+
+const BATTERY_TYPES: BatteryType[] = [
   {
     id: 'lifepo4',
     name: 'LiFePO4 (Lithium)',
@@ -331,19 +342,35 @@ export default function BatterySizingPage() {
             <CardContent className="pt-4">
               <div className="flex gap-2 text-xs text-gray-500">
                 <Info className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
-                <p>
-                  <strong className="text-gray-700">Inverter cutoff:</strong> Set your low-voltage
-                  disconnect to stop discharge at your DoD limit.
-                  For {voltage}V {battery.name.split(' ')[0]}, that&apos;s typically{' '}
-                  <strong className="text-gray-700">
-                    {voltage === 12
-                      ? battery.id === 'lifepo4' ? '12.0V' : '11.8V'
-                      : voltage === 24
-                      ? battery.id === 'lifepo4' ? '24.0V' : '23.6V'
-                      : battery.id === 'lifepo4' ? '48.0V' : '47.2V'}
-                  </strong>.
-                </p>
+                {CUTOFF_PROFILES[battery.id].voltageIsReliableProxy ? (
+                  <p>
+                    <strong className="text-gray-700">Inverter cutoff:</strong> {battery.name}
+                    {' '}voltage sags close to linearly, so a resting reading is a usable clue.
+                    At {voltage}V that&apos;s around{' '}
+                    <strong className="text-gray-700">{formatBand(cutoffBand(battery.id, voltage as 12 | 24 | 48))}</strong>
+                    {' '}<em>at rest</em> — nothing charging, nothing running. Under load the
+                    voltage sags further, so copying this resting number straight into a live
+                    cutoff will stop the inverter too late. Always confirm against the battery&apos;s
+                    datasheet.
+                  </p>
+                ) : (
+                  <p>
+                    <strong className="text-gray-700">Inverter cutoff:</strong> {battery.name}
+                    {' '}voltage barely moves until the pack is nearly empty — a single voltage
+                    number can&apos;t reliably enforce an 80% DoD limit. Use the battery&apos;s
+                    built-in manager (BMS) or a monitor that reports <strong className="text-gray-700">
+                    percent remaining</strong> instead. If the inverter only has a voltage
+                    setting, a rough &ldquo;everything off&rdquo; floor at {voltage}V is about{' '}
+                    <strong className="text-gray-700">{formatBand(cutoffBand(battery.id, voltage as 12 | 24 | 48))}</strong>
+                    {' '}— that is already close to empty, not 20% left.
+                  </p>
+                )}
               </div>
+              <p className="text-xs text-gray-400 mt-2 pl-6">
+                <Link href="/guides/depth-of-discharge" className="hover:underline">
+                  How deep can you drain a battery? →
+                </Link>
+              </p>
             </CardContent>
           </Card>
 
