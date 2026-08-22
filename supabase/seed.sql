@@ -96,8 +96,8 @@ values
    'planned', 0, true, 58),
 
   (0, 'onboarding', 'Fix /guides index dead links',
-   'Guides index still cards 5 pages that do not exist (depth-of-discharge, wiring, grounding, inverter-settings, glossary). Footer links wiring/grounding/glossary. Battery guide links /guides/depth-of-discharge twice. how-it-works has since shipped — leave that card. Production gate: do not index or footer-link a guide until its page exists. Writing the missing guides is the separate "Remaining guide pages" item.',
-   'planned', 0, true, 59),
+   'Shipped in 766cedf (PR #40): all 5 previously-missing guide pages now exist, so the guides index and footer links that pointed at them stop 404ing. Verified live — all 7 /guides/* routes return 200.',
+   'in_production', 100, true, 59),
 
   (0, 'infrastructure', 'Legal: real contact channel',
    'Disclaimer/terms/privacy/accessibility pages currently have a [TODO] instead of contact info — publishing "reach out via GitHub" is not usable for a non-technical visitor. Blocked on Vincent choosing a channel (email vs. contact form).',
@@ -149,8 +149,8 @@ values
    'planned', 0, true, 60),
 
   (1, 'onboarding', 'Remaining guide pages',
-   'wiring, depth-of-discharge, grounding, inverter-settings, glossary. how-it-works and battery-types have shipped. Do not re-link from the index or footer until each page exists (see "Fix /guides index dead links").',
-   'planned', 0, true, 62),
+   'Shipped in 766cedf (PR #40, "feat: write the remaining guide pages"): depth-of-discharge, wiring, grounding, inverter-settings, and glossary all exist and share the GuideChrome component with how-it-works and batteries. All 7 guide routes verified returning 200.',
+   'in_production', 100, true, 62),
 
   (1, 'onboarding', 'Guides: expertise-level profile field + filtering',
    'Add a skill_level column to profiles (beginner/intermediate/advanced), a place in account settings to set it, and use it to filter or reorder the /guides index — the "beginner" tags already exist on every guide card, this just closes the loop so a returning user sees their level first. Needs its own migration + RLS policy, same pattern as the existing role column.',
@@ -190,12 +190,12 @@ values
    'in_test', 90, false, 75),
 
   (2, 'calculators', 'battery_models: track charge-temperature range and self-heating so vendor listings can flag cold-climate risk',
-   'The battery calculator lists real vendor models (brand/model/capacity/price) but nothing about charge-temperature range or self-heating. Add those columns, have the scraper capture them where the source datasheet states it, and show an explicit "cold-charge protection: confirmed / not stated" badge per model instead of leaving users to go find the datasheet themselves. Sequence after the in-flight Epoch/SOK/Enjoybot scraper branch merges, not concurrently with it.',
+   'The battery calculator lists real vendor models (brand/model/capacity/price) but nothing about charge-temperature range or self-heating. Add those columns, have the scraper capture them where the source datasheet states it, and show an explicit "cold-charge protection: confirmed / not stated" badge per model instead of leaving users to go find the datasheet themselves. feature/battery-scraper-epoch-sok-enjoybot exists but has no commits beyond develop (2026-08-22 check) — it was never actually started, not "in-flight". No blocker to picking this up now.',
    'planned', 0, true, 92),
 
   (2, 'calculators', 'Battery spec data pipeline (scraper)',
-   'battery_models table + scripts/scrape-*.ts. Collects real battery model specs (brand, capacity, voltage, DoD) from manufacturer sites so the battery calculator can eventually recommend "4x EG4 LL-S 100Ah" instead of just a kWh number. Rows land unpublished; an admin review step (part of the admin scrapers item) gates anything reaching a visitor. Started with EG4 only — robots.txt ruled out Renogy (explicitly disallows AI crawlers); SOK and Battle Born are next.',
-   'in_development', 20, false, 76),
+   'battery_models table + scripts/scrape-*.ts. Collects real battery model specs (brand, capacity, voltage, DoD) from manufacturer sites so the battery calculator can eventually recommend "4x EG4 LL-S 100Ah" instead of just a kWh number. Rows land unpublished; an admin review step (see "Admin: battery model review") gates anything reaching a visitor. Three brands live: EG4, Victron, SunGoldPower (PR #29). Scraping stays manual-only — no scheduled re-run yet, and the upsert still overwrites an already-published row on every re-run with no re-review step (see "Battery scraper: re-scrape scheduling + published-row review gate", which is what remains planned here).',
+   'in_development', 45, false, 76),
 
   (2, 'admin', 'Admin: 2FA and an audit log for role changes',
    'First admin is promoted by hand in the SQL editor. No 2FA, no audit log of who published a battery row or who flipped a profiles.role. Fine while it is one operator; not fine once anyone else has the admin role or the board is reachable on a public domain. Pair with the existing admin portal item.',
