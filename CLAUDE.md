@@ -72,13 +72,66 @@ that lets them close the gap.
 - Anything requiring ZonZelf-branded hardware (this contradicts differentiator #2)
 - A general-purpose home-automation platform (that is Home Assistant's job)
 
-### Monetization — the intended path
+### Monetization — revised 2026-08-22
 
-Affiliate links from day 1; **freemium monitoring** (~$5–9/mo) as the primary recurring
-revenue, because monitoring creates daily active users and daily active users are what turn a
-content site into a business. Component database, electrician lead-gen, digital products, and
-sponsored brand guides come later. Revenue work that isn't the monitoring subscription is a
-Phase 2+ distraction.
+> The previous version of this section made freemium monitoring (~$5–9/mo) the primary
+> recurring revenue and called everything else a "Phase 2+ distraction." Tested against
+> market comparables, that was backwards. Superseded.
+
+**Affiliate plus content is the primary revenue line.** Direct solar programs pay 5–6%
+(Renogy 6%, A1 6%, Bluetti 5–10%); ~6% of one $1,200 battery beats nine months of a $7
+subscription. Display advertising is the second line. Modeled at a realistic year-3 steady
+state (~40k sessions/mo), affiliate and ads together are roughly 85% of revenue.
+
+**Monitoring is free.** It is a retention and differentiation feature, not a revenue engine.
+That is not a concession — it is the original argument followed through: monitoring earns its
+place by creating daily active users, and daily active users are what make affiliate and
+content revenue work. Three things killed the subscription:
+
+1. **The incumbent is cheaper.** Solar Assistant charges $59 once plus $30/yr for updates.
+   $5–9/mo is $60–108/yr — 2–4× the price, from a newcomer with less trust.
+2. **Differentiator #2 destroys its own collectability.** Solar Assistant's $149 dongle *is*
+   their moat. An open Python MODBUS agent is forkable in an afternoon and repointable at
+   self-hosted Grafana or Home Assistant. ZonZelf cannot advertise "no lock-in" and bill a
+   subscription that depends on lock-in.
+3. **It is the only stream that meaningfully escalates liability** and support burden, while
+   being the smallest of the three.
+
+Paid tiers are not forbidden — they are **unproven**. Do not build billing, gating, or
+"Pro" UI until there is evidence users will pay. (Note that `/api/scan-label` already
+pretends to be Pro-gated with `const isPro = false` while the API itself is wide open; that
+is a phase-0 security item, not the start of a paid tier.)
+
+### Legal posture — the rule that governs calculator design
+
+**Entity: US LLC. Audience: US-first. Governing code: NEC 310.16.**
+
+US product-liability law splits on whether information is a "product," and ZonZelf straddles
+the line:
+
+- `Winter v. G.P. Putnam's Sons`, 938 F.2d 1033 (9th Cir. 1991) — a mushroom encyclopedia
+  that poisoned its readers. Held: **the informational content of a book is not a product**,
+  and **publishers owe no general duty to verify accuracy.** Guides, glossary, and resources
+  sit here.
+- `Saloomey v. Jeppesen`, `Brocklesby`, `Fluor` — aeronautical charts **were** products,
+  because a chart mechanically converts data into an output acted on directly in a hazardous
+  activity. *Winter* distinguished these rather than overruling them.
+
+> **The rule: guides teach; calculators must show the derivation and cite the code. Never
+> emit a bare authoritative recommendation.**
+
+"Recommended gauge: AWG 10" in large green type is the chart, not the book. Show the code
+table, show the arithmetic, cite the source, teach the user to derive the answer. This is
+**permanent design**, not a holding pattern until the electrician sign-off lands — and it is
+differentiator #1 executed properly, so the liability fix and the product goal are the same
+move. A bigger disclaimer is not a substitute: a footer link is weak evidence of assent, and
+US courts have struck down all-encompassing waivers as overbroad.
+
+GDPR still applies to EU visitors even with a US entity — the live signup with no deletion
+path, and household photos going to Anthropic via `/api/scan-label`, are real findings today.
+The EU Product Liability Directive (2024/2853, software-as-product, strict liability,
+transposition due 9 Dec 2026) is out of scope for a US entity, but would return if EU users
+were ever commercially *targeted*.
 
 ---
 
@@ -138,9 +191,13 @@ zonzelf-app/
 └── public/
 ```
 
-**Planned, not yet built** (see the roadmap module before starting any of it):
-`/dashboard` (user projects), `/monitoring` (live inverter data), `/admin` (operator portal),
-`/api/ingest` (agent telemetry), `/api/scrape` (content aggregation).
+**Planned, not yet built** (see the roadmap board before starting any of it):
+`/dashboard` (user projects), `/monitoring` (live inverter data), `/api/ingest` (agent
+telemetry), `/api/scrape` (content aggregation).
+
+`/admin` **is** built — `src/app/admin/` has the gated layout, the roadmap board, and the
+battery review queue, with Server Actions in `actions.ts` files that each re-check
+`requireAdmin()`. The tree above is abridged; read the directory rather than trusting it.
 
 ### The admin portal
 
@@ -365,6 +422,23 @@ Schema changes are committed SQL migration files, never clicks in the Supabase d
 Migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`) and
 must be applied to **both** the staging and production projects. Before declaring a data fix
 done, verify the row exists in the database the running app actually reads.
+
+### 10b. The roadmap board is mutable state — dump it before you touch it
+
+`/admin/roadmap`'s Server Actions write straight to the database, so any item created or
+re-statused through the UI exists **only** there. `supabase/seed.sql` is a hand-maintained
+reconstruction, **not a backup** — on 2026-08-22 it was found to have silently drifted from
+the live board in four places, including an operator-created item that existed nowhere in
+git. A `db reset` cannot catch this: it only ever proves `seed.sql` agrees with the
+migrations, never that either agrees with reality.
+
+```bash
+npm run dump:roadmap      # scripts/dump-roadmap.ts — seed.sql-shaped, service-role read
+```
+
+Run it **before and after** any roadmap change and diff, then fold drift back into
+`seed.sql` in the same PR. And never run `supabase db reset --linked` — the hosted project
+is shared between staging and dev, and it would destroy every admin-UI edit with no backup.
 
 ### 11. Column drops are the highest-risk change
 
