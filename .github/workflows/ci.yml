@@ -36,5 +36,13 @@ jobs:
       - name: Roadmap migrations match seed.sql
         run: npm run check:roadmap-migrations
 
+      # The load, battery and panel calculators share one efficiency model
+      # (src/lib/system-efficiency.ts). They used to apply losses three
+      # different ways, and because the stages feed each other the disagreement
+      # multiplied down the chain. A contract test that CI does not run is not
+      # a contract, so this gate exists from the moment the model does.
+      - name: Tests
+        run: npm test
+
       - name: Build
         run: npm run build

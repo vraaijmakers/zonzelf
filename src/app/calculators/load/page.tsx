@@ -11,6 +11,7 @@ import {
   PRESET_GROUPS, rowDailyWh, totalDailyKwh, normalizeDuty, DUTY_CYCLE_SOURCE,
   type Preset,
 } from '@/lib/appliance-load'
+import { energyChain, DEFAULTS as EFF } from '@/lib/system-efficiency'
 
 interface Appliance {
   id: number
@@ -40,7 +41,7 @@ export default function LoadCalculatorPage() {
   const [appliances, setAppliances, , clearAppliances] =
     usePersistentState<Appliance[]>('zonzelf:load:appliances', DEFAULT_APPLIANCES)
   const [efficiency, setEfficiency, , clearEfficiency] =
-    usePersistentState('zonzelf:load:efficiency', 0.8)
+    usePersistentState<number>('zonzelf:load:efficiency', EFF.inverter)
   const [scanningId, setScanningId] = useState<number | null>(null)
   const [showProPrompt, setShowProPrompt] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -106,7 +107,11 @@ export default function LoadCalculatorPage() {
     setAppliances(a => a.filter(row => row.id !== id))
 
   const totalKwh = totalDailyKwh(appliances)
-  const adjustedKwh = totalKwh / efficiency
+  // One shared model — see src/lib/system-efficiency.ts. This page owns the
+  // inverter stage only; battery round-trip and array losses belong to the
+  // pages that actually pay them.
+  const chain = energyChain({ rawKwh: totalKwh, inverter: efficiency })
+  const adjustedKwh = chain.fromBatteryKwh
 
   // Publish the result so the battery and panel calculators can pick it up.
   useEffect(() => {
@@ -404,7 +409,7 @@ export default function LoadCalculatorPage() {
 
               <div className="border-t pt-3">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">System efficiency</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Inverter &amp; wiring</p>
                   <span className="text-sm font-medium">{Math.round(efficiency * 100)}%</span>
                 </div>
                 <input
@@ -412,18 +417,22 @@ export default function LoadCalculatorPage() {
                   min="0.6" max="0.95" step="0.05"
                   value={efficiency}
                   onChange={e => setEfficiency(parseFloat(e.target.value))}
-                  aria-label="System efficiency"
+                  aria-label="Inverter and wiring efficiency"
                   className="w-full accent-yellow-500"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Accounts for inverter losses, wiring, and battery inefficiency. 80% is a safe default.
+                  DC to AC conversion and cable loss. Battery and panel losses are applied on their own pages, so they are not counted twice here.
                 </p>
               </div>
 
               <div className="border-t pt-3 bg-white rounded-lg p-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Adjusted daily need</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Battery must deliver</p>
                 <p className="text-3xl font-bold text-gray-900">{adjustedKwh.toFixed(2)} kWh</p>
-                <p className="text-xs text-gray-500">Use this number for battery and panel sizing</p>
+                <p className="text-xs text-gray-500">
+                  What the bank has to supply each day, after inverter losses. Your panels
+                  need more than this — they also pay battery round-trip and array losses,
+                  which the panel calculator applies.
+                </p>
               </div>
             </CardContent>
           </Card>

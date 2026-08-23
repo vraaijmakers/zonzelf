@@ -118,13 +118,32 @@ export function usePersistentState<T>(key: string, initial: T) {
 export const LOAD_SUMMARY_KEY = 'zonzelf:load:summary'
 
 export interface LoadSummary {
-  /** Total appliance consumption, before system losses. */
+  /** Total appliance consumption at the socket, before any losses. */
   rawKwh: number
-  /** System efficiency the load calculator was set to (0.6–0.95). */
+  /**
+   * Inverter + wiring efficiency, DC to AC. Named `efficiency` for
+   * compatibility with summaries saved before the loss stages were separated;
+   * it has always been this stage in practice. See src/lib/system-efficiency.ts.
+   */
   efficiency: number
-  /** rawKwh / efficiency — what the system actually has to deliver. */
+  /** rawKwh / efficiency — what the battery has to deliver. */
   adjustedKwh: number
 }
+
+/**
+ * What the battery calculator publishes so panel sizing can use the real
+ * chemistry's round-trip efficiency instead of a generic default. Absent until
+ * the user has visited the battery calculator.
+ */
+export interface BatterySummary {
+  chemistry: string
+  /** Energy out divided by energy in, for the selected chemistry. */
+  roundTrip: number
+  /** Depth of discharge the bank was sized against. */
+  dod: number
+}
+
+export const BATTERY_SUMMARY_KEY = 'zonzelf:battery:summary'
 
 /** The result the load calculator last published, or null if it was never used. */
 export function useLoadSummary(): LoadSummary | null {
@@ -134,6 +153,16 @@ export function useLoadSummary(): LoadSummary | null {
 
 export function publishLoadSummary(summary: LoadSummary) {
   writeStored(LOAD_SUMMARY_KEY, summary)
+}
+
+/** The chemistry the battery calculator last used, or null if never visited. */
+export function useBatterySummary(): BatterySummary | null {
+  const [summary] = usePersistentState<BatterySummary | null>(BATTERY_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishBatterySummary(summary: BatterySummary) {
+  writeStored(BATTERY_SUMMARY_KEY, summary)
 }
 
 export const round2 = (n: number) => Math.round(n * 100) / 100

@@ -4,7 +4,10 @@ import Link from 'next/link'
 import { Sun, Info } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
+import {
+  usePersistentState, useLoadSummary, useBatterySummary, round2,
+} from '@/lib/calc-storage'
+import { energyChain, arrayWatts, DEFAULTS as EFF } from '@/lib/system-efficiency'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 
 const PEAK_SUN_EXAMPLES = [
@@ -25,22 +28,40 @@ const PANEL_SIZES = [100, 200, 300, 400, 410, 450, 500, 600]
 export default function PanelSizingPage() {
   const [savedKwh, setDailyKwh, kwhMeta] = usePersistentState('zonzelf:panels:dailyKwh', 3.5)
   const [peakSun, setPeakSun]            = usePersistentState('zonzelf:panels:peakSun', 3.0)
-  const [savedEff, setEfficiency, effMeta] = usePersistentState('zonzelf:panels:efficiency', 0.8)
+  const [savedEff, setEfficiency] = usePersistentState<number>('zonzelf:panels:efficiency', EFF.array)
   const [panelWatt, setPanelWatt]        = usePersistentState('zonzelf:panels:panelWatt', 400)
 
   const loadSummary = useLoadSummary()
-  // This page applies system efficiency itself, so it takes the raw appliance
-  // total — feeding it the adjusted figure would count the losses twice.
+  // The chain starts from raw appliance consumption; every loss stage is applied
+  // once, here, by energyChain. Feeding it the adjusted figure would double-count
+  // the inverter.
   const fromLoadCalc = loadSummary ? round2(loadSummary.rawKwh) : null
 
   // Until this page has saved values of its own, follow the load calculator, so
   // both steps agree. Editing a field here takes over from then on.
   const dailyKwh = !kwhMeta.restored && fromLoadCalc !== null ? fromLoadCalc : savedKwh
-  const efficiency = !effMeta.restored && loadSummary ? loadSummary.efficiency : savedEff
+  // Array derate is this page's own stage — it is NOT the load calculator's
+  // inverter figure. Inheriting that number was part of the same-word-different-
+  // meaning problem the shared model exists to remove.
+  const efficiency = savedEff
 
-  const totalWattsNeeded = (dailyKwh * 1000) / (peakSun * efficiency)
+  // One shared model — src/lib/system-efficiency.ts. The array pays every loss
+  // in the chain, because the energy it generates is stored before it is used:
+  // inverter, battery round trip, then the array's own derate. The old maths
+  // omitted round trip entirely and so undersized the array — by ~3% for
+  // lithium, ~25% for flooded lead-acid.
+  const batterySummary = useBatterySummary()
+  const chain = energyChain({
+    rawKwh: dailyKwh,
+    inverter: loadSummary?.efficiency,
+    batteryRoundTrip: batterySummary?.roundTrip,
+    array: efficiency,
+  })
+  const totalWattsNeeded = arrayWatts(chain.fromArrayKwh, peakSun)
   const panelsNeeded     = Math.ceil(totalWattsNeeded / panelWatt)
-  const actualOutput     = panelsNeeded * panelWatt * peakSun * efficiency / 1000
+  // Delivered at the socket, so it must unwind the same three losses.
+  const actualOutput     = panelsNeeded * panelWatt * peakSun
+                             * efficiency * chain.batteryRoundTrip * chain.inverter / 1000
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
@@ -138,7 +159,7 @@ export default function PanelSizingPage() {
 
               <div>
                 <label htmlFor="panels-efficiency" className="block text-sm font-medium mb-1">
-                  System efficiency
+                  Array losses
                   <span className="ml-1 font-normal text-gray-400 text-xs">{Math.round(efficiency * 100)}%</span>
                 </label>
                 <input
@@ -149,7 +170,7 @@ export default function PanelSizingPage() {
                   className="w-full accent-yellow-500"
                 />
                 <p className="text-xs text-gray-400">
-                  Includes inverter, wiring, and temperature losses. 80% is a safe default.
+                  Soiling, cell temperature, MPPT conversion and array cabling. Inverter and battery losses are separate stages, applied once each — see the breakdown on the right.
                 </p>
               </div>
 
@@ -212,7 +233,11 @@ export default function PanelSizingPage() {
               <div className="border-t pt-3">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Estimated daily output</p>
                 <p className="text-xl font-bold text-green-700">{actualOutput.toFixed(1)} kWh</p>
-                <p className="text-xs text-gray-500">at {peakSun}h peak sun · {Math.round(efficiency * 100)}% efficiency</p>
+                <p className="text-xs text-gray-500">
+                  at {peakSun}h peak sun · {Math.round(efficiency * 100)}% array ·{' '}
+                  {Math.round(chain.batteryRoundTrip * 100)}% battery round trip ·{' '}
+                  {Math.round(chain.inverter * 100)}% inverter
+                </p>
               </div>
 
               <div className="border-t pt-3 text-xs text-gray-500 space-y-1">

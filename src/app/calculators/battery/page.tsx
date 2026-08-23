@@ -5,7 +5,10 @@ import Link from 'next/link'
 import { Battery, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
+import {
+  usePersistentState, useLoadSummary, publishBatterySummary, round2,
+} from '@/lib/calc-storage'
+import { bankKwh } from '@/lib/system-efficiency'
 import { CUTOFF_PROFILES, cutoffBand, formatBand, type ChemistryId } from '@/lib/battery-chemistry'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { createClient } from '@/lib/supabase/client'
@@ -97,8 +100,24 @@ export default function BatterySizingPage() {
 
   const battery = BATTERY_TYPES.find(b => b.id === selectedType) ?? BATTERY_TYPES[0]
 
+  // The panel calculator needs the real round-trip figure; without this it has
+  // to assume a conservative default. This is the field that was defined here
+  // and never used.
+  useEffect(() => {
+    publishBatterySummary({
+      chemistry: battery.id,
+      roundTrip: battery.efficiency,
+      dod: battery.dod,
+    })
+  }, [battery.id, battery.efficiency, battery.dod])
+
+  // One shared model — src/lib/system-efficiency.ts. dailyKwh already carries
+  // the inverter stage (it is what the load calculator publishes), so the chain
+  // is entered with it as the battery's own delivery figure. Round-trip
+  // efficiency belongs to the array, not the bank: the bank is sized by what it
+  // must hand to the inverter.
   const usableKwh  = dailyKwh * days
-  const totalKwh   = usableKwh / battery.dod
+  const totalKwh   = bankKwh(dailyKwh, days, battery.dod)
   const totalAh    = (totalKwh * 1000) / voltage
   const usableAh   = totalAh * battery.dod
 
