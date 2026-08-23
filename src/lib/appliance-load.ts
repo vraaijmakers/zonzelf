@@ -177,3 +177,18 @@ export const DUTY_CYCLE_SOURCE =
   'Refrigeration duty cycles describe a temperate indoor kitchen (~21 °C): compressor running ' +
   'roughly a third of the time, giving 1–2 kWh/day for a modern full-size unit. Warmer rooms ' +
   'run longer. Air-conditioning presets assume continuous running, which overestimates.'
+
+/**
+ * The duty cycle a preset of this name carries, if it is a cycling load.
+ *
+ * Rows saved before duty cycles existed have no value and are treated as 100%,
+ * so nobody's stored numbers move underneath them. That is the right default,
+ * but on its own it means the correction never reaches anyone who had already
+ * used the calculator — their fridge stays at the nameplate figure forever.
+ * The UI uses this to offer the corrected value rather than impose it.
+ */
+export function suggestedDuty(name: string): number | undefined {
+  const preset = ALL_PRESETS.find(p => p.name.toLowerCase() === name.trim().toLowerCase())
+  if (!preset || preset.duty === undefined || preset.duty >= 1) return undefined
+  return preset.duty
+}
