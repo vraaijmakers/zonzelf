@@ -9,6 +9,9 @@ import {
   usePersistentState, useLoadSummary, publishBatterySummary, round2,
 } from '@/lib/calc-storage'
 import { bankKwh } from '@/lib/system-efficiency'
+import {
+  buildScenarios, scenarioRange, roundBank, defaultOvernightShare,
+} from '@/lib/battery-scenarios'
 import { CUTOFF_PROFILES, cutoffBand, formatBand, type ChemistryId } from '@/lib/battery-chemistry'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { createClient } from '@/lib/supabase/client'
@@ -88,6 +91,11 @@ export default function BatterySizingPage() {
   const [voltage, setVoltage] = usePersistentState('zonzelf:battery:voltage', 24)
   const [selectedType, setSelectedType] = usePersistentState('zonzelf:battery:type', 'lifepo4')
   const [showTypes, setShowTypes] = useState(false)
+  // Overnight energy cannot be derived from the load calculator — it records
+  // hours per day, never what time of day. So this is asked, not inferred.
+  const [darkHours, setDarkHours] = usePersistentState<number>('zonzelf:battery:darkHours', 12)
+  const [shareOverride, setShareOverride, shareMeta] =
+    usePersistentState<number | null>('zonzelf:battery:overnightShare', null)
 
   const loadSummary = useLoadSummary()
   // The battery bank has to cover losses, so this step uses the adjusted figure.
@@ -116,10 +124,22 @@ export default function BatterySizingPage() {
   // is entered with it as the battery's own delivery figure. Round-trip
   // efficiency belongs to the array, not the bank: the bank is sized by what it
   // must hand to the inverter.
-  const usableKwh  = dailyKwh * days
   const totalKwh   = bankKwh(dailyKwh, days, battery.dod)
-  const totalAh    = (totalKwh * 1000) / voltage
-  const usableAh   = totalAh * battery.dod
+
+  // Until the user overrides it, the overnight share follows the dark hours —
+  // what you would get if consumption were spread evenly around the clock.
+  const overnightShare = shareMeta.restored && shareOverride !== null
+    ? shareOverride
+    : defaultOvernightShare(darkHours)
+
+  const scenarios = buildScenarios({
+    dailyDeliveredKwh: dailyKwh,
+    overnightShare,
+    autonomyDays: days,
+    depthOfDischarge: battery.dod,
+    systemVoltage: voltage,
+  })
+  const band = scenarioRange(scenarios)
 
   const [allModels, setAllModels] = useState<BatteryModelMatch[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
@@ -261,6 +281,61 @@ export default function BatterySizingPage() {
                   48V is recommended for systems above 2 kWh — lower current means thinner cables.
                 </p>
               </div>
+
+              <div className="border-t pt-5 space-y-4">
+                <div>
+                  <label htmlFor="battery-dark-hours" className="block text-sm font-medium mb-1">
+                    Hours of darkness
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="battery-dark-hours"
+                      type="number" min="0" max="24" step="1"
+                      value={darkHours}
+                      onChange={e => setDarkHours(Math.min(24, Math.max(0, parseFloat(e.target.value) || 0)))}
+                      className="w-20 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    />
+                    <span className="text-sm text-gray-500">hours</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Sunset to sunrise, for the time of year you care about. This varies far more
+                    than people expect — in the Netherlands it is about 8 hours in June and 16 in
+                    December. Size on a summer night and December will disappoint you.
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="battery-overnight-share" className="block text-sm font-medium mb-1">
+                    Share of daily use after dark:{' '}
+                    <span className="text-yellow-700">{Math.round(overnightShare * 100)}%</span>
+                  </label>
+                  <input
+                    id="battery-overnight-share"
+                    type="range" min="0" max="100" step="5"
+                    value={Math.round(overnightShare * 100)}
+                    onChange={e => setShareOverride(parseFloat(e.target.value) / 100)}
+                    className="w-full accent-yellow-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    An assumption, not a measurement — the load calculator records how many hours
+                    each appliance runs, never what time of day. It defaults to the share you would
+                    get if use were spread evenly around the clock ({Math.round(defaultOvernightShare(darkHours) * 100)}%
+                    {' '}for {darkHours}h of dark). Cooking and television after dark push it up;
+                    daytime tools or air-conditioning pull it down.
+                    {shareMeta.restored && shareOverride !== null && (
+                      <>
+                        {' '}
+                        <button
+                          onClick={() => setShareOverride(null)}
+                          className="underline decoration-dotted hover:no-underline text-yellow-700"
+                        >
+                          reset to {Math.round(defaultOvernightShare(darkHours) * 100)}%
+                        </button>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -320,20 +395,38 @@ export default function BatterySizingPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Battery className="w-4 h-4 text-yellow-600" />
-                Recommended bank
+                How big a bank?
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total capacity needed</p>
-                <p className="text-2xl font-bold text-yellow-700">{totalKwh.toFixed(1)} kWh</p>
-                <p className="text-sm text-gray-500">{Math.round(totalAh)} Ah at {voltage}V</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                  Depending on what you want it to survive
+                </p>
+                <p className="text-2xl font-bold text-yellow-700">
+                  {roundBank(band.min)}–{roundBank(band.max)} kWh
+                </p>
+                <p className="text-sm text-gray-500">
+                  {Math.round((band.min * 1000) / voltage)}–{Math.round((band.max * 1000) / voltage)} Ah
+                  {' '}at {voltage}V · {Math.round(battery.dod * 100)}% DoD
+                </p>
               </div>
 
-              <div className="border-t pt-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Usable capacity</p>
-                <p className="text-xl font-bold text-gray-800">{usableKwh.toFixed(1)} kWh</p>
-                <p className="text-xs text-gray-500">{Math.round(usableAh)} Ah usable ({Math.round(battery.dod * 100)}% DoD)</p>
+              <div className="border-t pt-3 space-y-3">
+                {scenarios.map(sc => (
+                  <div key={sc.id}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-medium text-gray-800">{sc.label}</span>
+                      <span className="text-base font-bold text-gray-900 whitespace-nowrap tabular-nums">
+                        {roundBank(sc.bankKwh)} kWh
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">{sc.meaning}</p>
+                    <p className="text-xs text-gray-400 tabular-nums">
+                      delivers {sc.energyKwh.toFixed(1)} kWh · {Math.round(sc.bankAh)} Ah
+                    </p>
+                  </div>
+                ))}
               </div>
 
               <div className="border-t pt-3 text-xs text-gray-500 space-y-1">
@@ -344,6 +437,10 @@ export default function BatterySizingPage() {
                 <div className="flex justify-between">
                   <span>Days of autonomy</span>
                   <span className="font-medium text-gray-700">{days}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Used after dark</span>
+                  <span className="font-medium text-gray-700">{Math.round(overnightShare * 100)}% of {darkHours}h</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Max depth of discharge</span>
