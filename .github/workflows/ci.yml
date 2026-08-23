@@ -27,5 +27,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Every roadmap migration header claims it is "kept in sync with
+      # seed.sql". Nothing enforced that until 2026-08-23, when a migration
+      # written with ASCII dashes disagreed with seed.sql's em dashes from the
+      # moment it was applied. Needs no database, so it is safe on a public
+      # repo — the live comparison (npm run check:roadmap-sync) needs the
+      # service-role key and stays local, per CLAUDE.md rule 9.
+      - name: Roadmap migrations match seed.sql
+        run: npm run check:roadmap-migrations
+
       - name: Build
         run: npm run build

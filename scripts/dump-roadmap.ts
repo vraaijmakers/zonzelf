@@ -12,34 +12,7 @@
 // never commit its raw output anywhere public without checking those.
 
 import { getServiceRoleClient } from './lib/scrape-common'
-
-type RoadmapRow = {
-  phase: number
-  category: string
-  title: string
-  description: string | null
-  status: string
-  dev_percent_complete: number
-  is_public: boolean
-  display_order: number
-}
-
-/** Postgres string literal: single quotes are escaped by doubling them. */
-function sqlString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
-}
-
-function sqlValue(value: string | null): string {
-  return value === null ? 'null' : sqlString(value)
-}
-
-function formatRow(row: RoadmapRow): string {
-  return [
-    `  (${row.phase}, ${sqlString(row.category)}, ${sqlString(row.title)},`,
-    `   ${sqlValue(row.description)},`,
-    `   ${sqlString(row.status)}, ${row.dev_percent_complete}, ${row.is_public}, ${row.display_order})`,
-  ].join('\n')
-}
+import { formatRow, type RoadmapRow } from './lib/roadmap-sql'
 
 async function main() {
   const supabase = getServiceRoleClient()
