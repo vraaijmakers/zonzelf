@@ -11,6 +11,7 @@ import {
 import {
   buildScenarios, scenarioRange, roundBank, defaultOvernightShare, type ScenarioId,
 } from '@/lib/battery-scenarios'
+import { overnightShareFrom, weatherDrivenShare } from '@/lib/appliance-load'
 import { CUTOFF_PROFILES, cutoffBand, formatBand, type ChemistryId } from '@/lib/battery-chemistry'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { createClient } from '@/lib/supabase/client'
@@ -99,6 +100,10 @@ export default function BatterySizingPage() {
   const [darkHours, setDarkHours] = usePersistentState<number>('zonzelf:battery:darkHours', 12)
   const [shareOverride, setShareOverride, shareMeta] =
     usePersistentState<number | null>('zonzelf:battery:overnightShare', null)
+  // How much of a weather-driven load still runs when it is overcast. Asked,
+  // not assumed: it depends on climate and on what the load actually is.
+  const [overcastFactor, setOvercastFactor] =
+    usePersistentState<number>('zonzelf:battery:overcastFactor', 0.4)
 
   const loadSummary = useLoadSummary()
   // The battery bank has to cover losses, so this step uses the adjusted figure.
@@ -130,13 +135,25 @@ export default function BatterySizingPage() {
 
   // Until the user overrides it, the overnight share follows the dark hours —
   // what you would get if consumption were spread evenly around the clock.
+  // Derived from the per-appliance profiles when the load calculator has
+  // published a breakdown — a flat share treats a fridge, an air conditioner
+  // and a television as if they ran at the same times, which for a
+  // cooling-dominated load is wrong in both directions.
+  const breakdown = loadSummary?.breakdown
+  const derivedShare = breakdown
+    ? overnightShareFrom(breakdown, darkHours)
+    : defaultOvernightShare(darkHours)
+  const weatherShare = breakdown ? weatherDrivenShare(breakdown) : 0
+
   const overnightShare = shareMeta.restored && shareOverride !== null
     ? shareOverride
-    : defaultOvernightShare(darkHours)
+    : derivedShare
 
   const scenarios = buildScenarios({
     dailyDeliveredKwh: dailyKwh,
     overnightShare,
+    overcastFactor,
+    weatherDrivenShare: weatherShare,
     autonomyDays: days,
     depthOfDischarge: battery.dod,
     systemVoltage: voltage,
@@ -320,11 +337,21 @@ export default function BatterySizingPage() {
                     className="w-full accent-yellow-500"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    An assumption, not a measurement — the load calculator records how many hours
-                    each appliance runs, never what time of day. It defaults to the share you would
-                    get if use were spread evenly around the clock ({Math.round(defaultOvernightShare(darkHours) * 100)}%
-                    {' '}for {darkHours}h of dark). Cooking and television after dark push it up;
-                    daytime tools or air-conditioning pull it down.
+                    {breakdown ? (
+                      <>
+                        Worked out from what you listed on the load calculator and when each
+                        appliance runs — {Math.round(derivedShare * 100)}% for {darkHours}h of dark.
+                        Air conditioning barely runs at night; lighting and cooking mostly do.
+                        Change it here if you know better.
+                      </>
+                    ) : (
+                      <>
+                        An assumption — no appliance list has been published yet, so this defaults
+                        to the share you would get if use were spread evenly around the clock
+                        ({Math.round(defaultOvernightShare(darkHours) * 100)}% for {darkHours}h of dark).
+                        Use the load calculator and this is worked out from your actual appliances.
+                      </>
+                    )}
                     {shareMeta.restored && shareOverride !== null && (
                       <>
                         {' '}
@@ -338,6 +365,30 @@ export default function BatterySizingPage() {
                     )}
                   </p>
                 </div>
+
+                {weatherShare > 0.01 && (
+                  <div>
+                    <label htmlFor="battery-overcast" className="block text-sm font-medium mb-1">
+                      Weather-driven load on an overcast day:{' '}
+                      <span className="text-yellow-700">{Math.round(overcastFactor * 100)}%</span>
+                    </label>
+                    <input
+                      id="battery-overcast"
+                      type="range" min="0" max="100" step="5"
+                      value={Math.round(overcastFactor * 100)}
+                      onChange={e => setOvercastFactor(parseFloat(e.target.value) / 100)}
+                      className="w-full accent-yellow-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {Math.round(weatherShare * 100)}% of your daily use is weather-driven
+                      (air conditioning, tools). A sunless day is sunless because it is overcast,
+                      which usually means cooler — so that load runs less on exactly the days you
+                      have least sun. Sizing a bank as if it ran flat out through three grey days
+                      buys battery you will never use. Set this to 100% if your climate does not
+                      work that way.
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

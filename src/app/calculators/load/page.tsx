@@ -9,7 +9,8 @@ import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-stora
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import {
   PRESET_GROUPS, rowDailyWh, totalDailyKwh, normalizeDuty, suggestedDuty, DUTY_CYCLE_SOURCE,
-  type Preset,
+  breakdownByProfile, LOAD_PROFILES, DEFAULT_PROFILE,
+  type Preset, type LoadProfile,
 } from '@/lib/appliance-load'
 import { energyChain, DEFAULTS as EFF } from '@/lib/system-efficiency'
 
@@ -23,12 +24,14 @@ interface Appliance {
   qty: number
   /** Fraction of those hours it actually draws power. Absent means 100%. */
   duty?: number
+  /** When it runs — drives the battery scenarios. Absent means all day. */
+  profile?: LoadProfile
 }
 
 const DEFAULT_APPLIANCES: Appliance[] = [
-  { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4 },
+  { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4, profile: 'evening' },
   { id: 2, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1 },
-  { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
+  { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1, profile: 'evening' },
   { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1, duty: 0.30 },
 ]
 
@@ -92,6 +95,7 @@ export default function LoadCalculatorPage() {
       watts: preset.watts,
       hours: preset.hours,
       duty: preset.duty,
+      profile: preset.profile,
       qty: 1,
     }])
 
@@ -110,6 +114,7 @@ export default function LoadCalculatorPage() {
   // One shared model — see src/lib/system-efficiency.ts. This page owns the
   // inverter stage only; battery round-trip and array losses belong to the
   // pages that actually pay them.
+  const breakdown = breakdownByProfile(appliances)
   const chain = energyChain({ rawKwh: totalKwh, inverter: efficiency })
   const adjustedKwh = chain.fromBatteryKwh
 
@@ -119,11 +124,19 @@ export default function LoadCalculatorPage() {
       rawKwh: round2(totalKwh),
       efficiency,
       adjustedKwh: round2(adjustedKwh),
+      breakdown: {
+        always: round2(breakdown.always),
+        daytime: round2(breakdown.daytime),
+        evening: round2(breakdown.evening),
+        total: round2(breakdown.total),
+      },
     })
+    // breakdown is derived from `appliances`, which totalKwh already tracks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalKwh, efficiency, adjustedKwh])
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
+    <div className="max-w-5xl mx-auto px-4 py-12">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
@@ -152,6 +165,7 @@ export default function LoadCalculatorPage() {
                       <th className="text-left px-3 py-3 font-medium text-gray-600">Appliance</th>
                       <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Watts</th>
                       <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Hrs</th>
+                      <th className="text-left px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Runs</th>
                       <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Duty</th>
                       <th className="text-right px-2 py-3 font-medium text-gray-600">Qty</th>
                       <th className="text-right px-3 py-3 font-medium text-gray-600 whitespace-nowrap">Wh/day</th>
@@ -169,7 +183,7 @@ export default function LoadCalculatorPage() {
                         : undefined
                       return (
                         <tr key={a.id} className={`border-b ${i % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
-                          <td className="px-3 py-2 min-w-[7.5rem]">
+                          <td className="px-3 py-2 min-w-[8rem]">
                             <input
                               type="text"
                               value={a.name}
@@ -197,6 +211,19 @@ export default function LoadCalculatorPage() {
                               className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0" max="24" step="0.5"
                             />
+                          </td>
+                          <td className="px-2 py-2">
+                            <select
+                              value={a.profile ?? DEFAULT_PROFILE}
+                              onChange={e => update(a.id, 'profile', e.target.value)}
+                              aria-label={a.name ? `When ${a.name} runs` : 'When this runs'}
+                              title={LOAD_PROFILES[a.profile ?? DEFAULT_PROFILE].hint}
+                              className="text-xs bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-0 -ml-1 max-w-[4.75rem]"
+                            >
+                              {(Object.keys(LOAD_PROFILES) as LoadProfile[]).map(k => (
+                                <option key={k} value={k}>{LOAD_PROFILES[k].label}</option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-2 py-2">
                             {stale !== undefined && (
@@ -233,8 +260,8 @@ export default function LoadCalculatorPage() {
                               ? `${(wh / 1000).toFixed(2)} kWh`
                               : `${Math.round(wh)} Wh`}
                           </td>
-                          <td className="px-2 py-2">
-                            <div className="flex items-center gap-1">
+                          <td className="px-1 py-2">
+                            <div className="flex items-center gap-0.5">
                               <button
                                 onClick={() => handleScanClick(a.id)}
                                 title={isPro ? 'Scan appliance label' : 'Pro feature — scan label'}
@@ -267,7 +294,7 @@ export default function LoadCalculatorPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 bg-yellow-50">
-                      <td colSpan={5} className="px-4 py-3 font-semibold text-gray-700">
+                      <td colSpan={6} className="px-4 py-3 font-semibold text-gray-700">
                         Total daily consumption
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-yellow-700 whitespace-nowrap">

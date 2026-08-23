@@ -102,3 +102,39 @@ test('every scenario explains what it assumes', () => {
     assert.ok(s.label.length > 0)
   }
 })
+
+test('an overcast day suppresses only the weather-driven part of the load', () => {
+  // Raised in use: a sunless day is sunless because it is overcast, which means
+  // cooler, which means a cooling load largely goes away. The shortage and the
+  // load are anti-correlated, and treating load as constant overstates the bank.
+  const constant = buildScenarios(base)
+  const acHeavy = buildScenarios({ ...base, weatherDrivenShare: 0.75, overcastFactor: 0.35 })
+
+  assert.ok(acHeavy[1].energyKwh < constant[1].energyKwh, 'a sunless day must need less when the load is weather-driven')
+  assert.ok(acHeavy[2].energyKwh < constant[2].energyKwh)
+
+  // 32 kWh, 75% weather-driven surviving at 35%: 32*0.25 + 32*0.75*0.35 = 16.4
+  assert.ok(Math.abs(acHeavy[1].energyKwh - 16.4) < 1e-9, `got ${acHeavy[1].energyKwh}`)
+
+  // The overnight case is unaffected — that is governed by the profiles, not weather.
+  assert.equal(acHeavy[0].energyKwh, constant[0].energyKwh)
+})
+
+test('no suppression by default, so an absent breakdown never shrinks a bank', () => {
+  const plain = buildScenarios(base)
+  const explicit = buildScenarios({ ...base, weatherDrivenShare: 0, overcastFactor: 0.3 })
+  assert.equal(plain[1].energyKwh, explicit[1].energyKwh)
+  assert.equal(plain[1].energyKwh, base.dailyDeliveredKwh, 'a fully weather-independent load is unchanged')
+})
+
+test('a fully weather-driven load collapses to the overcast factor', () => {
+  const s = buildScenarios({ ...base, weatherDrivenShare: 1, overcastFactor: 0.25 })
+  assert.ok(Math.abs(s[1].energyKwh - base.dailyDeliveredKwh * 0.25) < 1e-9)
+})
+
+test('overcast inputs are clamped rather than inverting the model', () => {
+  const over = buildScenarios({ ...base, weatherDrivenShare: 5, overcastFactor: 5 })
+  assert.equal(over[1].energyKwh, base.dailyDeliveredKwh, 'factor above 1 must not increase the load')
+  const under = buildScenarios({ ...base, weatherDrivenShare: -1, overcastFactor: -1 })
+  assert.ok(under[1].energyKwh >= 0)
+})

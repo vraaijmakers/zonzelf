@@ -54,8 +54,22 @@ export interface Scenario {
 export interface ScenarioInputs {
   /** What the bank must deliver over a full day, after inverter losses. */
   dailyDeliveredKwh: number
-  /** Fraction of daily consumption that happens after dark (0-1). */
+  /**
+   * Fraction of daily consumption that happens after dark (0-1). Derived from
+   * the per-appliance profiles when a breakdown is supplied; a flat assumption
+   * otherwise.
+   */
   overnightShare: number
+  /**
+   * How much of a weather-driven load still runs on an overcast day (0-1).
+   * A sunless day is sunless because it is overcast, which means cooler, which
+   * means a cooling load largely goes away — the shortage and the load are
+   * anti-correlated. Only applied when `weatherDrivenShare` says how much of
+   * the load is weather-driven.
+   */
+  overcastFactor?: number
+  /** Fraction of the daily load that bad weather suppresses (0-1). */
+  weatherDrivenShare?: number
   /** Days of autonomy for the extended scenario. */
   autonomyDays: number
   /** Usable fraction of nameplate capacity for the chemistry. */
@@ -83,6 +97,13 @@ export function buildScenarios(inputs: ScenarioInputs): Scenario[] {
   const dod = clamp(inputs.depthOfDischarge, 0.1, 1)
   const volts = inputs.systemVoltage > 0 ? inputs.systemVoltage : 48
 
+  // On an overcast day the weather-driven part of the load shrinks; the rest is
+  // unchanged. Defaults to no suppression so an absent breakdown behaves as
+  // before rather than silently shrinking someone's bank.
+  const weatherShare = clamp(inputs.weatherDrivenShare ?? 0, 0, 1)
+  const overcast = clamp(inputs.overcastFactor ?? 1, 0, 1)
+  const sunlessDaily = daily * (1 - weatherShare) + daily * weatherShare * overcast
+
   const make = (id: ScenarioId, label: string, meaning: string, energyKwh: number): Scenario => {
     const bankKwh = energyKwh / dod
     return { id, label, meaning, energyKwh, bankKwh, bankAh: (bankKwh * 1000) / volts }
@@ -93,11 +114,13 @@ export function buildScenarios(inputs: ScenarioInputs): Scenario[] {
       'An ordinary night with sun tomorrow. The bank covers only what you use after dark; the panels refill it in the morning.',
       daily * share),
     make('oneDay', 'One sunless day',
-      'A full 24 hours with effectively no solar input — heavy overcast, or snow sitting on the array.',
-      daily),
+      weatherShare > 0
+        ? 'A full 24 hours with effectively no solar input. Overcast means cooler, so your weather-driven loads run less than on a sunny day — that is counted here.'
+        : 'A full 24 hours with effectively no solar input — heavy overcast, or snow sitting on the array.',
+      sunlessDaily),
     make('extended', `${days} sunless day${days === 1 ? '' : 's'}`,
       `A run of ${days} day${days === 1 ? '' : 's'} with no meaningful generation. This is usually what sets the bank you actually buy.`,
-      daily * days),
+      sunlessDaily * days),
   ]
 }
 

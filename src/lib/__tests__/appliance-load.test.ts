@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizeDuty, rowDailyWh, averageWatts, totalDailyKwh,
-  ALL_PRESETS, PRESET_GROUPS, suggestedDuty,
+  ALL_PRESETS, PRESET_GROUPS, suggestedDuty, breakdownByProfile, LOAD_PROFILES, overnightShareFrom, weatherDrivenShare,
 } from '../appliance-load'
 
 const preset = (name: string) => {
@@ -112,4 +112,89 @@ test('suggestedDuty offers the corrected value only for cycling presets', () => 
   assert.equal(suggestedDuty('Window AC (5,000 BTU)'), undefined)
   assert.equal(suggestedDuty('Something the user typed'), undefined)
   assert.equal(suggestedDuty(''), undefined)
+})
+
+test('profiles split the load by when it runs', () => {
+  const rows = [
+    { watts: 1000, hours: 10, qty: 1, profile: 'daytime' as const },   // 10 kWh A/C
+    { watts: 100, hours: 5, qty: 1, profile: 'evening' as const },     // 0.5 kWh TV
+    { watts: 150, hours: 24, qty: 1, duty: 0.35 },                     // fridge, no profile
+  ]
+  const b = breakdownByProfile(rows)
+  assert.equal(b.daytime, 10)
+  assert.equal(b.evening, 0.5)
+  assert.ok(Math.abs(b.always - 1.26) < 1e-9, 'a row without a profile counts as always')
+  assert.ok(Math.abs(b.total - (b.always + b.daytime + b.evening)) < 1e-9)
+})
+
+test('air conditioning is daytime, refrigeration is always, television is evening', () => {
+  // The tagging that makes both of the in-use observations work.
+  const p = (n: string) => ALL_PRESETS.find(x => x.name === n)
+  assert.equal(p('Mini-split (12,000 BTU)')?.profile, 'daytime')
+  assert.equal(p('Window AC (5,000 BTU)')?.profile, 'daytime')
+  assert.equal(p('TV (55")')?.profile, 'evening')
+  assert.equal(p('Induction cooktop')?.profile, 'evening')
+  assert.equal(p('Full-size fridge')?.profile, undefined, 'refrigeration runs regardless')
+  assert.equal(p('Router / modem')?.profile, undefined)
+})
+
+test('only daytime loads are weather-driven', () => {
+  assert.equal(LOAD_PROFILES.daytime.weatherDriven, true)
+  assert.equal(LOAD_PROFILES.always.weatherDriven, false)
+  assert.equal(LOAD_PROFILES.evening.weatherDriven, false, 'rain does not stop you watching television')
+})
+
+test('overnight shares reflect when each profile runs', () => {
+  assert.equal(LOAD_PROFILES.always.overnightShare, 'proportional')
+  assert.ok((LOAD_PROFILES.evening.overnightShare as number) > 0.8, 'evening load is mostly after dark')
+  assert.ok((LOAD_PROFILES.daytime.overnightShare as number) < 0.1, 'daytime load barely runs at night')
+})
+
+test('the overnight share is derived from the default appliance list', () => {
+  // The starter rows: 4 LED bulbs (evening), a ceiling fan (always), a laptop
+  // (evening), a mini fridge (always, 30% duty). With 12h of dark the share
+  // should land well above the flat 50% a uniform assumption would give,
+  // because two of the four are evening loads.
+  const rows = [
+    { watts: 10, hours: 5, qty: 4, profile: 'evening' as const },
+    { watts: 60, hours: 8, qty: 1 },
+    { watts: 65, hours: 6, qty: 1, profile: 'evening' as const },
+    { watts: 80, hours: 24, qty: 1, duty: 0.3 },
+  ]
+  const b = breakdownByProfile(rows)
+  assert.ok(Math.abs(b.evening - 0.59) < 1e-9, `evening ${b.evening}`)
+  assert.ok(Math.abs(b.always - 1.056) < 1e-9, `always ${b.always}`)
+
+  const share = overnightShareFrom(b, 12)
+  assert.ok(Math.abs(share - 1.059 / 1.646) < 1e-6, `share ${share}`)
+  assert.ok(share > 0.6 && share < 0.7, 'evening-heavy load should exceed a flat 50%')
+})
+
+test('an air-conditioning load pulls the overnight share DOWN', () => {
+  // Vincent's case: a mini-split dominates the day but barely runs at night.
+  // A flat share would badly overstate the overnight bank.
+  const withAC = breakdownByProfile([
+    { watts: 1100, hours: 10, qty: 2, profile: 'daytime' as const },  // 22 kWh
+    { watts: 150, hours: 24, qty: 1, duty: 0.35 },                    // fridge
+    { watts: 100, hours: 4, qty: 1, profile: 'evening' as const },    // TV
+  ])
+  const share = overnightShareFrom(withAC, 12)
+  assert.ok(share < 0.15, `A/C-dominated overnight share should be small, got ${share}`)
+
+  // And it is almost entirely weather-driven, so overcast days shrink too.
+  assert.ok(weatherDrivenShare(withAC) > 0.9)
+})
+
+test('an all-day load with no profiles behaves as before', () => {
+  const b = breakdownByProfile([{ watts: 1000, hours: 24, qty: 1 }])
+  assert.equal(weatherDrivenShare(b), 0, 'nothing weather-driven means no overcast suppression')
+  assert.ok(Math.abs(overnightShareFrom(b, 12) - 0.5) < 1e-9, 'proportional to the night')
+  assert.ok(Math.abs(overnightShareFrom(b, 16) - 16 / 24) < 1e-9)
+})
+
+test('an empty list never divides by zero', () => {
+  const b = breakdownByProfile([])
+  assert.equal(b.total, 0)
+  assert.equal(overnightShareFrom(b, 12), 0)
+  assert.equal(weatherDrivenShare(b), 0)
 })
