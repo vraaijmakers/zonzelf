@@ -86,8 +86,8 @@ values
    'in_test', 90, true, 52),
 
   (0, 'calculators', 'Calculators: appliance presets use duty cycle, not nameplate × 24h',
-   'Full-size fridge preset is 150W × 24h = 3.6 kWh/day; real cycling is typically 1–2 kWh. Mini fridge 80W × 24h is the same class of error. One row can double a beginner''s battery and panel bill. Use average/duty-cycle watts for cycling loads, and say so. Motor surge is explained in a sidebar and never enters a number — that is the separate inverter-sizing item, not this one.',
-   'planned', 0, true, 53),
+   'Fixed for refrigeration: appliance rows now carry a duty cycle — the fraction of their in-service hours they actually draw power — and the presets apply it. The full-size fridge falls from 150 W × 24 h = 3.6 kWh/day to about 1.3 kWh/day, and the mini fridge from 1.92 to about 0.58, both inside the 1–2 kWh/day band two independent sources give for a modern unit in a temperate kitchen (compressor running 33–40% of the time). A chest freezer preset was added on the same basis. Watts stays the RUNNING figure so inverter sizing can still use it; duty % is what turns it into energy. Air-conditioning presets are deliberately left at 100% and flagged as cycling: no two-source duty figure was established for them, and inventing one would repeat this bug — the overestimate oversizes rather than undersizes. Rows saved before this shipped have no duty value and are treated as 100%, so no one''s stored numbers change underneath them. Covered by src/lib/__tests__/appliance-load.test.ts.',
+   'in_test', 90, true, 53),
 
   (0, 'calculators', 'Calculators: one efficiency model across load / battery / panels',
    'Production gate, and the data contract the whole sizing chain rests on. Three different stories today: the load calculator publishes adjustedKwh = raw / efficiency and tells the user to carry it into both battery AND panel sizing; the battery calculator uses adjustedKwh (good) but then ignores the per-chemistry battery.efficiency field it already defines; the panel calculator uses rawKwh and applies its own efficiency (correct in isolation, to avoid double-counting). Because the stages feed each other, a disagreement here does not stay local — it multiplies down the chain, and combined with the 2-3x fridge preset a beginner can end up with a bank and an array that are both roughly twice the size they need. Pick one model, make the copy match the math, and add a test so the three pages cannot drift again. This defines the shared model the phase-1 system designer is built on, so it lands first and independently.',
@@ -142,8 +142,8 @@ values
    'planned', 0, true, 66),
 
   (0, 'infrastructure', 'Unit tests for calculator math and battery-review',
-   'Started: src/lib/__tests__/awg.test.ts covers the NEC 310.16 table, the 240.4(D) caps, round-trip voltage-drop maths, the passing-set contract, and the zero-voltage NaN guard — 11 tests via node:test through tsx, no new dependencies (npm test). Still uncovered: the load, battery and panel calculators, the load→battery→panel efficiency contract, the AWG table beyond spot-checks, and reviewBatteryModel() flags. For tools that recommend wire gauge and cutoff voltages, build + lint + screenshot was never a test strategy; this is the first of it, not the whole of it. Wire npm test into CI when a second module is covered.',
-   'in_development', 25, false, 67),
+   'Started: src/lib/__tests__/ covers the NEC 310.16 ampacity table, the 240.4(D) caps, round-trip voltage-drop maths, the AWG passing-set contract, the zero-voltage NaN guard, and now the appliance duty-cycle model and preset bands — 21 tests via node:test through tsx, no new dependencies (npm test). Still uncovered: the battery and panel calculators, the load→battery→panel efficiency contract, and reviewBatteryModel() flags. Wire npm test into CI once the efficiency contract is covered, so the three pages cannot drift apart silently.',
+   'in_development', 40, false, 67),
 
   (0, 'infrastructure', 'HTTP security headers',
    'next.config.ts sets no CSP, HSTS, X-Frame-Options, Referrer-Policy, or Permissions-Policy. Cookie flags are whatever @supabase/ssr defaults to. Minimum before public: CSP (start strict, loosen for Supabase/auth), HSTS on the real domain, frame-ancestors none. XSS on a future comment feature becomes session theft without this.',
