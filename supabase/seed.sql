@@ -16,6 +16,20 @@
 -- (migrations run before this file on a reset, so those migrations'
 -- UPDATEs/INSERTs are no-ops here — the values below are written directly
 -- instead).
+--
+-- THIS FILE IS NOT A BACKUP. It is a hand-maintained reconstruction, and on
+-- 2026-08-22 it was found to have silently drifted from the live board in
+-- four places: one item created through /admin/roadmap ("Run a full security
+-- scan") existed here not at all, and three display_order values had never
+-- matched. Nothing detects that drift on its own — the admin Server Actions
+-- write straight to the database, and a `db reset` only ever proves this file
+-- agrees with the migrations, never that either agrees with reality.
+--
+-- Before editing the board, and again after, run:
+--
+--     npm run dump:roadmap
+--
+-- and diff it against this file. See scripts/dump-roadmap.ts.
 
 insert into public.roadmap_items
   (phase, category, title, description, status, dev_percent_complete, is_public, display_order)
@@ -76,15 +90,15 @@ values
    'planned', 0, true, 53),
 
   (0, 'calculators', 'Calculators: one efficiency model across load / battery / panels',
-   'Three different stories today. Load calculator publishes adjustedKwh = raw / efficiency and tells the user to use that number for battery AND panel sizing. Battery calculator uses adjustedKwh (good) then ignores the per-chemistry battery.efficiency field (defined, never applied). Panel calculator uses rawKwh then applies its own efficiency (correct, to avoid double-counting). Pick one model, make the copy match the math, and add a test so the three pages cannot drift again.',
+   'Production gate, and the data contract the whole sizing chain rests on. Three different stories today: the load calculator publishes adjustedKwh = raw / efficiency and tells the user to carry it into both battery AND panel sizing; the battery calculator uses adjustedKwh (good) but then ignores the per-chemistry battery.efficiency field it already defines; the panel calculator uses rawKwh and applies its own efficiency (correct in isolation, to avoid double-counting). Because the stages feed each other, a disagreement here does not stay local — it multiplies down the chain, and combined with the 2-3x fridge preset a beginner can end up with a bank and an array that are both roughly twice the size they need. Pick one model, make the copy match the math, and add a test so the three pages cannot drift again. This defines the shared model the phase-1 system designer is built on, so it lands first and independently.',
    'planned', 0, true, 54),
 
   (0, 'calculators', 'Calculators: peak sun hours are annual averages — say so',
    'The regional presets (Netherlands 2.5h, etc.) are annual figures. December in NL is closer to 1h. No worst-month, no tilt, no shading. Fine as a first estimate if the page says so; currently it does not. Label them annual, and offer a worst-month input so a beginner does not size an array that only works in June.',
    'planned', 0, true, 55),
 
-  (0, 'calculators', 'Calculators: demote "Recommended" copy until engineer-reviewed',
-   'Result cards say "Recommended gauge" / "Recommended bank" in large green type. Combined with chassis ampacity and wrong LVD numbers, that reads as a specification, not a starting estimate. Until the electrician/engineer sign-off item is done, the UI should say "rough starting estimate — do not buy from this number" with the same visual weight as the number itself. Product-liability item; pairs with the disclaimer, does not replace it.',
+  (0, 'calculators', 'Calculators: show the derivation, never a bare recommendation',
+   'Permanent design principle, not a temporary measure pending sign-off. US product-liability law splits on whether information is a "product": Winter v. G.P. Putnam''s Sons (9th Cir. 1991) held a book''s informational content is not, and that publishers owe no general duty to verify accuracy. Saloomey v. Jeppesen and Brocklesby held aeronautical charts ARE products, because a chart mechanically converts data into an output the user acts on directly in a hazardous activity. "Recommended gauge: AWG 10" in large green type is the chart, not the book. SCOPE: this applies to the protection register (conductor gauge, overcurrent protection, cutoff voltage, voltage windows) — see "Calculators: split output into capacity and protection registers". Capacity outputs stay confident and specific; they are the product. For protection outputs: show the code table, show the arithmetic so it can be checked, cite the source, let the user pick the installation context, and return the set of options that pass rather than a single verdict. Pairs with the disclaimer and the electrician sign-off, replaces neither — and note that showing the derivation of a WRONG number documents the error rather than excusing it, so the correctness items are prerequisites, not alternatives.',
    'planned', 0, true, 56),
 
   (0, 'calculators', 'Calculators: licensed electrician/engineer sign-off',
@@ -92,7 +106,7 @@ values
    'planned', 0, true, 57),
 
   (0, 'calculators', 'Battery calculator: flag when the panel array can''t recharge the bank in the available sun',
-   'Production gate for the calculator suite. The battery and panel calculators size storage (kWh) and generation (kWh/day) independently, but never check whether the array can actually refill the bank within the site''s peak sun hours. A user can size a "correct" battery bank and a "correct" array and still end up under-charging every day. Add a check on the battery calculator (or a shared summary) comparing array output over peak sun hours against the daily kWh drawn from the battery, and warn when the recharge doesn''t close the loop. Surfaced in the how-it-works guide; originally filed as phase 2 and pulled forward by the 2026-08-21 audit.',
+   'Production gate, and the first cross-stage check in the sizing chain. The battery and panel calculators size storage (kWh) and generation (kWh/day) independently and never check whether the array can refill the bank within the site''s peak sun hours — so a user can size a "correct" bank and a "correct" array and still under-charge every day. Add a check comparing array output over peak sun hours against the daily kWh drawn from the battery, and warn when the recharge does not close the loop. This is the pattern every later cross-stage check follows; the phase-1 system designer generalises it rather than replacing it. Surfaced in the how-it-works guide; pulled forward from phase 2 by the 2026-08-21 audit.',
    'planned', 0, true, 58),
 
   (0, 'onboarding', 'Fix /guides index dead links',
@@ -104,11 +118,11 @@ values
    'planned', 0, false, 60),
 
   (0, 'infrastructure', 'Legal: confirm entity and jurisdiction',
-   'Terms of Service governing-law section is an explicit TODO pending a confirmed legal entity and jurisdiction.',
+   'Decided 2026-08-22: US LLC, US-first audience, NEC 310.16 as the governing electrical code. Remaining work is execution, not the decision — file the LLC and name it plus the governing law in the Terms "Governing law" section, which is still a visible [TODO] in src/app/terms/page.tsx. Operating as a natural person means unlimited personal liability; this is a hard gate before collecting an email or a dollar.',
    'planned', 0, false, 61),
 
   (0, 'infrastructure', 'Legal: professional review before production',
-   'Disclaimer/terms/privacy/accessibility are a first draft, not lawyer-reviewed, and currently show [TODO] placeholders to visitors. Before production, counsel must review: governing law and legal entity, liability language vs the confidence of calculator "Recommended" copy, GDPR/AVG (lawful basis, processor list including Supabase + Anthropic vision for /api/scan-label, retention, US transfers, cookie assessment, DSR channel), and consumer-law risk of advertising Pro/subscriptions/monitoring that do not exist yet. Visible TODOs must be gone before zonzelf.com is public.',
+   'Production gate. US counsel reviews the disclaimer, terms, and privacy pages against the US LLC and NEC framing: liability language measured against the confidence of calculator output (see "Calculators: show the derivation"), clickwrap assent, affiliate disclosure, and the FTC endorsement rules. GDPR/AVG still applies to EU visitors even with a US entity — lawful basis, processor list (Supabase, plus Anthropic vision for /api/scan-label), retention, US transfers, and a DSR channel all still need answering, but as a visitor-facing obligation rather than the entity-level exposure the EU Product Liability Directive would have been. Visible [TODO] placeholders must be gone before zonzelf.com is public.',
    'planned', 0, false, 62),
 
   (0, 'infrastructure', 'Auth: sanitize the next= redirect (open redirect)',
@@ -143,10 +157,30 @@ values
    'Production gate before any battery_models row is published (the public battery calculator already lists them). The upsert currently overwrites an already-published row''s data on every re-run with no re-review step — a scheduled job silently changing a live price/spec would break the "scraped data isn''t trusted until reviewed" rule. Fix overwrite-protection first. Then, later, add a scheduled re-scrape (GitHub Actions, weekly/monthly — battery specs don''t change daily) for the known brands. Scrapers are manual-only today.',
    'planned', 0, false, 70),
 
+  (0, 'infrastructure', 'Form the US LLC + liability insurance',
+   'Hard gate before collecting any email or any money. File the LLC (~$150-800 first year incl. registered agent, ~$100-300/yr after) and bind cover before launch: media liability averages ~$930/yr for a publisher, tech E&O runs $500-3,000/yr. Stage the spend against revenue milestones rather than paying it all upfront. Until this exists, ZonZelf is Vincent personally, with unlimited personal liability, publishing electrical guidance.',
+   'planned', 0, false, 71),
+
+  (0, 'infrastructure', 'Clickwrap assent for terms and disclaimer',
+   'The disclaimer is currently a footer link. Courts treat browsewrap as weak evidence of assent — a disclaimer nobody affirmatively accepted is much harder to rely on, and US courts have struck down all-encompassing waivers as overbroad. Add an explicit "I have read and accept" checkbox at signup (and before any paid tier), storing the timestamp and the version of the terms accepted. This is what makes the disclaimer worth having; it does not replace fixing the calculators.',
+   'planned', 0, false, 72),
+
+  (0, 'calculators', 'Calculators: split output into capacity and protection registers',
+   'The design decision that makes the derivation rule tractable. Classify every calculator output as either CAPACITY (daily kWh, bank kWh, panel count, inverter continuous rating — wrong means an undersized system, not an injury) or PROTECTION (conductor gauge, fuse/breaker rating, battery cutoff voltage, string Voc vs MPPT window — wrong starts fires or destroys equipment). Capacity outputs keep their current confident treatment: they are the product, and they are also where the affiliate value sits. Protection outputs get the full derivation treatment and never appear as a bare number. Protection is roughly five outputs, so this is a small surface — the point of the exercise is to stop treating all four calculators as one undifferentiated liability problem.',
+   'planned', 0, true, 73),
+
+  (0, 'calculators', 'Calculators: capacity outputs are ranges, not point estimates',
+   'Every headline figure is currently a point estimate with invented precision — totalKwh.toFixed(1), panelsNeeded, adjustedKwh.toFixed(2) — carrying no signal about how wide the real uncertainty is, when the inputs are duty-cycle guesses and annual-average sun hours. Replace with a band and say what moves it: "9-13 kWh of usable storage — the low end if you will run lean in December, the high end for three days of autonomy; your inputs put the middle at 10.4." More honest, more useful, and much harder to characterise as a defective specification than a single decimal. Affiliate is untouched — the component list still sits underneath. Highest-leverage single change across the chain.',
+   'planned', 0, true, 74),
+
+  (0, 'calculators', 'Calculators: fuse and breaker sizing — the fuse must protect the wire',
+   'Missing, and its absence makes the AWG output actively unsafe rather than merely incomplete, which is why this is a phase-0 gate under the misleads-vs-incomplete test. The AWG calculator recommends a conductor and never states the rule that the overcurrent device must protect that conductor — so a beginner can follow ZonZelf to a correctly sized cable and then fit a breaker that will never open before the wire melts. Add OCPD sizing as a protection-register output: continuous-load factor, the NEC 240.4(D) small-conductor caps (14 AWG 15A, 12 AWG 20A, 10 AWG 30A) that override the ampacity table, and the DC-rating requirement for breakers on the DC side. Derivation shown and cited, never a bare number.',
+   'planned', 0, true, 75),
+
   -- Phase 1 — content completeness (onboarding differentiator)
   (1, 'onboarding', 'Guided beginner onboarding',
    'Plain-English explainers woven into guides and calculators, not a separate wizard. Differentiator #1.',
-   'planned', 0, true, 60),
+   'planned', 0, true, 70),
 
   (1, 'onboarding', 'Remaining guide pages',
    'wiring, depth-of-discharge, grounding, inverter-settings, glossary. how-it-works and battery-types have shipped. Do not re-link from the index or footer until each page exists (see "Fix /guides index dead links").',
@@ -172,9 +206,27 @@ values
    'Published models show `You need ${ceil(totalKwh / capacity_kwh)}`. That is a kWh count, not a wiring plan: 2S2P vs 4P, current sharing, and that mixing 12.8V packs to make 24V is a different problem. If we show prices this becomes shopping advice. Teach the topology, or stop implying N identical units in parallel is the answer.',
    'planned', 0, true, 94),
 
+  (1, 'onboarding', 'Affiliate disclosure + FTC-compliant link policy',
+   'Affiliate is now the primary revenue line, and the FTC requires disclosure that is clear and conspicuous — near the link, before the click, not buried in a footer or a separate page. Needs a standing disclosure component on any page carrying affiliate links, a policy page explaining what is and is not paid placement, and a rule that a component is never recommended because it pays better. On a site whose entire moat is beginner trust, an undisclosed affiliate link costs more than it earns.',
+   'planned', 0, true, 96),
+
+  -- Created by the operator through /admin/roadmap, recovered from the live
+  -- database on 2026-08-22 — it had never existed in seed.sql or any migration.
+  (1, 'infrastructure', 'Run a full security scan',
+   'Make sure all components and services conform to the latest security standards.',
+   'planned', 0, true, 100),
+
   (1, 'infrastructure', 'Docs hygiene: CLAUDE.md, TECH-STACK, .env.example',
    'Internal. CLAUDE.md still lists /admin as unbuilt and the architecture tree is stale. TECH-STACK.md still says Vercel + Prisma. .env.example still says "set these in Vercel" and first claims the service-role key is unused, then describes the scrapers using it. The next session will follow the stale files. Not user-facing; do it when touching those files, not as its own heroic rewrite.',
    'planned', 0, false, 95),
+
+  (1, 'calculators', 'System designer: one integrated sizing chain',
+   'The umbrella the four calculators become: one flow from appliances to a system, with assumptions stated once and carried visibly, uncertainty shown where it enters, and a stated confidence band on the result. Integration is not cosmetic — four tools that each look authoritative and quietly disagree is the worst configuration available, because it has the confidence of a specification and the coherence of a guess. Integration is what makes honesty structurally possible: it is the only place the chain can say "this number depends on that assumption you made three steps ago". Differentiator #1 at full strength. Depends on the phase-0 correctness items, which stay independent gates and must ship first — do NOT let this feature absorb them.',
+   'planned', 0, true, 97),
+
+  (1, 'calculators', 'Calculators: string voltage vs MPPT input window',
+   'The panel calculator says how many panels to buy and nothing about how to wire them, so a beginner can series the whole array and exceed the charge controller''s maximum input voltage — a common and expensive way to destroy an MPPT before the system ever runs. Add a string check: panel Voc, count in series, and the cold-temperature Voc correction that catches people out (Voc RISES as temperature falls, so a string sized in July can be over the limit in January), checked against the controller''s max input. Protection-register output: show the derivation, cite the panel datasheet and controller spec, never a bare verdict. Phase 1 rather than phase 0 because it is a missing output rather than a wrong one — but it is the first phase-1 calculator item to pick up.',
+   'planned', 0, true, 98),
 
   -- Phase 2 — account & ops foundation
   (2, 'infrastructure', 'User dashboard shell',
@@ -204,11 +256,11 @@ values
   -- Phase 3 — monitoring (pushed later, 2026-08-20: sequencing choice, not a
   -- change to differentiator #2 in the Blue Ocean Contract)
   (3, 'monitoring', 'Local monitoring agent',
-   'Brand-agnostic MODBUS/serial agent (Python, runs on a Pi/PC) posting to /api/ingest. Differentiator #2.',
-   'planned', 0, true, 80),
+   'Brand-agnostic MODBUS/serial agent (Python, runs on a Pi/PC) posting to /api/ingest. Differentiator #2. Deliberately free: the agent is open and forkable by design, so it cannot carry a subscription — Solar Assistant''s $149 dongle is precisely the lock-in ZonZelf is choosing not to have. Its value is the daily active users it creates, which is what makes affiliate and content revenue work.',
+   'planned', 0, true, 60),
 
   (3, 'monitoring', 'Monitoring dashboard UI + /api/ingest',
-   'The user-facing live monitoring screen and the ingest endpoint the local agent posts to. Depends on the dashboard shell.',
+   'The user-facing live monitoring screen and the ingest endpoint the local agent posts to. Depends on the dashboard shell. Free feature — see "Local monitoring agent". Paid tiers are deferred until there is evidence users will pay, and are not assumed by the plan.',
    'planned', 0, true, 82),
 
   (3, 'calculators', 'Battery scraper: brand discovery + LLM extraction',
@@ -222,4 +274,4 @@ values
   -- Phase 4 — community (depends on monitoring data existing)
   (4, 'community', 'Community data aggregation',
    'Opt-in anonymized aggregate stats ("systems like yours averaged X peak sun hours"). Differentiator #3.',
-   'planned', 0, true, 90);
+   'planned', 0, true, 80);
