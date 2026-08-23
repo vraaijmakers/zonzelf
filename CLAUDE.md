@@ -127,6 +127,22 @@ differentiator #1 executed properly, so the liability fix and the product goal a
 move. A bigger disclaimer is not a substitute: a footer link is weak evidence of assent, and
 US courts have struck down all-encompassing waivers as overbroad.
 
+**The capacity / protection split.** The rule above does not apply evenly, because risk
+does not. Classify every calculator output:
+
+- **Capacity** — daily kWh, bank size, panel count, inverter continuous rating. Wrong here
+  means an undersized system and a disappointing December. These stay confident and
+  specific: they are the product, and they are where the affiliate value sits (the battery
+  is $1,200; the cable is $80).
+- **Protection** — conductor gauge, overcurrent protection, battery cutoff voltage, string
+  Voc against the MPPT window. Wrong here starts fires or destroys equipment. These get the
+  full derivation treatment and never appear as a bare number.
+
+Protection is about five outputs, so this is a contained surface — the point of naming the
+split is to stop treating four calculators as one undifferentiated liability problem.
+Showing the derivation of a **wrong** number documents the error rather than excusing it, so
+the phase-0 correctness items are prerequisites for the framing work, not alternatives to it.
+
 GDPR still applies to EU visitors even with a US entity — the live signup with no deletion
 path, and household photos going to Anthropic via `/api/scan-label`, are real findings today.
 The EU Product Liability Directive (2024/2853, software-as-product, strict liability,
@@ -433,12 +449,18 @@ git. A `db reset` cannot catch this: it only ever proves `seed.sql` agrees with 
 migrations, never that either agrees with reality.
 
 ```bash
-npm run dump:roadmap      # scripts/dump-roadmap.ts — seed.sql-shaped, service-role read
+npm run check:roadmap-sync        # live database vs seed.sql — needs .env.local
+npm run check:roadmap-migrations  # migrations vs seed.sql — no credentials, runs in CI
+npm run dump:roadmap              # live board as seed.sql-shaped tuples
 ```
 
-Run it **before and after** any roadmap change and diff, then fold drift back into
-`seed.sql` in the same PR. And never run `supabase db reset --linked` — the hosted project
-is shared between staging and dev, and it would destroy every admin-UI edit with no backup.
+Run `check:roadmap-sync` **before and after** any roadmap change, and fold drift back into
+`seed.sql` in the same PR — `dump:roadmap` emits the live rows in the right shape to paste.
+`check:roadmap-migrations` is the credential-free half and gates every PR: CI cannot read
+the live board, because rule 9 keeps the service-role key out of this repo.
+
+Never run `supabase db reset --linked` — the hosted project is shared between staging and
+dev, and it would destroy every admin-UI edit with no backup.
 
 ### 11. Column drops are the highest-risk change
 
