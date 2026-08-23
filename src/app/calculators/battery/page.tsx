@@ -8,9 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import {
   usePersistentState, useLoadSummary, publishBatterySummary, round2,
 } from '@/lib/calc-storage'
-import { bankKwh } from '@/lib/system-efficiency'
 import {
-  buildScenarios, scenarioRange, roundBank, defaultOvernightShare,
+  buildScenarios, scenarioRange, roundBank, defaultOvernightShare, type ScenarioId,
 } from '@/lib/battery-scenarios'
 import { CUTOFF_PROFILES, cutoffBand, formatBand, type ChemistryId } from '@/lib/battery-chemistry'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
@@ -91,6 +90,10 @@ export default function BatterySizingPage() {
   const [voltage, setVoltage] = usePersistentState('zonzelf:battery:voltage', 24)
   const [selectedType, setSelectedType] = usePersistentState('zonzelf:battery:type', 'lifepo4')
   const [showTypes, setShowTypes] = useState(false)
+  // Which scenario the battery-model counts answer. Without this the list
+  // silently answered the autonomy-days case only, so "how many do I need to
+  // survive just the night" could not be asked.
+  const [sizeFor, setSizeFor] = usePersistentState<ScenarioId>('zonzelf:battery:sizeFor', 'extended')
   // Overnight energy cannot be derived from the load calculator — it records
   // hours per day, never what time of day. So this is asked, not inferred.
   const [darkHours, setDarkHours] = usePersistentState<number>('zonzelf:battery:darkHours', 12)
@@ -124,7 +127,6 @@ export default function BatterySizingPage() {
   // is entered with it as the battery's own delivery figure. Round-trip
   // efficiency belongs to the array, not the bank: the bank is sized by what it
   // must hand to the inverter.
-  const totalKwh   = bankKwh(dailyKwh, days, battery.dod)
 
   // Until the user overrides it, the overnight share follows the dark hours —
   // what you would get if consumption were spread evenly around the clock.
@@ -140,6 +142,7 @@ export default function BatterySizingPage() {
     systemVoltage: voltage,
   })
   const band = scenarioRange(scenarios)
+  const chosen = scenarios.find(sc => sc.id === sizeFor) ?? scenarios[scenarios.length - 1]
 
   const [allModels, setAllModels] = useState<BatteryModelMatch[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
@@ -414,7 +417,14 @@ export default function BatterySizingPage() {
 
               <div className="border-t pt-3 space-y-3">
                 {scenarios.map(sc => (
-                  <div key={sc.id}>
+                  <button
+                    key={sc.id}
+                    onClick={() => setSizeFor(sc.id)}
+                    aria-pressed={sizeFor === sc.id}
+                    className={`w-full text-left rounded-lg p-2 -mx-2 transition-colors ${
+                      sizeFor === sc.id ? 'bg-yellow-100/70 ring-1 ring-yellow-300' : 'hover:bg-gray-50'
+                    }`}
+                  >
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-sm font-medium text-gray-800">{sc.label}</span>
                       <span className="text-base font-bold text-gray-900 whitespace-nowrap tabular-nums">
@@ -425,8 +435,11 @@ export default function BatterySizingPage() {
                     <p className="text-xs text-gray-400 tabular-nums">
                       delivers {sc.energyKwh.toFixed(1)} kWh · {Math.round(sc.bankAh)} Ah
                     </p>
-                  </div>
+                  </button>
                 ))}
+                <p className="text-xs text-gray-400 pt-1">
+                  Pick one — the real battery models below are counted against it.
+                </p>
               </div>
 
               <div className="border-t pt-3 text-xs text-gray-500 space-y-1">
@@ -511,6 +524,9 @@ export default function BatterySizingPage() {
           <CardTitle className="text-base flex items-center gap-2">
             <Battery className="w-4 h-4 text-yellow-600" />
             Real battery models — {voltage}V {battery.name}
+            <span className="block text-xs font-normal text-gray-500 mt-0.5">
+              counted for <strong className="text-gray-700">{chosen.label.toLowerCase()}</strong> · {roundBank(chosen.bankKwh)} kWh
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -524,7 +540,7 @@ export default function BatterySizingPage() {
           ) : (
             <div className="space-y-3">
               {matchingModels.map(m => {
-                const units = Math.ceil(totalKwh / m.capacity_kwh)
+                const units = Math.ceil(chosen.bankKwh / m.capacity_kwh)
                 const totalPrice = m.price_usd != null ? units * m.price_usd : null
                 return (
                   <div
