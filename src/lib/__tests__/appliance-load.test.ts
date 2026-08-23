@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   normalizeDuty, rowDailyWh, averageWatts, totalDailyKwh,
-  ALL_PRESETS, PRESET_GROUPS,
+  ALL_PRESETS, PRESET_GROUPS, suggestedDuty,
 } from '../appliance-load'
 
 const preset = (name: string) => {
@@ -98,4 +98,18 @@ test('no preset draws for more than 24 hours a day', () => {
     assert.ok(p.hours > 0 && p.hours <= 24, `${p.name} has ${p.hours} hours`)
     assert.ok(p.watts > 0, `${p.name} has ${p.watts} watts`)
   }
+})
+
+test('suggestedDuty offers the corrected value only for cycling presets', () => {
+  // Rows saved before duty cycles existed sit at 100%. The UI offers the real
+  // figure rather than rewriting stored data underneath the user.
+  assert.equal(suggestedDuty('Full-size fridge'), 0.35)
+  assert.equal(suggestedDuty('Mini fridge'), 0.30)
+  assert.equal(suggestedDuty('  full-size fridge  '), 0.35, 'match should tolerate case and padding')
+
+  // Non-cycling loads and A/C (deliberately unsourced) must offer nothing.
+  assert.equal(suggestedDuty('LED light bulb'), undefined)
+  assert.equal(suggestedDuty('Window AC (5,000 BTU)'), undefined)
+  assert.equal(suggestedDuty('Something the user typed'), undefined)
+  assert.equal(suggestedDuty(''), undefined)
 })

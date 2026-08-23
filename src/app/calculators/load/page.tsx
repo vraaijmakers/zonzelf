@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import {
-  PRESET_GROUPS, rowDailyWh, totalDailyKwh, normalizeDuty, DUTY_CYCLE_SOURCE,
+  PRESET_GROUPS, rowDailyWh, totalDailyKwh, normalizeDuty, suggestedDuty, DUTY_CYCLE_SOURCE,
   type Preset,
 } from '@/lib/appliance-load'
 import { energyChain, DEFAULTS as EFF } from '@/lib/system-efficiency'
@@ -149,21 +149,27 @@ export default function LoadCalculatorPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Appliance</th>
+                      <th className="text-left px-3 py-3 font-medium text-gray-600">Appliance</th>
                       <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Watts</th>
-                      <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Hrs/day</th>
-                      <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Duty %</th>
+                      <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Hrs</th>
+                      <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Duty</th>
                       <th className="text-right px-2 py-3 font-medium text-gray-600">Qty</th>
-                      <th className="text-right px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Wh/day</th>
+                      <th className="text-right px-3 py-3 font-medium text-gray-600 whitespace-nowrap">Wh/day</th>
                       <th className="px-2 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {appliances.map((a, i) => {
                       const wh = rowDailyWh(a)
+                      // A row saved before duty cycles existed, or left at 100%, when the
+                      // preset of that name is a cycling load. Offered, never imposed.
+                      const suggested = suggestedDuty(a.name)
+                      const stale = suggested !== undefined && normalizeDuty(a.duty) === 1
+                        ? suggested
+                        : undefined
                       return (
                         <tr key={a.id} className={`border-b ${i % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
-                          <td className="px-4 py-2 min-w-[8.5rem]">
+                          <td className="px-3 py-2 min-w-[7.5rem]">
                             <input
                               type="text"
                               value={a.name}
@@ -178,7 +184,7 @@ export default function LoadCalculatorPage() {
                               value={a.watts || ''}
                               onChange={e => update(a.id, 'watts', parseFloat(e.target.value) || 0)}
                               aria-label={a.name ? `Watts for ${a.name}` : 'Watts'}
-                              className="w-16 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
+                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0"
                             />
                           </td>
@@ -188,18 +194,27 @@ export default function LoadCalculatorPage() {
                               value={a.hours || ''}
                               onChange={e => update(a.id, 'hours', parseFloat(e.target.value) || 0)}
                               aria-label={a.name ? `Hours per day for ${a.name}` : 'Hours per day'}
-                              className="w-16 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
+                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0" max="24" step="0.5"
                             />
                           </td>
                           <td className="px-2 py-2">
+                            {stale !== undefined && (
+                              <button
+                                onClick={() => update(a.id, 'duty', stale)}
+                                title={`${a.name} cycles on and off — use ${Math.round(stale * 100)}% instead of 100%`}
+                                className="block w-full text-right text-xs text-yellow-700 underline decoration-dotted hover:no-underline"
+                              >
+                                use {Math.round(stale * 100)}%
+                              </button>
+                            )}
                             <input
                               type="number"
                               value={Math.round(normalizeDuty(a.duty) * 100)}
                               onChange={e => update(a.id, 'duty', Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) / 100)}
                               aria-label={a.name ? `Duty cycle percent for ${a.name}` : 'Duty cycle percent'}
                               title="Percentage of its in-service hours this appliance actually draws power"
-                              className="w-14 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
+                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-11 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0" max="100" step="5"
                             />
                           </td>
@@ -209,11 +224,11 @@ export default function LoadCalculatorPage() {
                               value={a.qty || ''}
                               onChange={e => update(a.id, 'qty', parseInt(e.target.value) || 1)}
                               aria-label={a.name ? `Quantity of ${a.name}` : 'Quantity'}
-                              className="w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
+                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-9 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="1"
                             />
                           </td>
-                          <td className="px-4 py-2 text-right font-medium text-gray-700 whitespace-nowrap">
+                          <td className="px-3 py-2 text-right font-medium text-gray-700 whitespace-nowrap">
                             {wh >= 1000
                               ? `${(wh / 1000).toFixed(2)} kWh`
                               : `${Math.round(wh)} Wh`}
