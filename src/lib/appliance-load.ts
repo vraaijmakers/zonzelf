@@ -1,0 +1,179 @@
+/**
+ * Daily energy for an appliance, accounting for duty cycle.
+ *
+ * WHY THIS FILE EXISTS
+ * --------------------
+ * The load calculator multiplied nameplate watts by hours in service, so a
+ * full-size fridge came out at 150 W × 24 h = 3.6 kWh/day and a mini fridge at
+ * 80 W × 24 h = 1.92 kWh/day. Both are roughly double reality, because a
+ * fridge's compressor is not running most of the time — it cycles against a
+ * thermostat.
+ *
+ * That error does not stay local. Daily kWh feeds battery sizing, which feeds
+ * array sizing, which feeds the current the conductors are sized for, so one
+ * bad row inflates the whole build. It was the "×2 fridge error" identified in
+ * the sizing-chain design.
+ *
+ * THE MODEL
+ * ---------
+ *   daily Wh = runningWatts × hoursInService × dutyCycle × quantity
+ *
+ * - `runningWatts` is draw while actually operating. Kept separate from the
+ *   average because inverter sizing needs the running figure, not the average.
+ * - `hoursInService` is how long per day the appliance is available to run —
+ *   24 for a fridge that is always plugged in.
+ * - `dutyCycle` is the fraction of those hours it actually draws power. 1 for
+ *   anything that runs continuously while on (a light, a laptop).
+ *
+ * SOURCES FOR THE REFRIGERATION FIGURES
+ * -------------------------------------
+ * Two independent sources agree that a typical kitchen refrigerator in a ~70 °F
+ * room runs its compressor roughly a third of the time (33–40%, i.e. 8–10 hours
+ * in 24), giving 1–2 kWh/day for a modern full-size unit — consistent with
+ * ENERGY STAR certified models averaging ~1.35 kWh/day (493 kWh/year).
+ *
+ * Duty cycle is NOT a constant: the same fridge in a garage above 90 °F can run
+ * 50–70% of the time, and a chest freezer or an ageing unit differs again. The
+ * presets describe a temperate indoor kitchen, and the UI says so.
+ *
+ * WHAT IS DELIBERATELY LEFT AT 100%
+ * ---------------------------------
+ * Air conditioning is also thermostatic and also cycles, but no two-source
+ * figure for its duty cycle was established, and inventing one would repeat the
+ * mistake this file exists to fix. A/C presets stay at 100% — an overestimate,
+ * which oversizes rather than undersizes — and are flagged as cycling loads so
+ * the user can set a figure they trust.
+ */
+
+/** Fraction of the in-service hours during which the appliance actually draws power. */
+export type DutyCycle = number
+
+export interface ApplianceRow {
+  watts: number
+  hours: number
+  qty: number
+  /** Optional: rows saved before duty cycles existed have no value and mean 100%. */
+  duty?: DutyCycle
+}
+
+/** Clamp to a sane fraction. Absent means 100% — never silently reduce a saved row. */
+export function normalizeDuty(duty: number | undefined): DutyCycle {
+  if (duty === undefined || Number.isNaN(duty)) return 1
+  return Math.min(1, Math.max(0, duty))
+}
+
+/** Watt-hours per day for one row, duty cycle applied. */
+export function rowDailyWh(row: ApplianceRow): number {
+  const watts = Math.max(0, row.watts || 0)
+  const hours = Math.min(24, Math.max(0, row.hours || 0))
+  const qty = Math.max(0, row.qty || 0)
+  return watts * hours * normalizeDuty(row.duty) * qty
+}
+
+/** Average draw across the in-service hours — what the row contributes continuously. */
+export function averageWatts(row: ApplianceRow): number {
+  return Math.max(0, row.watts || 0) * normalizeDuty(row.duty)
+}
+
+export function totalDailyKwh(rows: ApplianceRow[]): number {
+  return rows.reduce((sum, row) => sum + rowDailyWh(row), 0) / 1000
+}
+
+export interface Preset {
+  name: string
+  /** Draw while running, not the daily average. */
+  watts: number
+  hours: number
+  duty?: DutyCycle
+  /** Thermostatic or otherwise intermittent — the UI explains the duty figure. */
+  cycles?: boolean
+  /** Shown when the preset carries a duty cycle the user did not choose. */
+  note?: string
+}
+
+const FRIDGE_NOTE =
+  'Compressor cycles against a thermostat — it runs roughly a third of the time in a ' +
+  'temperate kitchen. In a garage or an unheated room above 30 °C, expect 50–70% instead.'
+
+export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] = [
+  {
+    label: 'Lighting & fans',
+    items: [
+      { name: 'LED light bulb',   watts: 10, hours: 5 },
+      { name: 'LED tube light',   watts: 20, hours: 6 },
+      { name: 'Ceiling fan',      watts: 60, hours: 8 },
+      { name: 'Bathroom exhaust', watts: 30, hours: 2 },
+    ],
+  },
+  {
+    label: 'Cooling (A/C)',
+    icon: 'ac',
+    items: [
+      // Left at 100% deliberately — see the file header. Overestimates.
+      { name: 'Window AC (5,000 BTU)',    watts: 450,  hours: 8,  cycles: true },
+      { name: 'Window AC (8,000 BTU)',    watts: 700,  hours: 8,  cycles: true },
+      { name: 'Window AC (12,000 BTU)',   watts: 1100, hours: 8,  cycles: true },
+      { name: 'Portable AC (10,000 BTU)', watts: 1000, hours: 8,  cycles: true },
+      { name: 'Mini-split (9,000 BTU)',   watts: 860,  hours: 10, cycles: true },
+      { name: 'Mini-split (12,000 BTU)',  watts: 1100, hours: 10, cycles: true },
+      { name: 'Mini-split (18,000 BTU)',  watts: 1600, hours: 10, cycles: true },
+      { name: 'Mini-split (24,000 BTU)',  watts: 2100, hours: 10, cycles: true },
+      { name: 'Central AC (2 ton)',       watts: 2500, hours: 8,  cycles: true },
+      { name: 'Central AC (3 ton)',       watts: 3500, hours: 8,  cycles: true },
+      { name: 'Central AC (4 ton)',       watts: 4700, hours: 8,  cycles: true },
+      { name: 'Central AC (5 ton)',       watts: 6000, hours: 8,  cycles: true },
+      { name: 'Central AC (6 ton)',       watts: 7200, hours: 8,  cycles: true },
+      { name: 'Central AC (7.5 ton)',     watts: 9000, hours: 8,  cycles: true },
+    ],
+  },
+  {
+    label: 'Kitchen',
+    items: [
+      { name: 'Mini fridge',       watts: 80,   hours: 24,   duty: 0.30, cycles: true, note: FRIDGE_NOTE },
+      { name: 'Full-size fridge',  watts: 150,  hours: 24,   duty: 0.35, cycles: true, note: FRIDGE_NOTE },
+      { name: 'Chest freezer',     watts: 120,  hours: 24,   duty: 0.35, cycles: true, note: FRIDGE_NOTE },
+      { name: 'Microwave',         watts: 1000, hours: 0.5 },
+      { name: 'Coffee maker',      watts: 900,  hours: 0.25 },
+      { name: 'Toaster',           watts: 850,  hours: 0.1 },
+      { name: 'Induction cooktop', watts: 1800, hours: 1 },
+    ],
+  },
+  {
+    label: 'Entertainment & office',
+    items: [
+      { name: 'TV (32")',      watts: 40,  hours: 4 },
+      { name: 'TV (55")',      watts: 100, hours: 4 },
+      { name: 'Laptop',        watts: 65,  hours: 6 },
+      { name: 'Desktop PC',    watts: 200, hours: 4 },
+      { name: 'Phone charger', watts: 10,  hours: 2 },
+      { name: 'Router / modem', watts: 15, hours: 24 },
+    ],
+  },
+  {
+    label: 'Water & utility',
+    items: [
+      { name: 'Water pump (small)',  watts: 300,  hours: 1 },
+      { name: 'Water pump (1 HP)',   watts: 750,  hours: 2 },
+      { name: 'Washing machine',     watts: 500,  hours: 1 },
+      { name: 'Clothes dryer',       watts: 5000, hours: 0.75 },
+      { name: 'Dishwasher',          watts: 1200, hours: 1 },
+      { name: 'Water heater (elec)', watts: 4000, hours: 1 },
+    ],
+  },
+  {
+    label: 'Other',
+    items: [
+      { name: 'CPAP machine',       watts: 30,   hours: 8 },
+      { name: 'Power tool (drill)', watts: 600,  hours: 0.5 },
+      { name: 'EV charger (L1)',    watts: 1400, hours: 6 },
+      { name: 'EV charger (L2)',    watts: 7200, hours: 2 },
+    ],
+  },
+]
+
+export const ALL_PRESETS: Preset[] = PRESET_GROUPS.flatMap(g => g.items)
+
+export const DUTY_CYCLE_SOURCE =
+  'Refrigeration duty cycles describe a temperate indoor kitchen (~21 °C): compressor running ' +
+  'roughly a third of the time, giving 1–2 kWh/day for a modern full-size unit. Warmer rooms ' +
+  'run longer. Air-conditioning presets assume continuous running, which overestimates.'
