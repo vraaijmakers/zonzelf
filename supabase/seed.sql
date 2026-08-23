@@ -82,8 +82,8 @@ values
    'in_test', 90, true, 51),
 
   (0, 'calculators', 'Calculators: AWG ampacity from a cited electrical code',
-   'The AWG table uses chassis-wiring ratings (AWG 10 = 55A, AWG 12 = 41A). NEC 310.16 / typical THHN in conduit is ~30A / 20A; NEN 1010 / IEC 60364 are the relevant codes for the EU/NL audience. max_amps_bundle exists in the table and is unused. No insulation type, temperature, bundling, DC vs AC, or fuse-must-protect-the-wire. Voltage-drop math is fine; the recommendation is not. Default to the conservative (in-conduit / code) table, or offer chassis vs in-conduit as two modes. Cite the source on the page.',
-   'planned', 0, true, 52),
+   'Fixed: the table now carries NEC 310.16 copper ampacities with a selectable 60/75/90 °C terminal column (defaulting to 75 °C per NEC 110.14(C), since the lowest-rated termination limits the circuit), and applies the NEC 240.4(D) small-conductor caps that override it — so 10 AWG reads 30 A, not the 55 A chassis rating it showed before. Sizes thinner than 14 AWG are gone; Table 310.16 does not cover them. Values cross-checked against two independent reproductions of the table and covered by unit tests in src/lib/__tests__/awg.test.ts. The page cites its sources and states what is NOT modelled: free-air ampacity (310.17, only one source could be verified), ambient derates above 30 °C, and conduit-fill adjustment — all of which REDUCE ampacity. Still blocked on the separate licensed-electrician sign-off before this counts as reviewed, and overcurrent protection is called out on the page but not yet calculated (see the fuse/breaker item).',
+   'in_test', 90, true, 52),
 
   (0, 'calculators', 'Calculators: appliance presets use duty cycle, not nameplate × 24h',
    'Full-size fridge preset is 150W × 24h = 3.6 kWh/day; real cycling is typically 1–2 kWh. Mini fridge 80W × 24h is the same class of error. One row can double a beginner''s battery and panel bill. Use average/duty-cycle watts for cycling loads, and say so. Motor surge is explained in a sidebar and never enters a number — that is the separate inverter-sizing item, not this one.',
@@ -142,8 +142,8 @@ values
    'planned', 0, true, 66),
 
   (0, 'infrastructure', 'Unit tests for calculator math and battery-review',
-   'No test suite. Calculators, AWG tables, LVD copy, efficiency math, and reviewBatteryModel() have zero unit tests; verification is build + lint + screenshot. For tools that recommend wire gauge and cutoff voltages, that is not a test strategy. Add tests for the four calculator formulas, the AWG table, reviewBatteryModel flags, and the load→battery→panel efficiency contract, and run them in CI. Playwright/e2e can come later.',
-   'planned', 0, false, 67),
+   'Started: src/lib/__tests__/awg.test.ts covers the NEC 310.16 table, the 240.4(D) caps, round-trip voltage-drop maths, the passing-set contract, and the zero-voltage NaN guard — 11 tests via node:test through tsx, no new dependencies (npm test). Still uncovered: the load, battery and panel calculators, the load→battery→panel efficiency contract, the AWG table beyond spot-checks, and reviewBatteryModel() flags. For tools that recommend wire gauge and cutoff voltages, build + lint + screenshot was never a test strategy; this is the first of it, not the whole of it. Wire npm test into CI when a second module is covered.',
+   'in_development', 25, false, 67),
 
   (0, 'infrastructure', 'HTTP security headers',
    'next.config.ts sets no CSP, HSTS, X-Frame-Options, Referrer-Policy, or Permissions-Policy. Cookie flags are whatever @supabase/ssr defaults to. Minimum before public: CSP (start strict, loosen for Supabase/auth), HSTS on the real domain, frame-ancestors none. XSS on a future comment feature becomes session theft without this.',
