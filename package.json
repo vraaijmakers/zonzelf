@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test src/lib/__tests__/*.test.ts",
     "dump:roadmap": "tsx --env-file=.env.local scripts/dump-roadmap.ts",
     "check:roadmap-migrations": "tsx scripts/check-roadmap-migrations.ts",
     "check:roadmap-sync": "tsx --env-file=.env.local scripts/check-roadmap-sync.ts",
