@@ -475,6 +475,40 @@ Before every insert/update, drop empty optional keys so the database default app
 them explicitly. Validate at the boundary — parse the request body, don't spread it into a
 query.
 
+### 12b. Changing what stored data *means* needs a migration path in the UI
+
+Calculator state lives in `localStorage` and outlives every deploy. When you
+change the meaning of a stored field — add a new one with a default, split one
+class into two, retag a preset — **preserving what people already saved is
+right, but it silently withholds the correction from everyone who has already
+used the tool.** Their numbers stay wrong, and they have no way to know.
+
+This shipped three times in one day:
+
+- Duty cycles arrived; saved rows had none, so they stayed at 100% and kept the
+  `150 W × 24 h` fridge figure the change existed to fix.
+- Load profiles arrived; saved rows had none, so they counted as `always`.
+- `cooling` and `heating` were split out of `daytime`; saved air conditioning
+  kept `daytime`, which is deliberately weather-neutral, so it was never
+  suppressed on an overcast day and a sunless day stayed at full summer load.
+
+Each was found by a person using the page, never by a test, because the code was
+internally consistent and simply wrong about the world.
+
+**The pattern that works:** keep the stored value, and offer the corrected one
+inline where the number appears — `use 30%`, `use Cooling` — one click, never
+imposed. See `suggestedDuty()` and `suggestedProfile()` in
+`src/lib/appliance-load.ts`.
+
+Two things that fall out of it:
+
+- A stored shape that gained fields needs a normalizer, not a cast. See
+  `normalizeBreakdown()` — a summary saved before a field existed is a real
+  runtime case, not just a type error.
+- **The seed data and the presets must agree.** A starter row tagged one way and
+  a preset of the same name tagged another makes the page disagree with itself
+  and fires a false correction on a fresh visit. Check both when you retag either.
+
 ### 13. Never end a session with dangling commits
 
 After a PR merges, commits pushed to that branch do **not** reach `develop`. At session end:

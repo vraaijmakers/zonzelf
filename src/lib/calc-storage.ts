@@ -128,6 +128,20 @@ export interface LoadSummary {
   efficiency: number
   /** rawKwh / efficiency — what the battery has to deliver. */
   adjustedKwh: number
+  /**
+   * Daily kWh split by when each appliance runs. Absent on summaries saved
+   * before profiles existed; the battery page falls back to a flat assumption
+   * rather than pretending it knows.
+   */
+  breakdown?: {
+    always: number
+    daytime: number
+    evening: number
+    /** Added when cooling and heating became distinct classes; absent on older summaries. */
+    cooling?: number
+    heating?: number
+    total: number
+  }
 }
 
 /**
