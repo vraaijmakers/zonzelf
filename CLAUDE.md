@@ -158,8 +158,8 @@ were ever commercially *targeted*.
 - **Supabase** — Postgres, Auth, RLS, storage (`@supabase/supabase-js`, `@supabase/ssr`)
 - **Anthropic SDK** (`@anthropic-ai/sdk`) — currently powering `/api/scan-label`
 - **lucide-react** icons · `clsx` + `tailwind-merge` via `cn()` in `src/lib/utils.ts`
-- Hosting: **TBD** — not yet set up anywhere. A self-hosted Docker staging instance is
-  planned on the seecago.com VPN box (same pattern as the BOND platform: shared nginx
+- Hosting: **staging is live, production is not chosen.** A self-hosted Docker staging
+  instance runs on the seecago.com VPN box (same pattern as the BOND platform: shared nginx
   reverse proxy, container on the `webapps-docker` network, VPN-only — no public
   reachability). No production host chosen yet. **Do not write "Vercel" here again without
   it actually being configured** — it was previously listed as hosting with nothing behind
