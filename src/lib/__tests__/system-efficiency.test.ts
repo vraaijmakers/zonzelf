@@ -28,11 +28,13 @@ test('battery chemistry actually changes array sizing', () => {
   // The bug: battery.efficiency was defined per chemistry and never applied.
   // Flooded lead-acid at 80% round trip must demand a meaningfully bigger array
   // than lithium at 97%.
-  const lithium = energyChain({ rawKwh: 10, batteryRoundTrip: 0.97 })
-  const flooded = energyChain({ rawKwh: 10, batteryRoundTrip: 0.80 })
+  // The figures the app actually uses: midpoints of the ranges the batteries
+  // guide publishes, not the best case of each.
+  const lithium = energyChain({ rawKwh: 10, batteryRoundTrip: 0.965 })
+  const flooded = energyChain({ rawKwh: 10, batteryRoundTrip: 0.75 })
   assert.ok(flooded.fromArrayKwh > lithium.fromArrayKwh)
   const ratio = flooded.fromArrayKwh / lithium.fromArrayKwh
-  assert.ok(ratio > 1.2 && ratio < 1.25, `expected ~21% more array, got ${((ratio - 1) * 100).toFixed(1)}%`)
+  assert.ok(ratio > 1.25 && ratio < 1.32, `expected ~29% more array, got ${((ratio - 1) * 100).toFixed(1)}%`)
 
   // Bank sizing is unaffected by round trip — the bank does not pay it.
   close(lithium.fromBatteryKwh, flooded.fromBatteryKwh)
@@ -41,7 +43,7 @@ test('battery chemistry actually changes array sizing', () => {
 test('the old model undersized the array', () => {
   // Old panel maths: raw / arrayEfficiency, with no inverter and no round trip.
   const oldWay = 10 / 0.8
-  const now = energyChain({ rawKwh: 10, batteryRoundTrip: 0.97 }).fromArrayKwh
+  const now = energyChain({ rawKwh: 10, batteryRoundTrip: 0.965 }).fromArrayKwh
   assert.ok(now > oldWay, 'the corrected chain must ask for more generation, not less')
 })
 
