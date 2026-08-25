@@ -10,6 +10,7 @@ import {
   evaluateGauges, passingGauges, thinnestByAmpacity,
   type TempColumn,
 } from '../awg'
+import { sizeOvercurrent } from '../overcurrent'
 
 const spec = (awg: number) => {
   const s = AWG_SPECS.find(s => s.awg === awg)
@@ -94,11 +95,13 @@ test('voltage drop uses the round trip, not the one-way length', () => {
   assert.ok(Math.abs(r.powerLossWatts - 18) < 1e-9)
 })
 
-test('a 30A load rejects 10 AWG at 75C on ampacity', () => {
-  // 10 AWG usable is 30A, so 30A exactly meets it; 31A must not.
-  const at30 = evaluateGauges({ amps: 30, oneWayFeet: 5, volts: 24, maxDropPercent: 3, column: 75 })
-  const at31 = evaluateGauges({ amps: 31, oneWayFeet: 5, volts: 24, maxDropPercent: 3, column: 75 })
-  assert.equal(at30.find(r => r.spec.awg === 10)?.meetsAmpacity, true)
+test('the ampacity boundary is exact', () => {
+  // 10 AWG usable is 30A. Checked non-continuous so the boundary is the bare
+  // ampacity; the continuous case has its own test, because 125% moves it.
+  const base = { oneWayFeet: 5, volts: 24, maxDropPercent: 3, column: 75 as const, continuous: false }
+  const at30 = evaluateGauges({ ...base, amps: 30 })
+  const at31 = evaluateGauges({ ...base, amps: 31 })
+  assert.equal(at30.find(r => r.spec.awg === 10)?.meetsAmpacity, true, '30A exactly meets 30A')
   assert.equal(at31.find(r => r.spec.awg === 10)?.meetsAmpacity, false)
 })
 
@@ -141,4 +144,48 @@ test('no gauge passes when the load exceeds every conductor', () => {
     passingGauges({ amps: 5000, oneWayFeet: 10, volts: 48, maxDropPercent: 3, column: 90 }).length,
     0,
   )
+})
+
+test('a continuous load sizes the CONDUCTOR at 125%, not just its breaker', () => {
+  // NEC 210.19(A)(1). Sizing the device at 125% and the wire at 100% is a
+  // common and dangerous asymmetry — 10 AWG "passes" a 30A continuous load on
+  // bare ampacity and then cannot be protected by any legal device.
+  const continuous = evaluateGauges({
+    amps: 30, oneWayFeet: 5, volts: 24, maxDropPercent: 3, column: 75, continuous: true,
+  })
+  const ten = continuous.find(r => r.spec.awg === 10)
+  assert.ok(ten)
+  assert.equal(ten.designAmps, 37.5)
+  assert.equal(ten.meetsAmpacity, false, '10 AWG must fail a 30A continuous load')
+
+  const notContinuous = evaluateGauges({
+    amps: 30, oneWayFeet: 5, volts: 24, maxDropPercent: 3, column: 75, continuous: false,
+  })
+  assert.equal(notContinuous.find(r => r.spec.awg === 10)?.meetsAmpacity, true)
+})
+
+test('a PV source circuit sizes the conductor at 156% of Isc', () => {
+  const r = evaluateGauges({
+    amps: 10, oneWayFeet: 5, volts: 24, maxDropPercent: 3, column: 75, kind: 'pv-source',
+  })
+  const first = r.find(g => g.meetsAmpacity)
+  assert.ok(first)
+  assert.ok(Math.abs(first.designAmps - 15.6) < 1e-9)
+  // 14 AWG is capped at 15A by 240.4(D), below 15.6A, so it cannot be first.
+  assert.ok(first.spec.awg < 14, 'a 10A string needs more than 14 AWG once 690.8 applies')
+})
+
+test('conductor and device agree — anything that passes can be protected', () => {
+  // The contract between the two modules: the calculator must never present a
+  // conductor that no standard device can protect.
+  for (const amps of [5, 10, 18, 30, 45, 80]) {
+    for (const kind of ['general', 'pv-source'] as const) {
+      const input = { amps, oneWayFeet: 5, volts: 48, maxDropPercent: 5, column: 75 as const, kind, continuous: true }
+      for (const g of passingGauges(input)) {
+        const ocpd = sizeOvercurrent({ amps, continuous: true, kind, awg: g.spec.awg, column: 75 })
+        assert.ok(ocpd && !ocpd.impossible,
+          `${amps}A ${kind}: AWG ${g.label} passes but no device can protect it`)
+      }
+    }
+  }
 })
