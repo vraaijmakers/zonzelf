@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   normalizeDuty, rowDailyWh, averageWatts, totalDailyKwh,
   ALL_PRESETS, PRESET_GROUPS, suggestedDuty, breakdownByProfile, LOAD_PROFILES, overnightShareFrom,
-  coolingShare, heatingShare, isCorrelatedRisk, normalizeBreakdown,
+  coolingShare, heatingShare, isCorrelatedRisk, normalizeBreakdown, suggestedProfile,
 } from '../appliance-load'
 
 const preset = (name: string) => {
@@ -253,4 +253,35 @@ test('a summary saved before cooling and heating existed still loads', () => {
   assert.equal(normalizeBreakdown(undefined), null)
   assert.equal(normalizeBreakdown(null), null)
   assert.equal(normalizeBreakdown({ always: 1 }), null, 'a shape without a total is unusable')
+})
+
+test('suggestedProfile offers the preset class when a saved row disagrees', () => {
+  // The bug this exists for: air conditioning saved as 'daytime' before cooling
+  // was split out is weather-NEUTRAL, so it is never suppressed on an overcast
+  // day and the sunless-day bank stays at full summer load.
+  assert.equal(suggestedProfile('Mini-split (12,000 BTU)', 'daytime'), 'cooling')
+  assert.equal(suggestedProfile('Window AC (5,000 BTU)', undefined), 'cooling')
+  assert.equal(suggestedProfile('Coffee maker', 'daytime'), 'evening')
+  assert.equal(suggestedProfile('Heat pump (12,000 BTU)', 'daytime'), 'heating')
+
+  // Already correct, or unknown: offer nothing.
+  assert.equal(suggestedProfile('Mini-split (12,000 BTU)', 'cooling'), undefined)
+  assert.equal(suggestedProfile('Mini fridge', undefined), undefined, 'absent means always, which is right')
+  assert.equal(suggestedProfile('Mini fridge', 'always'), undefined)
+  assert.equal(suggestedProfile('Something hand-typed', 'daytime'), undefined)
+})
+
+test('a stale cooling row is what keeps a sunless day at full load', () => {
+  // Reproduces the reported case end to end.
+  const stale = breakdownByProfile([
+    { watts: 1100, hours: 10, qty: 2, profile: 'daytime' as const },   // A/C, stale class
+    { watts: 80, hours: 24, qty: 2, duty: 0.3 },
+  ])
+  assert.equal(coolingShare(stale), 0, 'stale rows contribute nothing to cooling')
+
+  const fixed = breakdownByProfile([
+    { watts: 1100, hours: 10, qty: 2, profile: 'cooling' as const },
+    { watts: 80, hours: 24, qty: 2, duty: 0.3 },
+  ])
+  assert.ok(coolingShare(fixed) > 0.9, 'once corrected, almost everything is suppressible')
 })

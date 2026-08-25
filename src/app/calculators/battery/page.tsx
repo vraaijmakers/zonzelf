@@ -523,6 +523,18 @@ export default function BatterySizingPage() {
                 <p className="text-xs text-gray-400 pt-1">
                   Pick one — the real battery models below are counted against it.
                 </p>
+                {cooling > 0.01 && heating > 0.01 && (
+                  <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <p className="text-xs text-blue-900 leading-relaxed">
+                      <strong>You have listed both cooling and heating.</strong> These scenarios
+                      describe a single day, and a day that is both hot enough for air
+                      conditioning and cold enough for heating does not happen — so the sunless
+                      figure here blends two seasons that never overlap. Size for whichever season
+                      is harder on your system, and list only that season&apos;s loads while you do.
+                      A heat pump that both heats and cools is two entries, not one.
+                    </p>
+                  </div>
+                )}
                 {correlatedRisk && (
                   <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50 p-3">
                     <p className="text-xs text-orange-900 leading-relaxed">

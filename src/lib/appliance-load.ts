@@ -374,3 +374,20 @@ export function normalizeBreakdown(raw: Partial<LoadBreakdown> | undefined | nul
     total: raw.total,
   }
 }
+
+/**
+ * The profile a preset of this name carries, when a saved row disagrees with it.
+ *
+ * Same failure as the duty cycles: rows saved before a classification changed
+ * keep the old value, so the correction never reaches anyone who had already
+ * used the calculator. It bit twice — once when duty cycles arrived, and again
+ * when cooling and heating were split out of `daytime`, which left saved air
+ * conditioning tagged weather-neutral and so never suppressed on an overcast
+ * day. Offered, never imposed.
+ */
+export function suggestedProfile(name: string, current: LoadProfile | undefined): LoadProfile | undefined {
+  const preset = ALL_PRESETS.find(p => p.name.toLowerCase() === name.trim().toLowerCase())
+  if (!preset) return undefined
+  const want = preset.profile ?? DEFAULT_PROFILE
+  return want === (current ?? DEFAULT_PROFILE) ? undefined : want
+}

@@ -9,7 +9,7 @@ import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-stora
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import {
   PRESET_GROUPS, rowDailyWh, totalDailyKwh, normalizeDuty, suggestedDuty, DUTY_CYCLE_SOURCE,
-  breakdownByProfile, LOAD_PROFILES, DEFAULT_PROFILE,
+  breakdownByProfile, LOAD_PROFILES, DEFAULT_PROFILE, suggestedProfile,
   type Preset, type LoadProfile,
 } from '@/lib/appliance-load'
 import { energyChain, DEFAULTS as EFF } from '@/lib/system-efficiency'
@@ -31,7 +31,7 @@ interface Appliance {
 const DEFAULT_APPLIANCES: Appliance[] = [
   { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4, profile: 'evening' },
   { id: 2, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1 },
-  { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1, profile: 'evening' },
+  { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
   { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1, duty: 0.30 },
 ]
 
@@ -180,6 +180,10 @@ export default function LoadCalculatorPage() {
                       // A row saved before duty cycles existed, or left at 100%, when the
                       // preset of that name is a cycling load. Offered, never imposed.
                       const suggested = suggestedDuty(a.name)
+                      // Same staleness as duty cycles: a row saved before cooling and
+                      // heating were split keeps its old class, so its A/C is never
+                      // suppressed on an overcast day.
+                      const betterProfile = suggestedProfile(a.name, a.profile)
                       const stale = suggested !== undefined && normalizeDuty(a.duty) === 1
                         ? suggested
                         : undefined
@@ -215,6 +219,15 @@ export default function LoadCalculatorPage() {
                             />
                           </td>
                           <td className="px-2 py-2">
+                            {betterProfile !== undefined && (
+                              <button
+                                onClick={() => update(a.id, 'profile', betterProfile)}
+                                title={LOAD_PROFILES[betterProfile].hint}
+                                className="block text-xs text-yellow-700 underline decoration-dotted hover:no-underline"
+                              >
+                                use {LOAD_PROFILES[betterProfile].label}
+                              </button>
+                            )}
                             <select
                               value={a.profile ?? DEFAULT_PROFILE}
                               onChange={e => update(a.id, 'profile', e.target.value)}
