@@ -179,8 +179,8 @@ values
 
   -- Phase 1 — content completeness (onboarding differentiator)
   (1, 'onboarding', 'Guided beginner onboarding',
-   'Plain-English explainers woven into guides and calculators, not a separate wizard. Differentiator #1.',
-   'planned', 0, true, 70),
+   'Plain-English explainers woven into guides and calculators, not a separate wizard. Differentiator #1. Started 2026-08-25 after an audit of where each concept actually appears found the calculators had outrun the teaching badly: duty cycle, load profiles, the three-stage efficiency chain, the battery scenario band, dark hours and the cooling/heating asymmetry were all enforced by tools and explained on no page at all, and the glossary — whose entire job this is — defined none of the new vocabulary. A beginner met "Duty %", "Runs: Cooling" and "156% of Isc" with nowhere to look them up, which is differentiator #1 inverted. Done: the glossary gained ampacity, autonomy, continuous load, design current, duty cycle, Isc, OCPD and round-trip efficiency, cross-linked to the calculators and guides that use them; the wiring guide gained the 125% continuous rule and the 156% PV rule. Remaining: the efficiency chain belongs in /guides/how-it-works, and the autonomy-vs-overnight distinction plus the cooling/heating asymmetry belong with battery sizing. No test can tell you an explanation is clear, so this one is verified by a person reading it.',
+   'in_development', 25, true, 70),
 
   (1, 'onboarding', 'Remaining guide pages',
    'wiring, depth-of-discharge, grounding, inverter-settings, glossary. how-it-works and battery-types have shipped. Do not re-link from the index or footer until each page exists (see "Fix /guides index dead links").',
