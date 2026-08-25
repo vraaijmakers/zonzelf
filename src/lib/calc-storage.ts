@@ -133,7 +133,15 @@ export interface LoadSummary {
    * before profiles existed; the battery page falls back to a flat assumption
    * rather than pretending it knows.
    */
-  breakdown?: { always: number; daytime: number; evening: number; total: number }
+  breakdown?: {
+    always: number
+    daytime: number
+    evening: number
+    /** Added when cooling and heating became distinct classes; absent on older summaries. */
+    cooling?: number
+    heating?: number
+    total: number
+  }
 }
 
 /**

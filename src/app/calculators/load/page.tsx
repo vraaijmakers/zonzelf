@@ -128,6 +128,8 @@ export default function LoadCalculatorPage() {
         always: round2(breakdown.always),
         daytime: round2(breakdown.daytime),
         evening: round2(breakdown.evening),
+        cooling: round2(breakdown.cooling),
+        heating: round2(breakdown.heating),
         total: round2(breakdown.total),
       },
     })

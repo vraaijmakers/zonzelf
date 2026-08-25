@@ -11,7 +11,9 @@ import {
 import {
   buildScenarios, scenarioRange, roundBank, defaultOvernightShare, type ScenarioId,
 } from '@/lib/battery-scenarios'
-import { overnightShareFrom, weatherDrivenShare } from '@/lib/appliance-load'
+import {
+  overnightShareFrom, coolingShare, heatingShare, isCorrelatedRisk, normalizeBreakdown,
+} from '@/lib/appliance-load'
 import { CUTOFF_PROFILES, cutoffBand, formatBand, type ChemistryId } from '@/lib/battery-chemistry'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { createClient } from '@/lib/supabase/client'
@@ -104,6 +106,10 @@ export default function BatterySizingPage() {
   // not assumed: it depends on climate and on what the load actually is.
   const [overcastFactor, setOvercastFactor] =
     usePersistentState<number>('zonzelf:battery:overcastFactor', 0.4)
+  // The mirror image: heating runs HARDER on a cold sunless day. Asked rather
+  // than baked in, for the same reason the cooling factor is.
+  const [coldFactor, setColdFactor] =
+    usePersistentState<number>('zonzelf:battery:coldFactor', 1.5)
 
   const loadSummary = useLoadSummary()
   // The battery bank has to cover losses, so this step uses the adjusted figure.
@@ -139,11 +145,13 @@ export default function BatterySizingPage() {
   // published a breakdown — a flat share treats a fridge, an air conditioner
   // and a television as if they ran at the same times, which for a
   // cooling-dominated load is wrong in both directions.
-  const breakdown = loadSummary?.breakdown
+  const breakdown = normalizeBreakdown(loadSummary?.breakdown)
   const derivedShare = breakdown
     ? overnightShareFrom(breakdown, darkHours)
     : defaultOvernightShare(darkHours)
-  const weatherShare = breakdown ? weatherDrivenShare(breakdown) : 0
+  const cooling = breakdown ? coolingShare(breakdown) : 0
+  const heating = breakdown ? heatingShare(breakdown) : 0
+  const correlatedRisk = breakdown ? isCorrelatedRisk(breakdown) : false
 
   const overnightShare = shareMeta.restored && shareOverride !== null
     ? shareOverride
@@ -153,7 +161,9 @@ export default function BatterySizingPage() {
     dailyDeliveredKwh: dailyKwh,
     overnightShare,
     overcastFactor,
-    weatherDrivenShare: weatherShare,
+    coolingShare: cooling,
+    coldFactor,
+    heatingShare: heating,
     autonomyDays: days,
     depthOfDischarge: battery.dod,
     systemVoltage: voltage,
@@ -366,7 +376,7 @@ export default function BatterySizingPage() {
                   </p>
                 </div>
 
-                {weatherShare > 0.01 && (
+                {cooling > 0.01 && (
                   <div>
                     <label htmlFor="battery-overcast" className="block text-sm font-medium mb-1">
                       Weather-driven load on an overcast day:{' '}
@@ -380,12 +390,34 @@ export default function BatterySizingPage() {
                       className="w-full accent-yellow-500"
                     />
                     <p className="text-xs text-gray-400 mt-1">
-                      {Math.round(weatherShare * 100)}% of your daily use is weather-driven
-                      (air conditioning, tools). A sunless day is sunless because it is overcast,
+                      {Math.round(cooling * 100)}% of your daily use is cooling. A sunless day is sunless because it is overcast,
                       which usually means cooler — so that load runs less on exactly the days you
                       have least sun. Sizing a bank as if it ran flat out through three grey days
                       buys battery you will never use. Set this to 100% if your climate does not
                       work that way.
+                    </p>
+                  </div>
+                )}
+
+                {heating > 0.01 && (
+                  <div>
+                    <label htmlFor="battery-cold" className="block text-sm font-medium mb-1">
+                      Heating load on a cold sunless day:{' '}
+                      <span className="text-yellow-700">{Math.round(coldFactor * 100)}%</span>
+                    </label>
+                    <input
+                      id="battery-cold"
+                      type="range" min="100" max="300" step="10"
+                      value={Math.round(coldFactor * 100)}
+                      onChange={e => setColdFactor(parseFloat(e.target.value) / 100)}
+                      className="w-full accent-yellow-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {Math.round(heating * 100)}% of your daily use is heating, and heating is
+                      not cooling in reverse. It runs hardest through the coldest hours — at
+                      night, with no sun — and it runs <em>more</em> on a cold grey day, not less.
+                      So your demand rises exactly when your generation falls. 100% means the
+                      weather makes no difference; 150% means half again as much on a bad day.
                     </p>
                   </div>
                 )}
@@ -491,6 +523,18 @@ export default function BatterySizingPage() {
                 <p className="text-xs text-gray-400 pt-1">
                   Pick one — the real battery models below are counted against it.
                 </p>
+                {correlatedRisk && (
+                  <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50 p-3">
+                    <p className="text-xs text-orange-900 leading-relaxed">
+                      <strong>Your worst weather and your highest demand arrive together.</strong>{' '}
+                      A heating-dominated system has no slack in it: a cold, dark, still week is
+                      maximum load and minimum generation at the same time. Size against the
+                      multi-day figure, not the optimistic one — a cooling-dominated system in a
+                      hot climate forgives an undersized bank, because grey days are also cool
+                      days. This one does not.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-3 text-xs text-gray-500 space-y-1">

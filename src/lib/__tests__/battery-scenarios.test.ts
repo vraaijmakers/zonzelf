@@ -108,7 +108,7 @@ test('an overcast day suppresses only the weather-driven part of the load', () =
   // cooler, which means a cooling load largely goes away. The shortage and the
   // load are anti-correlated, and treating load as constant overstates the bank.
   const constant = buildScenarios(base)
-  const acHeavy = buildScenarios({ ...base, weatherDrivenShare: 0.75, overcastFactor: 0.35 })
+  const acHeavy = buildScenarios({ ...base, coolingShare: 0.75, overcastFactor: 0.35 })
 
   assert.ok(acHeavy[1].energyKwh < constant[1].energyKwh, 'a sunless day must need less when the load is weather-driven')
   assert.ok(acHeavy[2].energyKwh < constant[2].energyKwh)
@@ -122,19 +122,66 @@ test('an overcast day suppresses only the weather-driven part of the load', () =
 
 test('no suppression by default, so an absent breakdown never shrinks a bank', () => {
   const plain = buildScenarios(base)
-  const explicit = buildScenarios({ ...base, weatherDrivenShare: 0, overcastFactor: 0.3 })
+  const explicit = buildScenarios({ ...base, coolingShare: 0, overcastFactor: 0.3 })
   assert.equal(plain[1].energyKwh, explicit[1].energyKwh)
   assert.equal(plain[1].energyKwh, base.dailyDeliveredKwh, 'a fully weather-independent load is unchanged')
 })
 
 test('a fully weather-driven load collapses to the overcast factor', () => {
-  const s = buildScenarios({ ...base, weatherDrivenShare: 1, overcastFactor: 0.25 })
+  const s = buildScenarios({ ...base, coolingShare: 1, overcastFactor: 0.25 })
   assert.ok(Math.abs(s[1].energyKwh - base.dailyDeliveredKwh * 0.25) < 1e-9)
 })
 
 test('overcast inputs are clamped rather than inverting the model', () => {
-  const over = buildScenarios({ ...base, weatherDrivenShare: 5, overcastFactor: 5 })
+  const over = buildScenarios({ ...base, coolingShare: 5, overcastFactor: 5 })
   assert.equal(over[1].energyKwh, base.dailyDeliveredKwh, 'factor above 1 must not increase the load')
-  const under = buildScenarios({ ...base, weatherDrivenShare: -1, overcastFactor: -1 })
+  const under = buildScenarios({ ...base, coolingShare: -1, overcastFactor: -1 })
   assert.ok(under[1].energyKwh >= 0)
+})
+
+test('heating INCREASES the sunless-day load — the sign error this fixes', () => {
+  // Alaska, not Florida. A cold grey day means the heating runs harder, so
+  // demand rises exactly as generation falls. Treating heating like cooling
+  // subtracted where it should add.
+  const constant = buildScenarios(base)
+  const heated = buildScenarios({ ...base, heatingShare: 0.6, coldFactor: 1.5 })
+
+  assert.ok(heated[1].energyKwh > constant[1].energyKwh, 'a sunless day must need MORE with heating')
+  assert.ok(heated[2].energyKwh > constant[2].energyKwh)
+
+  // 32 kWh, 60% heating at 1.5x: 32*(0.4 + 0.6*1.5) = 32*1.3 = 41.6
+  assert.ok(Math.abs(heated[1].energyKwh - 41.6) < 1e-9, `got ${heated[1].energyKwh}`)
+})
+
+test('cooling and heating move the sunless day in opposite directions', () => {
+  const florida = buildScenarios({ ...base, coolingShare: 0.7, overcastFactor: 0.35 })
+  const alaska = buildScenarios({ ...base, heatingShare: 0.7, coldFactor: 1.6 })
+  assert.ok(florida[1].energyKwh < base.dailyDeliveredKwh, 'cooling shrinks the bad day')
+  assert.ok(alaska[1].energyKwh > base.dailyDeliveredKwh, 'heating grows it')
+  assert.ok(alaska[2].bankKwh > florida[2].bankKwh * 2,
+    'the same load in a heating climate needs a far bigger bank')
+})
+
+test('a mixed load nets the two effects without double-counting', () => {
+  const mixed = buildScenarios({
+    ...base, coolingShare: 0.3, overcastFactor: 0.4, heatingShare: 0.3, coldFactor: 1.5,
+  })
+  // 0.4 neutral + 0.3*0.4 + 0.3*1.5 = 0.4 + 0.12 + 0.45 = 0.97
+  assert.ok(Math.abs(mixed[1].energyKwh - base.dailyDeliveredKwh * 0.97) < 1e-9)
+})
+
+test('the cold factor can never behave like suppression', () => {
+  // Floored at 1: a heating load must never shrink on a bad day, whatever the
+  // slider says.
+  const sabotage = buildScenarios({ ...base, heatingShare: 1, coldFactor: 0.2 })
+  assert.ok(sabotage[1].energyKwh >= base.dailyDeliveredKwh)
+  const absurd = buildScenarios({ ...base, heatingShare: 1, coldFactor: 99 })
+  assert.ok(absurd[1].energyKwh <= base.dailyDeliveredKwh * 4, 'capped so a slider cannot run away')
+})
+
+test('cooling and heating shares cannot together exceed the whole load', () => {
+  const s = buildScenarios({ ...base, coolingShare: 0.8, heatingShare: 0.8, coldFactor: 2 })
+  // heating is clamped into what cooling left, so the load never doubles.
+  assert.ok(s[1].energyKwh <= base.dailyDeliveredKwh * 2)
+  assert.ok(Number.isFinite(s[1].energyKwh))
 })

@@ -68,8 +68,17 @@ export interface ScenarioInputs {
    * the load is weather-driven.
    */
   overcastFactor?: number
-  /** Fraction of the daily load that bad weather suppresses (0-1). */
-  weatherDrivenShare?: number
+  /** Fraction of the daily load that a cold grey day suppresses — cooling (0-1). */
+  coolingShare?: number
+  /**
+   * How much MORE a heating load runs on a cold sunless day (>= 1).
+   * Heating is not cooling reversed by accident: it runs hardest at night and
+   * harder still when it is cold and grey, so the shortage and the demand
+   * arrive together. Subtracting here instead of adding is a sign error.
+   */
+  coldFactor?: number
+  /** Fraction of the daily load that a cold grey day amplifies — heating (0-1). */
+  heatingShare?: number
   /** Days of autonomy for the extended scenario. */
   autonomyDays: number
   /** Usable fraction of nameplate capacity for the chemistry. */
@@ -100,9 +109,15 @@ export function buildScenarios(inputs: ScenarioInputs): Scenario[] {
   // On an overcast day the weather-driven part of the load shrinks; the rest is
   // unchanged. Defaults to no suppression so an absent breakdown behaves as
   // before rather than silently shrinking someone's bank.
-  const weatherShare = clamp(inputs.weatherDrivenShare ?? 0, 0, 1)
+  const cooling = clamp(inputs.coolingShare ?? 0, 0, 1)
+  const heating = clamp(inputs.heatingShare ?? 0, 0, 1 - cooling)
+  const neutral = Math.max(0, 1 - cooling - heating)
   const overcast = clamp(inputs.overcastFactor ?? 1, 0, 1)
-  const sunlessDaily = daily * (1 - weatherShare) + daily * weatherShare * overcast
+  // Heating grows on the bad days rather than shrinking. Capped at 4x so a
+  // slider cannot produce an absurd bank, and floored at 1 so it can never
+  // silently behave like cooling.
+  const cold = clamp(inputs.coldFactor ?? 1, 1, 4)
+  const sunlessDaily = daily * (neutral + cooling * overcast + heating * cold)
 
   const make = (id: ScenarioId, label: string, meaning: string, energyKwh: number): Scenario => {
     const bankKwh = energyKwh / dod
@@ -114,9 +129,11 @@ export function buildScenarios(inputs: ScenarioInputs): Scenario[] {
       'An ordinary night with sun tomorrow. The bank covers only what you use after dark; the panels refill it in the morning.',
       daily * share),
     make('oneDay', 'One sunless day',
-      weatherShare > 0
-        ? 'A full 24 hours with effectively no solar input. Overcast means cooler, so your weather-driven loads run less than on a sunny day — that is counted here.'
-        : 'A full 24 hours with effectively no solar input — heavy overcast, or snow sitting on the array.',
+      heating > 0
+        ? 'A full 24 hours with effectively no solar input. Cold and grey means your heating runs harder, so demand rises exactly as generation falls — that is counted here.'
+        : cooling > 0
+          ? 'A full 24 hours with effectively no solar input. Overcast means cooler, so your cooling load runs less than on a sunny day — that is counted here.'
+          : 'A full 24 hours with effectively no solar input — heavy overcast, or snow sitting on the array.',
       sunlessDaily),
     make('extended', `${days} sunless day${days === 1 ? '' : 's'}`,
       `A run of ${days} day${days === 1 ? '' : 's'} with no meaningful generation. This is usually what sets the bank you actually buy.`,

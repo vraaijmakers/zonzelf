@@ -64,39 +64,73 @@ export type DutyCycle = number
  *     can overstate the bank by more than a factor of two.
  *
  * One field per appliance fixes both.
+ *
+ * HEATING IS NOT COOLING REVERSED BY ACCIDENT
+ * -------------------------------------------
+ * The first version of this model was cooling-biased: `daytime` meant "runs in
+ * daylight AND is suppressed by overcast", which conflated two independent
+ * axes — when a load runs, and how weather affects it. Heating inverts both.
+ * It runs hardest through the coldest hours, which are at night with no solar
+ * gain, and it runs MORE on a cold grey day, not less. Tagging a heat pump as
+ * `daytime` therefore subtracted where it should have added. That is a sign
+ * error, not an imprecision, and no wording on the page can rescue it.
+ *
+ * The two cases are also not symmetric in risk, which is worth stating plainly:
+ *
+ *   - Cooling loads are ANTI-CORRELATED with the shortage. A grey day is a
+ *     cooler day, so demand falls exactly when generation does. The system
+ *     forgives you; the cost of getting it wrong is buying too much battery.
+ *   - Heating loads are CORRELATED with it. A cold, dark, still week is
+ *     maximum demand and minimum generation at the same time. Nothing forgives
+ *     you, and the failure mode is being cold in precisely the conditions the
+ *     system was built for.
  */
-export type LoadProfile = 'always' | 'daytime' | 'evening'
+export type LoadProfile = 'always' | 'daytime' | 'evening' | 'cooling' | 'heating'
+
+/** How a cold, grey, sunless day changes this load. */
+export type WeatherResponse = 'none' | 'suppressed' | 'amplified'
 
 export const LOAD_PROFILES: Record<LoadProfile, {
   label: string
   hint: string
   /**
    * Share of this appliance's daily energy that falls in the dark hours.
-   * `always` is proportional to the length of the night and is computed;
-   * the other two are definitional rather than measured — an "evening" load is
-   * one that happens in the evening.
+   * `always` is proportional to the length of the night and is computed. The
+   * others are definitional rather than measured — an "evening" load is one
+   * that happens in the evening.
    */
   overnightShare: number | 'proportional'
-  /** Whether an overcast day suppresses it. Only daytime loads are weather-driven. */
-  weatherDriven: boolean
+  weather: WeatherResponse
 }> = {
   always: {
     label: 'All day',
     hint: 'Runs around the clock regardless of weather — fridge, freezer, router.',
     overnightShare: 'proportional',
-    weatherDriven: false,
+    weather: 'none',
   },
   daytime: {
     label: 'Daytime',
-    hint: 'Driven by daylight or heat — air conditioning, power tools. Barely runs at night, and much less when it is overcast.',
+    hint: 'Used in daylight hours but not weather-driven — power tools, a daytime workshop.',
     overnightShare: 0.05,
-    weatherDriven: true,
+    weather: 'none',
   },
   evening: {
     label: 'Evening',
-    hint: 'Concentrated after dark — lighting, television, cooking. Rain does not change it.',
+    hint: 'Concentrated after dark — lighting, television, cooking. Weather does not change it.',
     overnightShare: 0.9,
-    weatherDriven: false,
+    weather: 'none',
+  },
+  cooling: {
+    label: 'Cooling',
+    hint: 'Driven by daytime heat. Runs much less on an overcast day, because overcast means cooler.',
+    overnightShare: 0.15,
+    weather: 'suppressed',
+  },
+  heating: {
+    label: 'Heating',
+    hint: 'Driven by cold. Runs hardest at night and MORE on a cold grey day — the opposite of cooling.',
+    overnightShare: 0.6,
+    weather: 'amplified',
   },
 }
 
@@ -169,20 +203,34 @@ export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] 
     icon: 'ac',
     items: [
       // Left at 100% deliberately — see the file header. Overestimates.
-      { name: 'Window AC (5,000 BTU)', profile: 'daytime',    watts: 450,  hours: 8,  cycles: true },
-      { name: 'Window AC (8,000 BTU)', profile: 'daytime',    watts: 700,  hours: 8,  cycles: true },
-      { name: 'Window AC (12,000 BTU)', profile: 'daytime',   watts: 1100, hours: 8,  cycles: true },
-      { name: 'Portable AC (10,000 BTU)', profile: 'daytime', watts: 1000, hours: 8,  cycles: true },
-      { name: 'Mini-split (9,000 BTU)', profile: 'daytime',   watts: 860,  hours: 10, cycles: true },
-      { name: 'Mini-split (12,000 BTU)', profile: 'daytime',  watts: 1100, hours: 10, cycles: true },
-      { name: 'Mini-split (18,000 BTU)', profile: 'daytime',  watts: 1600, hours: 10, cycles: true },
-      { name: 'Mini-split (24,000 BTU)', profile: 'daytime',  watts: 2100, hours: 10, cycles: true },
-      { name: 'Central AC (2 ton)', profile: 'daytime',       watts: 2500, hours: 8,  cycles: true },
-      { name: 'Central AC (3 ton)', profile: 'daytime',       watts: 3500, hours: 8,  cycles: true },
-      { name: 'Central AC (4 ton)', profile: 'daytime',       watts: 4700, hours: 8,  cycles: true },
-      { name: 'Central AC (5 ton)', profile: 'daytime',       watts: 6000, hours: 8,  cycles: true },
-      { name: 'Central AC (6 ton)', profile: 'daytime',       watts: 7200, hours: 8,  cycles: true },
-      { name: 'Central AC (7.5 ton)', profile: 'daytime',     watts: 9000, hours: 8,  cycles: true },
+      { name: 'Window AC (5,000 BTU)', profile: 'cooling',    watts: 450,  hours: 8,  cycles: true },
+      { name: 'Window AC (8,000 BTU)', profile: 'cooling',    watts: 700,  hours: 8,  cycles: true },
+      { name: 'Window AC (12,000 BTU)', profile: 'cooling',   watts: 1100, hours: 8,  cycles: true },
+      { name: 'Portable AC (10,000 BTU)', profile: 'cooling', watts: 1000, hours: 8,  cycles: true },
+      { name: 'Mini-split (9,000 BTU)', profile: 'cooling',   watts: 860,  hours: 10, cycles: true },
+      { name: 'Mini-split (12,000 BTU)', profile: 'cooling',  watts: 1100, hours: 10, cycles: true },
+      { name: 'Mini-split (18,000 BTU)', profile: 'cooling',  watts: 1600, hours: 10, cycles: true },
+      { name: 'Mini-split (24,000 BTU)', profile: 'cooling',  watts: 2100, hours: 10, cycles: true },
+      { name: 'Central AC (2 ton)', profile: 'cooling',       watts: 2500, hours: 8,  cycles: true },
+      { name: 'Central AC (3 ton)', profile: 'cooling',       watts: 3500, hours: 8,  cycles: true },
+      { name: 'Central AC (4 ton)', profile: 'cooling',       watts: 4700, hours: 8,  cycles: true },
+      { name: 'Central AC (5 ton)', profile: 'cooling',       watts: 6000, hours: 8,  cycles: true },
+      { name: 'Central AC (6 ton)', profile: 'cooling',       watts: 7200, hours: 8,  cycles: true },
+      { name: 'Central AC (7.5 ton)', profile: 'cooling',     watts: 9000, hours: 8,  cycles: true },
+    ],
+  },
+  {
+    label: 'Heating',
+    items: [
+      // Nothing here before: the preset list had fourteen ways to cool a house
+      // and no way to heat one, which quietly assumed a warm climate.
+      { name: 'Heat pump (9,000 BTU)',  watts: 900,  hours: 12, profile: 'heating' },
+      { name: 'Heat pump (12,000 BTU)', watts: 1200, hours: 12, profile: 'heating' },
+      { name: 'Heat pump (18,000 BTU)', watts: 1700, hours: 12, profile: 'heating' },
+      { name: 'Electric heater (1.5kW)', watts: 1500, hours: 8, profile: 'heating' },
+      { name: 'Oil-filled radiator',    watts: 1500, hours: 8,  profile: 'heating' },
+      { name: 'Underfloor heating zone', watts: 800, hours: 10, profile: 'heating' },
+      { name: 'Water heater (elec)',    watts: 4000, hours: 1 },
     ],
   },
   {
@@ -216,7 +264,6 @@ export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] 
       { name: 'Washing machine', profile: 'evening',     watts: 500,  hours: 1 },
       { name: 'Clothes dryer', profile: 'evening',       watts: 5000, hours: 0.75 },
       { name: 'Dishwasher', profile: 'evening',          watts: 1200, hours: 1 },
-      { name: 'Water heater (elec)', watts: 4000, hours: 1 },
     ],
   },
   {
@@ -258,12 +305,14 @@ export interface LoadBreakdown {
   always: number
   daytime: number
   evening: number
+  cooling: number
+  heating: number
   total: number
 }
 
 /** Daily energy split by when it is used, so the scenarios can vary the load. */
 export function breakdownByProfile(rows: ApplianceRow[]): LoadBreakdown {
-  const out: LoadBreakdown = { always: 0, daytime: 0, evening: 0, total: 0 }
+  const out: LoadBreakdown = { always: 0, daytime: 0, evening: 0, cooling: 0, heating: 0, total: 0 }
   for (const row of rows) {
     const kwh = rowDailyWh(row) / 1000
     out[row.profile ?? DEFAULT_PROFILE] += kwh
@@ -283,12 +332,45 @@ export function overnightShareFrom(breakdown: LoadBreakdown, darkHours: number):
   const overnightKwh =
     breakdown.always * nightFraction +
     breakdown.evening * (LOAD_PROFILES.evening.overnightShare as number) +
-    breakdown.daytime * (LOAD_PROFILES.daytime.overnightShare as number)
+    breakdown.daytime * (LOAD_PROFILES.daytime.overnightShare as number) +
+    breakdown.cooling * (LOAD_PROFILES.cooling.overnightShare as number) +
+    breakdown.heating * (LOAD_PROFILES.heating.overnightShare as number)
   return Math.min(1, Math.max(0, overnightKwh / breakdown.total))
 }
 
-/** Fraction of the daily load that an overcast day suppresses. */
-export function weatherDrivenShare(breakdown: LoadBreakdown): number {
-  if (breakdown.total <= 0) return 0
-  return breakdown.daytime / breakdown.total
+/** Fraction of the daily load that a cold, grey day suppresses (cooling). */
+export function coolingShare(breakdown: LoadBreakdown): number {
+  return breakdown.total > 0 ? breakdown.cooling / breakdown.total : 0
+}
+
+/** Fraction of the daily load that a cold, grey day amplifies (heating). */
+export function heatingShare(breakdown: LoadBreakdown): number {
+  return breakdown.total > 0 ? breakdown.heating / breakdown.total : 0
+}
+
+/**
+ * True when demand rises as generation falls — a heating-dominated system.
+ * The dangerous configuration: worst weather and highest load arrive together,
+ * so the multi-day scenario is the one to size against. Cooling-dominated
+ * systems have the opposite, forgiving property.
+ */
+export function isCorrelatedRisk(breakdown: LoadBreakdown): boolean {
+  return heatingShare(breakdown) > 0.25 && heatingShare(breakdown) > coolingShare(breakdown)
+}
+
+/**
+ * Fill in a breakdown that may have been saved before cooling and heating were
+ * separate classes. A summary in localStorage outlives a deploy, so the missing
+ * keys are a real runtime case, not just a type mismatch.
+ */
+export function normalizeBreakdown(raw: Partial<LoadBreakdown> | undefined | null): LoadBreakdown | null {
+  if (!raw || typeof raw.total !== 'number') return null
+  return {
+    always: raw.always ?? 0,
+    daytime: raw.daytime ?? 0,
+    evening: raw.evening ?? 0,
+    cooling: raw.cooling ?? 0,
+    heating: raw.heating ?? 0,
+    total: raw.total,
+  }
 }
