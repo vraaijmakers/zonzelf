@@ -47,6 +47,33 @@
  *  termination is also listed for 90°C, which on DIY equipment it rarely is. */
 export type TempColumn = 60 | 75 | 90
 
+/** A PV source circuit carries an extra irradiance factor; see sizingFactor(). */
+export type CircuitKind = 'general' | 'pv-source'
+
+/**
+ * The multiplier from operating current to the current a circuit must be built
+ * for. It applies to the CONDUCTOR as well as to the overcurrent device — NEC
+ * 210.19(A)(1) requires branch-circuit conductors to have an ampacity not less
+ * than 125% of a continuous load, exactly as NEC 210.20(A) requires of the
+ * device. Sizing the device at 125% and the wire at 100% is a common and
+ * dangerous asymmetry; both bounds move together, so this lives in one place.
+ *
+ * NEC 690.8(A) stacks two 125% factors on a PV source circuit: one for
+ * irradiance above nameplate, one for continuous duty. 1.25 x 1.25 = 1.56.
+ */
+export function sizingFactor(kind: CircuitKind, continuous: boolean): { factor: number; reason: string } {
+  if (kind === 'pv-source') {
+    return {
+      factor: 1.56,
+      reason: 'NEC 690.8(A): 125% of Isc for irradiance above nameplate, then 125% again as a continuous load',
+    }
+  }
+  if (continuous) {
+    return { factor: 1.25, reason: 'NEC 210.19(A)(1) and 210.20(A): 125% of a load running three hours or more' }
+  }
+  return { factor: 1, reason: 'Non-continuous load — no continuous-duty factor applied' }
+}
+
 export type AwgSpec = {
   /** Negative sizes are 1/0 (0), 2/0 (-1), 3/0 (-2), 4/0 (-3). */
   awg: number
@@ -103,6 +130,8 @@ export function isOcpdLimited(spec: AwgSpec, column: TempColumn): boolean {
 export type GaugeEvaluation = {
   spec: AwgSpec
   label: string
+  /** amps x the continuous/PV factor — what the conductor must actually carry. */
+  designAmps: number
   /** Table 310.16 value before the small-conductor rule. */
   tableAmpacity: number
   /** After 240.4(D). */
@@ -118,8 +147,12 @@ export type GaugeEvaluation = {
 }
 
 export type EvaluateInput = {
-  /** Maximum continuous current, amps. */
+  /** Operating current, amps. The continuous factor is applied here, not by the caller. */
   amps: number
+  /** Whether the load runs three hours or more. Defaults to true — most solar does. */
+  continuous?: boolean
+  /** PV source circuits take the extra irradiance factor. */
+  kind?: CircuitKind
   /** ONE-WAY run length in feet; the round trip is applied here. */
   oneWayFeet: number
   /** System nominal voltage. */
@@ -138,6 +171,9 @@ export type EvaluateInput = {
 export function evaluateGauges(input: EvaluateInput): GaugeEvaluation[] {
   const { amps, oneWayFeet, volts, maxDropPercent, column } = input
   const roundTripFeet = oneWayFeet * 2
+  // The conductor is sized for the same design current as its protection.
+  const { factor } = sizingFactor(input.kind ?? 'general', input.continuous ?? true)
+  const designAmps = Math.max(0, amps) * factor
 
   return AWG_SPECS.map(spec => {
     const resistance = (spec.resistancePer100ft / 100) * roundTripFeet
@@ -145,12 +181,13 @@ export function evaluateGauges(input: EvaluateInput): GaugeEvaluation[] {
     // Guard against a zero/absent system voltage rather than emitting NaN.
     const voltageDropPercent = volts > 0 ? (voltageDrop / volts) * 100 : Number.POSITIVE_INFINITY
     const usable = usableAmpacity(spec, column)
-    const meetsAmpacity = usable >= amps
+    const meetsAmpacity = usable >= designAmps
     const meetsVoltageDrop = voltageDropPercent <= maxDropPercent
 
     return {
       spec,
       label: awgLabel(spec.awg),
+      designAmps,
       tableAmpacity: spec.ampacity[column],
       usableAmpacity: usable,
       ocpdLimited: isOcpdLimited(spec, column),
