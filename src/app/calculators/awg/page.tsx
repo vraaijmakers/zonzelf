@@ -9,6 +9,11 @@ import {
   evaluateGauges, passingGauges, thinnestByAmpacity,
   NEC_SOURCES, type TempColumn,
 } from '@/lib/awg'
+import { awgLabel } from '@/lib/awg'
+import {
+  sizeOvercurrent, thinnestProtectableAwg,
+  OCPD_SOURCES, DC_RATING_WARNING, type CircuitKind,
+} from '@/lib/overcurrent'
 
 const TEMP_COLUMNS: { value: TempColumn; label: string; hint: string }[] = [
   { value: 60, label: '60 °C', hint: 'TW, UF — older or budget terminals' },
@@ -23,9 +28,10 @@ export default function AwgCalculatorPage() {
   const [voltage, setVoltage]     = usePersistentState('zonzelf:awg:voltage', 24)
   const [maxDrop, setMaxDrop]     = usePersistentState('zonzelf:awg:maxDrop', 3)
   const [column, setColumn]       = usePersistentState<TempColumn>('zonzelf:awg:tempColumn', 75)
+  const [kind, setKind]           = usePersistentState<CircuitKind>('zonzelf:awg:circuitKind', 'general')
 
   // lengthFt is always stored in feet; the metric toggle is display-only.
-  const input = { amps, oneWayFeet: lengthFt, volts: voltage, maxDropPercent: maxDrop, column }
+  const input = { amps, oneWayFeet: lengthFt, volts: voltage, maxDropPercent: maxDrop, column, kind, continuous: true }
 
   const results   = evaluateGauges(input)
   const passing   = passingGauges(input)
@@ -33,6 +39,15 @@ export default function AwgCalculatorPage() {
   const byAmpsOnly = thinnestByAmpacity(input)
   const roundTripFt = lengthFt * 2
   const dropBudgetV = (voltage * maxDrop) / 100
+
+  // The fuse must protect the wire. Sized against the thinnest conductor that
+  // passed both limits, because that is the one most likely to be bought.
+  const ocpd = thinnest
+    ? sizeOvercurrent({ amps, continuous: true, kind, awg: thinnest.spec.awg, column })
+    : null
+  const protectable = ocpd?.impossible
+    ? thinnestProtectableAwg({ amps, continuous: true, kind, column })
+    : undefined
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
@@ -69,8 +84,9 @@ export default function AwgCalculatorPage() {
                   <span className="text-sm text-zon-muted">A</span>
                 </div>
                 <p className="text-xs text-zon-muted mt-1">
-                  The maximum continuous current, not the peak. For a solar array that is
-                  short-circuit current (Isc) × 1.25.
+                  {kind === 'pv-source'
+                    ? 'Enter the panel short-circuit current (Isc) as printed on the label. Do not pre-multiply it — the 156% of NEC 690.8(A) is applied below, and doing it twice oversizes everything.'
+                    : 'The operating current, not the peak. The 125% continuous factor is applied below, so enter what the circuit actually draws.'}
                 </p>
               </div>
 
@@ -142,6 +158,30 @@ export default function AwgCalculatorPage() {
                   {TEMP_COLUMNS.find(t => t.value === column)?.hint}. Your circuit is limited by
                   the <em>lowest-rated</em> connection in it — usually a breaker or a lug, not the
                   wire. Buying 90 °C cable does not move you to the 90 °C column on its own.
+                </p>
+              </div>
+
+              <div role="group" aria-labelledby="awg-kind-label">
+                <span id="awg-kind-label" className="block text-sm font-medium mb-1 text-zon-ink">
+                  Circuit type
+                </span>
+                <div className="flex gap-2 flex-wrap">
+                  {([['general', 'General load'], ['pv-source', 'Solar panel string']] as const).map(([k, lbl]) => (
+                    <button key={k} onClick={() => setKind(k)} aria-pressed={kind === k}
+                      className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                        kind === k
+                          ? 'bg-zon-gold text-zon-ink border-zon-gold'
+                          : 'border-zon-rule hover:border-zon-gold-light'
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-zon-muted mt-1">
+                  {kind === 'pv-source'
+                    ? 'A panel string carries two 125% factors — one because bright conditions push a panel above its nameplate, one because it runs for hours. Enter the panel short-circuit current (Isc) above, not its rated output.'
+                    : 'Anything running three hours or more is a continuous load and gets a 125% factor on its protection.'}
                 </p>
               </div>
 
@@ -257,7 +297,10 @@ export default function AwgCalculatorPage() {
                         {thinnest.ocpdLimited && (
                           <> but capped to <span className="tabular-nums">{thinnest.usableAmpacity}A</span> by the small-conductor rule</>
                         )}
-                        . Your load is <span className="tabular-nums">{amps}A</span>.
+                        . Your <span className="tabular-nums">{amps}A</span> must be carried as{' '}
+                        <span className="tabular-nums">{thinnest.designAmps.toFixed(1)}A</span> —
+                        the conductor is sized at the same {kind === 'pv-source' ? '156' : '125'}%
+                        as its protection, not at the bare current.
                       </p>
                     </div>
                     <div>
@@ -305,17 +348,81 @@ export default function AwgCalculatorPage() {
             </Card>
           )}
 
+          {ocpd && (
+            <Card className={ocpd.impossible ? 'border-zon-red' : 'border-zon-gold-light'}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-zon-ink">
+                  Fuse or breaker for {ocpd.conductorLabel}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {ocpd.impossible ? (
+                  <>
+                    <div className="flex gap-2">
+                      <AlertTriangle className="w-5 h-5 text-zon-red shrink-0 mt-0.5" aria-hidden="true" />
+                      <p className="text-zon-body">
+                        <strong className="text-zon-ink">No device can protect this conductor
+                        at {amps}A.</strong> It would need at least{' '}
+                        <span className="tabular-nums">{ocpd.minimumAmps.toFixed(1)}A</span>, but{' '}
+                        {ocpd.conductorLabel} may not be protected above{' '}
+                        <span className="tabular-nums">{ocpd.maximumAmps}A</span>.
+                      </p>
+                    </div>
+                    <p className="text-xs text-zon-body">
+                      The answer is thicker cable, never a bigger breaker.
+                      {protectable && (
+                        <> {awgLabel(protectable.awg)} takes a{' '}
+                          <span className="tabular-nums">{protectable.rating}A</span> device.</>
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-xs text-zon-muted uppercase tracking-wide mb-1">
+                        Devices that fit
+                      </p>
+                      <p className="text-xl font-semibold text-zon-ink font-mono">
+                        {ocpd.allowed.map(a => `${a}A`).join(' · ')}
+                      </p>
+                      <p className="text-xs text-zon-muted mt-1">
+                        Smallest is usual — a larger device still protects the wire but trips
+                        later into a fault.
+                      </p>
+                    </div>
+                    <div className="border-t border-zon-rule pt-3 space-y-2 text-xs text-zon-body">
+                      <p>
+                        <strong className="text-zon-ink">Not below</strong>{' '}
+                        <span className="tabular-nums">{ocpd.minimumAmps.toFixed(1)}A</span> —{' '}
+                        {ocpd.factor}× your {amps}A. {ocpd.factorReason}.
+                      </p>
+                      <p>
+                        <strong className="text-zon-ink">Not above</strong>{' '}
+                        <span className="tabular-nums">{ocpd.maximumAmps}A</span> — what{' '}
+                        {ocpd.conductorLabel} can carry
+                        {ocpd.ceilingIsSmallConductorRule && ', capped by the small-conductor rule'}.
+                        Above this the wire becomes the fuse.
+                      </p>
+                    </div>
+                  </>
+                )}
+                <div className="border-t border-zon-rule pt-3 text-xs text-zon-muted space-y-1">
+                  <p>{OCPD_SOURCES.standard}. {ocpd.impossible ? OCPD_SOURCES.smallConductor : ''}</p>
+                  <p>
+                    NEC 240.4(B) may permit the next size above the conductor ampacity under
+                    conditions this page cannot check. That is an electrician&apos;s call, not a
+                    default — nothing here exceeds what the wire can carry.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardContent className="pt-4">
               <div className="flex gap-2 text-xs text-zon-body">
                 <Info className="w-4 h-4 shrink-0 text-zon-blue mt-0.5" aria-hidden="true" />
-                <p>
-                  <strong className="text-zon-ink">A cable size is only half the job.</strong> The
-                  fuse or breaker has to protect the wire — a correctly sized cable behind an
-                  oversized breaker is still a fire risk. ZonZelf does not size overcurrent
-                  protection yet. Check your local code, and have the design reviewed before you
-                  build.
-                </p>
+                <p><strong className="text-zon-ink">DC needs a DC-rated device.</strong> {DC_RATING_WARNING}</p>
               </div>
             </CardContent>
           </Card>
