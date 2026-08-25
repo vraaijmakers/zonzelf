@@ -14,7 +14,9 @@ import {
 import {
   overnightShareFrom, coolingShare, heatingShare, isCorrelatedRisk, normalizeBreakdown,
 } from '@/lib/appliance-load'
-import { CUTOFF_PROFILES, cutoffBand, formatBand, type ChemistryId } from '@/lib/battery-chemistry'
+import {
+  CUTOFF_PROFILES, cutoffBand, formatBand, roundTripMidpoint, type ChemistryId,
+} from '@/lib/battery-chemistry'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { createClient } from '@/lib/supabase/client'
 
@@ -42,6 +44,12 @@ interface BatteryType {
   id: ChemistryId
   name: string
   dod: number
+  /**
+   * Round-trip efficiency: the MIDPOINT of the range /guides/batteries
+   * publishes, not the best case. Sitting at the top of every range biased the
+   * array small, which is the direction that leaves someone short in December.
+   * Keep these two in step — the guide is the published source.
+   */
   efficiency: number
   cycles: string
   color: string
@@ -53,7 +61,7 @@ const BATTERY_TYPES: BatteryType[] = [
     id: 'lifepo4',
     name: 'LiFePO4 (Lithium)',
     dod: 0.8,
-    efficiency: 0.97,
+    efficiency: roundTripMidpoint('lifepo4'),
     cycles: '3,000–6,000',
     color: 'green',
     notes: 'Best choice for most off-grid systems. High DoD, long life, safe chemistry. Higher upfront cost.',
@@ -62,7 +70,7 @@ const BATTERY_TYPES: BatteryType[] = [
     id: 'agm',
     name: 'AGM (Sealed Lead-Acid)',
     dod: 0.5,
-    efficiency: 0.85,
+    efficiency: roundTripMidpoint('agm'),
     cycles: '400–800',
     color: 'blue',
     notes: 'Reliable and widely available. Lower DoD means you need more capacity for the same usable energy.',
@@ -71,7 +79,7 @@ const BATTERY_TYPES: BatteryType[] = [
     id: 'gel',
     name: 'Gel (Sealed Lead-Acid)',
     dod: 0.5,
-    efficiency: 0.85,
+    efficiency: roundTripMidpoint('gel'),
     cycles: '500–1,000',
     color: 'blue',
     notes: 'Similar to AGM but more tolerant of partial charge. Slightly better cycle life. Slower charge rate.',
@@ -80,7 +88,7 @@ const BATTERY_TYPES: BatteryType[] = [
     id: 'flooded',
     name: 'Flooded Lead-Acid (FLA)',
     dod: 0.5,
-    efficiency: 0.80,
+    efficiency: roundTripMidpoint('flooded'),
     cycles: '500–1,200',
     color: 'yellow',
     notes: 'Cheapest upfront. Requires regular maintenance (water topping). Must be vented. Often used in large off-grid systems.',

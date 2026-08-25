@@ -56,8 +56,8 @@ export const DEFAULTS = {
   inverter: 0.85,
   /** Array derate: soiling, heat, MPPT, cabling. */
   array: 0.8,
-  /** Used only when the battery chemistry is unknown — the conservative lead-acid figure. */
-  batteryRoundTrip: 0.85,
+  /** Used only when the chemistry is unknown — the AGM/gel midpoint from /guides/batteries. */
+  batteryRoundTrip: 0.825,
 } as const
 
 export const BOUNDS = {
