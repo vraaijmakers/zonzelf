@@ -17,6 +17,12 @@ export type ParsedBattery = {
   dod_rated: number | null
   price_usd: number | null
   source_url: string
+  // Only set when the spec source and the priced retailer are the same site
+  // (e.g. a reseller product page that states both). Omit when they differ —
+  // see scrape-signaturesolar.ts, which fills these in on an existing row
+  // instead of setting them at insert time.
+  retailer?: string
+  retailer_url?: string
 }
 
 export function sleep(ms: number) {
