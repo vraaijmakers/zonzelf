@@ -13,7 +13,8 @@
     "check:roadmap-sync": "tsx --env-file=.env.local scripts/check-roadmap-sync.ts",
     "scrape:eg4": "tsx --env-file=.env.local scripts/scrape-eg4.ts",
     "scrape:victron": "tsx --env-file=.env.local scripts/scrape-victron.ts",
-    "scrape:sungoldpower": "tsx --env-file=.env.local scripts/scrape-sungoldpower.ts"
+    "scrape:sungoldpower": "tsx --env-file=.env.local scripts/scrape-sungoldpower.ts",
+    "scrape:signaturesolar": "tsx --env-file=.env.local scripts/scrape-signaturesolar.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
