@@ -7,9 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test src/lib/__tests__/*.test.ts",
+    "dump:roadmap": "tsx --env-file=.env.local scripts/dump-roadmap.ts",
+    "check:roadmap-migrations": "tsx scripts/check-roadmap-migrations.ts",
+    "check:roadmap-sync": "tsx --env-file=.env.local scripts/check-roadmap-sync.ts",
     "scrape:eg4": "tsx --env-file=.env.local scripts/scrape-eg4.ts",
     "scrape:victron": "tsx --env-file=.env.local scripts/scrape-victron.ts",
-    "scrape:sungoldpower": "tsx --env-file=.env.local scripts/scrape-sungoldpower.ts"
+    "scrape:sungoldpower": "tsx --env-file=.env.local scripts/scrape-sungoldpower.ts",
+    "scrape:signaturesolar": "tsx --env-file=.env.local scripts/scrape-signaturesolar.ts",
+    "scrape:a1solarstore": "tsx --env-file=.env.local scripts/scrape-a1solarstore.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

@@ -30,8 +30,9 @@ export default function WiringGuidePage() {
         </p>
         <p>
           The fuse or breaker has to protect the <em>wire</em>, not just the gadget on
-          the end. And you measure cable length one way — the calculator already counts
-          the return wire.
+          the end. Anything running three hours or more needs cable <em>and</em> fuse
+          sized at 125% of it — a panel string at 156%. And you measure cable length one
+          way; the calculator already counts the return wire.
         </p>
       </Tldr>
 
@@ -100,9 +101,49 @@ export default function WiringGuidePage() {
           (the biggest energy store). A fat battery with a skinny unfused lead is a
           classic DIY fire.
         </p>
+        <p className="text-zon-body mb-4">
+          The calculator sizes it for you now, between two limits. It has to be{' '}
+          <strong>big enough</strong> not to trip on your normal running current, and{' '}
+          <strong>small enough</strong> that it opens before the cable is damaged. If no
+          real fuse size fits between those two, the cable is too thin — the fix is
+          thicker cable, never a bigger fuse.
+        </p>
         <p className="text-zon-body">
-          The calculator does <strong>not</strong> pick your fuse. That is a local-code
-          and datasheet job.
+          It still will not tell you which brand to buy, and it does not know your local
+          rules. Check both against your own code before you build.
+        </p>
+      </section>
+
+      <section className="mb-10">
+        <h2 className="text-xl font-bold mb-3">Why 30 amps is not a 30 amp circuit</h2>
+        <p className="text-zon-body mb-4">
+          This one surprises people, and it is the reason the calculator asks for a
+          bigger cable than you expect. If a load runs for <strong>three hours or
+          more</strong> — which almost everything in an off-grid system does — the rules
+          treat it as a <em>continuous</em> load, and both the cable and the fuse have to
+          be sized for <strong>125% of it</strong>.
+        </p>
+        <p className="text-zon-body mb-4">
+          So a fridge circuit pulling a steady 30 A is designed as a 37.5 A circuit. Not
+          because the fridge draws more, but because things that run for hours heat up
+          the wire and the terminals in a way that a short burst does not. The margin is
+          for the heat, not for the current.
+        </p>
+        <p className="text-zon-body mb-4">
+          The trap is applying it to only one of the two. Sizing the <em>fuse</em> at
+          125% and the <em>cable</em> at the bare current is a common mistake, and it
+          leaves you with a cable that no legal fuse can protect: too small a fuse
+          nuisance-trips, and a big enough one lets the cable cook. Both move together,
+          or neither does.
+        </p>
+        <p className="text-zon-body">
+          Solar panels get a second helping. A panel can briefly beat its own nameplate
+          on a bright day with cloud edges, so a panel string is designed at 125% of its
+          short-circuit current <em>and then</em> 125% again for running all day — about{' '}
+          <strong>156%</strong> of what the label says. A 10 A string is a 20 A fuse, not
+          a 15 A one. Enter the label figure and let the calculator do it; doing the
+          multiplication yourself as well is how people end up with cable twice as thick
+          as they need.
         </p>
       </section>
 
@@ -112,6 +153,8 @@ export default function WiringGuidePage() {
           <li>Using speaker wire, extension-cord cable, or household lamp flex on a battery.</li>
           <li>Picking thickness from a “chassis” chart, then running that cable through a wall.</li>
           <li>No fuse at the battery, or a fuse bigger than the wire can survive.</li>
+          <li>Sizing the fuse at 125% for a continuous load but the cable at the bare current — they move together, or you get a cable no legal fuse can protect.</li>
+          <li>Using an AC-rated breaker on the DC side. DC never crosses zero, so the arc does not go out on its own.</li>
           <li>Measuring a 12 V drop with a 230 V mindset — a 1 V drop on 12 V is already 8%.</li>
           <li>Mixing AC and DC in the same conduit without the separations the code requires.</li>
           <li>Loose lugs. A hot terminal is a loose terminal. Tighten to the spec, then check after a week of use.</li>

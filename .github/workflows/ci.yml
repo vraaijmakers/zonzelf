@@ -27,5 +27,22 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Every roadmap migration header claims it is "kept in sync with
+      # seed.sql". Nothing enforced that until 2026-08-23, when a migration
+      # written with ASCII dashes disagreed with seed.sql's em dashes from the
+      # moment it was applied. Needs no database, so it is safe on a public
+      # repo — the live comparison (npm run check:roadmap-sync) needs the
+      # service-role key and stays local, per CLAUDE.md rule 9.
+      - name: Roadmap migrations match seed.sql
+        run: npm run check:roadmap-migrations
+
+      # The load, battery and panel calculators share one efficiency model
+      # (src/lib/system-efficiency.ts). They used to apply losses three
+      # different ways, and because the stages feed each other the disagreement
+      # multiplied down the chain. A contract test that CI does not run is not
+      # a contract, so this gate exists from the moment the model does.
+      - name: Tests
+        run: npm test
+
       - name: Build
         run: npm run build

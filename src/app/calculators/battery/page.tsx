@@ -5,8 +5,18 @@ import Link from 'next/link'
 import { Battery, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { usePersistentState, useLoadSummary, round2 } from '@/lib/calc-storage'
-import { CUTOFF_PROFILES, cutoffBand, formatBand, type ChemistryId } from '@/lib/battery-chemistry'
+import {
+  usePersistentState, useLoadSummary, publishBatterySummary, round2,
+} from '@/lib/calc-storage'
+import {
+  buildScenarios, scenarioRange, roundBank, defaultOvernightShare, type ScenarioId,
+} from '@/lib/battery-scenarios'
+import {
+  overnightShareFrom, coolingShare, heatingShare, isCorrelatedRisk, normalizeBreakdown,
+} from '@/lib/appliance-load'
+import {
+  CUTOFF_PROFILES, cutoffBand, formatBand, roundTripMidpoint, type ChemistryId,
+} from '@/lib/battery-chemistry'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { createClient } from '@/lib/supabase/client'
 
@@ -34,6 +44,12 @@ interface BatteryType {
   id: ChemistryId
   name: string
   dod: number
+  /**
+   * Round-trip efficiency: the MIDPOINT of the range /guides/batteries
+   * publishes, not the best case. Sitting at the top of every range biased the
+   * array small, which is the direction that leaves someone short in December.
+   * Keep these two in step — the guide is the published source.
+   */
   efficiency: number
   cycles: string
   color: string
@@ -45,7 +61,7 @@ const BATTERY_TYPES: BatteryType[] = [
     id: 'lifepo4',
     name: 'LiFePO4 (Lithium)',
     dod: 0.8,
-    efficiency: 0.97,
+    efficiency: roundTripMidpoint('lifepo4'),
     cycles: '3,000–6,000',
     color: 'green',
     notes: 'Best choice for most off-grid systems. High DoD, long life, safe chemistry. Higher upfront cost.',
@@ -54,7 +70,7 @@ const BATTERY_TYPES: BatteryType[] = [
     id: 'agm',
     name: 'AGM (Sealed Lead-Acid)',
     dod: 0.5,
-    efficiency: 0.85,
+    efficiency: roundTripMidpoint('agm'),
     cycles: '400–800',
     color: 'blue',
     notes: 'Reliable and widely available. Lower DoD means you need more capacity for the same usable energy.',
@@ -63,7 +79,7 @@ const BATTERY_TYPES: BatteryType[] = [
     id: 'gel',
     name: 'Gel (Sealed Lead-Acid)',
     dod: 0.5,
-    efficiency: 0.85,
+    efficiency: roundTripMidpoint('gel'),
     cycles: '500–1,000',
     color: 'blue',
     notes: 'Similar to AGM but more tolerant of partial charge. Slightly better cycle life. Slower charge rate.',
@@ -72,7 +88,7 @@ const BATTERY_TYPES: BatteryType[] = [
     id: 'flooded',
     name: 'Flooded Lead-Acid (FLA)',
     dod: 0.5,
-    efficiency: 0.80,
+    efficiency: roundTripMidpoint('flooded'),
     cycles: '500–1,200',
     color: 'yellow',
     notes: 'Cheapest upfront. Requires regular maintenance (water topping). Must be vented. Often used in large off-grid systems.',
@@ -85,6 +101,23 @@ export default function BatterySizingPage() {
   const [voltage, setVoltage] = usePersistentState('zonzelf:battery:voltage', 24)
   const [selectedType, setSelectedType] = usePersistentState('zonzelf:battery:type', 'lifepo4')
   const [showTypes, setShowTypes] = useState(false)
+  // Which scenario the battery-model counts answer. Without this the list
+  // silently answered the autonomy-days case only, so "how many do I need to
+  // survive just the night" could not be asked.
+  const [sizeFor, setSizeFor] = usePersistentState<ScenarioId>('zonzelf:battery:sizeFor', 'extended')
+  // Overnight energy cannot be derived from the load calculator — it records
+  // hours per day, never what time of day. So this is asked, not inferred.
+  const [darkHours, setDarkHours] = usePersistentState<number>('zonzelf:battery:darkHours', 12)
+  const [shareOverride, setShareOverride, shareMeta] =
+    usePersistentState<number | null>('zonzelf:battery:overnightShare', null)
+  // How much of a weather-driven load still runs when it is overcast. Asked,
+  // not assumed: it depends on climate and on what the load actually is.
+  const [overcastFactor, setOvercastFactor] =
+    usePersistentState<number>('zonzelf:battery:overcastFactor', 0.4)
+  // The mirror image: heating runs HARDER on a cold sunless day. Asked rather
+  // than baked in, for the same reason the cooling factor is.
+  const [coldFactor, setColdFactor] =
+    usePersistentState<number>('zonzelf:battery:coldFactor', 1.5)
 
   const loadSummary = useLoadSummary()
   // The battery bank has to cover losses, so this step uses the adjusted figure.
@@ -97,10 +130,54 @@ export default function BatterySizingPage() {
 
   const battery = BATTERY_TYPES.find(b => b.id === selectedType) ?? BATTERY_TYPES[0]
 
-  const usableKwh  = dailyKwh * days
-  const totalKwh   = usableKwh / battery.dod
-  const totalAh    = (totalKwh * 1000) / voltage
-  const usableAh   = totalAh * battery.dod
+  // The panel calculator needs the real round-trip figure; without this it has
+  // to assume a conservative default. This is the field that was defined here
+  // and never used.
+  useEffect(() => {
+    publishBatterySummary({
+      chemistry: battery.id,
+      roundTrip: battery.efficiency,
+      dod: battery.dod,
+    })
+  }, [battery.id, battery.efficiency, battery.dod])
+
+  // One shared model — src/lib/system-efficiency.ts. dailyKwh already carries
+  // the inverter stage (it is what the load calculator publishes), so the chain
+  // is entered with it as the battery's own delivery figure. Round-trip
+  // efficiency belongs to the array, not the bank: the bank is sized by what it
+  // must hand to the inverter.
+
+  // Until the user overrides it, the overnight share follows the dark hours —
+  // what you would get if consumption were spread evenly around the clock.
+  // Derived from the per-appliance profiles when the load calculator has
+  // published a breakdown — a flat share treats a fridge, an air conditioner
+  // and a television as if they ran at the same times, which for a
+  // cooling-dominated load is wrong in both directions.
+  const breakdown = normalizeBreakdown(loadSummary?.breakdown)
+  const derivedShare = breakdown
+    ? overnightShareFrom(breakdown, darkHours)
+    : defaultOvernightShare(darkHours)
+  const cooling = breakdown ? coolingShare(breakdown) : 0
+  const heating = breakdown ? heatingShare(breakdown) : 0
+  const correlatedRisk = breakdown ? isCorrelatedRisk(breakdown) : false
+
+  const overnightShare = shareMeta.restored && shareOverride !== null
+    ? shareOverride
+    : derivedShare
+
+  const scenarios = buildScenarios({
+    dailyDeliveredKwh: dailyKwh,
+    overnightShare,
+    overcastFactor,
+    coolingShare: cooling,
+    coldFactor,
+    heatingShare: heating,
+    autonomyDays: days,
+    depthOfDischarge: battery.dod,
+    systemVoltage: voltage,
+  })
+  const band = scenarioRange(scenarios)
+  const chosen = scenarios.find(sc => sc.id === sizeFor) ?? scenarios[scenarios.length - 1]
 
   const [allModels, setAllModels] = useState<BatteryModelMatch[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
@@ -242,6 +319,117 @@ export default function BatterySizingPage() {
                   48V is recommended for systems above 2 kWh — lower current means thinner cables.
                 </p>
               </div>
+
+              <div className="border-t pt-5 space-y-4">
+                <div>
+                  <label htmlFor="battery-dark-hours" className="block text-sm font-medium mb-1">
+                    Hours of darkness
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="battery-dark-hours"
+                      type="number" min="0" max="24" step="1"
+                      value={darkHours}
+                      onChange={e => setDarkHours(Math.min(24, Math.max(0, parseFloat(e.target.value) || 0)))}
+                      className="w-20 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    />
+                    <span className="text-sm text-gray-500">hours</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Sunset to sunrise, for the time of year you care about. This varies far more
+                    than people expect — in the Netherlands it is about 8 hours in June and 16 in
+                    December. Size on a summer night and December will disappoint you.
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="battery-overnight-share" className="block text-sm font-medium mb-1">
+                    Share of daily use after dark:{' '}
+                    <span className="text-yellow-700">{Math.round(overnightShare * 100)}%</span>
+                  </label>
+                  <input
+                    id="battery-overnight-share"
+                    type="range" min="0" max="100" step="5"
+                    value={Math.round(overnightShare * 100)}
+                    onChange={e => setShareOverride(parseFloat(e.target.value) / 100)}
+                    className="w-full accent-yellow-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    {breakdown ? (
+                      <>
+                        Worked out from what you listed on the load calculator and when each
+                        appliance runs — {Math.round(derivedShare * 100)}% for {darkHours}h of dark.
+                        Air conditioning barely runs at night; lighting and cooking mostly do.
+                        Change it here if you know better.
+                      </>
+                    ) : (
+                      <>
+                        An assumption — no appliance list has been published yet, so this defaults
+                        to the share you would get if use were spread evenly around the clock
+                        ({Math.round(defaultOvernightShare(darkHours) * 100)}% for {darkHours}h of dark).
+                        Use the load calculator and this is worked out from your actual appliances.
+                      </>
+                    )}
+                    {shareMeta.restored && shareOverride !== null && (
+                      <>
+                        {' '}
+                        <button
+                          onClick={() => setShareOverride(null)}
+                          className="underline decoration-dotted hover:no-underline text-yellow-700"
+                        >
+                          reset to {Math.round(defaultOvernightShare(darkHours) * 100)}%
+                        </button>
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                {cooling > 0.01 && (
+                  <div>
+                    <label htmlFor="battery-overcast" className="block text-sm font-medium mb-1">
+                      Weather-driven load on an overcast day:{' '}
+                      <span className="text-yellow-700">{Math.round(overcastFactor * 100)}%</span>
+                    </label>
+                    <input
+                      id="battery-overcast"
+                      type="range" min="0" max="100" step="5"
+                      value={Math.round(overcastFactor * 100)}
+                      onChange={e => setOvercastFactor(parseFloat(e.target.value) / 100)}
+                      className="w-full accent-yellow-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {Math.round(cooling * 100)}% of your daily use is cooling. A sunless day is sunless because it is overcast,
+                      which usually means cooler — so that load runs less on exactly the days you
+                      have least sun. Sizing a bank as if it ran flat out through three grey days
+                      buys battery you will never use. Set this to 100% if your climate does not
+                      work that way.
+                    </p>
+                  </div>
+                )}
+
+                {heating > 0.01 && (
+                  <div>
+                    <label htmlFor="battery-cold" className="block text-sm font-medium mb-1">
+                      Heating load on a cold sunless day:{' '}
+                      <span className="text-yellow-700">{Math.round(coldFactor * 100)}%</span>
+                    </label>
+                    <input
+                      id="battery-cold"
+                      type="range" min="100" max="300" step="10"
+                      value={Math.round(coldFactor * 100)}
+                      onChange={e => setColdFactor(parseFloat(e.target.value) / 100)}
+                      className="w-full accent-yellow-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {Math.round(heating * 100)}% of your daily use is heating, and heating is
+                      not cooling in reverse. It runs hardest through the coldest hours — at
+                      night, with no sun — and it runs <em>more</em> on a cold grey day, not less.
+                      So your demand rises exactly when your generation falls. 100% means the
+                      weather makes no difference; 150% means half again as much on a bad day.
+                    </p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -301,20 +489,72 @@ export default function BatterySizingPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Battery className="w-4 h-4 text-yellow-600" />
-                Recommended bank
+                How big a bank?
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total capacity needed</p>
-                <p className="text-2xl font-bold text-yellow-700">{totalKwh.toFixed(1)} kWh</p>
-                <p className="text-sm text-gray-500">{Math.round(totalAh)} Ah at {voltage}V</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                  Depending on what you want it to survive
+                </p>
+                <p className="text-2xl font-bold text-yellow-700">
+                  {roundBank(band.min)}–{roundBank(band.max)} kWh
+                </p>
+                <p className="text-sm text-gray-500">
+                  {Math.round((band.min * 1000) / voltage)}–{Math.round((band.max * 1000) / voltage)} Ah
+                  {' '}at {voltage}V · {Math.round(battery.dod * 100)}% DoD
+                </p>
               </div>
 
-              <div className="border-t pt-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Usable capacity</p>
-                <p className="text-xl font-bold text-gray-800">{usableKwh.toFixed(1)} kWh</p>
-                <p className="text-xs text-gray-500">{Math.round(usableAh)} Ah usable ({Math.round(battery.dod * 100)}% DoD)</p>
+              <div className="border-t pt-3 space-y-3">
+                {scenarios.map(sc => (
+                  <button
+                    key={sc.id}
+                    onClick={() => setSizeFor(sc.id)}
+                    aria-pressed={sizeFor === sc.id}
+                    className={`w-full text-left rounded-lg p-2 -mx-2 transition-colors ${
+                      sizeFor === sc.id ? 'bg-yellow-100/70 ring-1 ring-yellow-300' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-medium text-gray-800">{sc.label}</span>
+                      <span className="text-base font-bold text-gray-900 whitespace-nowrap tabular-nums">
+                        {roundBank(sc.bankKwh)} kWh
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">{sc.meaning}</p>
+                    <p className="text-xs text-gray-400 tabular-nums">
+                      delivers {sc.energyKwh.toFixed(1)} kWh · {Math.round(sc.bankAh)} Ah
+                    </p>
+                  </button>
+                ))}
+                <p className="text-xs text-gray-400 pt-1">
+                  Pick one — the real battery models below are counted against it.
+                </p>
+                {cooling > 0.01 && heating > 0.01 && (
+                  <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <p className="text-xs text-blue-900 leading-relaxed">
+                      <strong>You have listed both cooling and heating.</strong> These scenarios
+                      describe a single day, and a day that is both hot enough for air
+                      conditioning and cold enough for heating does not happen — so the sunless
+                      figure here blends two seasons that never overlap. Size for whichever season
+                      is harder on your system, and list only that season&apos;s loads while you do.
+                      A heat pump that both heats and cools is two entries, not one.
+                    </p>
+                  </div>
+                )}
+                {correlatedRisk && (
+                  <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50 p-3">
+                    <p className="text-xs text-orange-900 leading-relaxed">
+                      <strong>Your worst weather and your highest demand arrive together.</strong>{' '}
+                      A heating-dominated system has no slack in it: a cold, dark, still week is
+                      maximum load and minimum generation at the same time. Size against the
+                      multi-day figure, not the optimistic one — a cooling-dominated system in a
+                      hot climate forgives an undersized bank, because grey days are also cool
+                      days. This one does not.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-3 text-xs text-gray-500 space-y-1">
@@ -325,6 +565,10 @@ export default function BatterySizingPage() {
                 <div className="flex justify-between">
                   <span>Days of autonomy</span>
                   <span className="font-medium text-gray-700">{days}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Used after dark</span>
+                  <span className="font-medium text-gray-700">{Math.round(overnightShare * 100)}% of {darkHours}h</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Max depth of discharge</span>
@@ -395,6 +639,9 @@ export default function BatterySizingPage() {
           <CardTitle className="text-base flex items-center gap-2">
             <Battery className="w-4 h-4 text-yellow-600" />
             Real battery models — {voltage}V {battery.name}
+            <span className="block text-xs font-normal text-gray-500 mt-0.5">
+              counted for <strong className="text-gray-700">{chosen.label.toLowerCase()}</strong> · {roundBank(chosen.bankKwh)} kWh
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -408,7 +655,7 @@ export default function BatterySizingPage() {
           ) : (
             <div className="space-y-3">
               {matchingModels.map(m => {
-                const units = Math.ceil(totalKwh / m.capacity_kwh)
+                const units = Math.ceil(chosen.bankKwh / m.capacity_kwh)
                 const totalPrice = m.price_usd != null ? units * m.price_usd : null
                 return (
                   <div

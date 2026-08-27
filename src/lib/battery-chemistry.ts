@@ -54,3 +54,39 @@ export function cutoffBand(chemistry: ChemistryId, systemVoltage: 12 | 24 | 48):
 export function formatBand(band: VoltageBand): string {
   return `${band.min.toFixed(1)}–${band.max.toFixed(1)}V`
 }
+
+
+/**
+ * Round-trip efficiency ranges — energy out divided by energy in.
+ *
+ * ONE SOURCE, TWO CONSUMERS. /guides/batteries publishes the range to the
+ * reader and the battery calculator sizes an array from a single figure. They
+ * used to be separate literals, and the calculator had drifted to the BEST case
+ * of every range — which biases the array small, the direction that leaves
+ * someone short in December. A guide that teaches one thing while the tool does
+ * another is the failure this product exists to avoid, so both now read from
+ * here and a test asserts the calculator sits at the midpoint.
+ */
+export interface EfficiencyRange {
+  min: number
+  max: number
+}
+
+export const ROUND_TRIP: Record<ChemistryId, EfficiencyRange> = {
+  lifepo4: { min: 0.95, max: 0.98 },
+  agm: { min: 0.80, max: 0.85 },
+  gel: { min: 0.80, max: 0.85 },
+  flooded: { min: 0.70, max: 0.80 },
+}
+
+/** The figure the calculators use: the middle of the published range. */
+export function roundTripMidpoint(chemistry: ChemistryId): number {
+  const r = ROUND_TRIP[chemistry]
+  return (r.min + r.max) / 2
+}
+
+/** The range as the guide prints it, e.g. "95–98%". */
+export function formatRoundTrip(chemistry: ChemistryId): string {
+  const r = ROUND_TRIP[chemistry]
+  return `${Math.round(r.min * 100)}–${Math.round(r.max * 100)}%`
+}

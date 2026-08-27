@@ -3,101 +3,36 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
+import {
+  PRESET_GROUPS, rowDailyWh, totalDailyKwh, normalizeDuty, suggestedDuty, DUTY_CYCLE_SOURCE,
+  breakdownByProfile, LOAD_PROFILES, DEFAULT_PROFILE, suggestedProfile,
+  type Preset, type LoadProfile,
+} from '@/lib/appliance-load'
+import { energyChain, DEFAULTS as EFF } from '@/lib/system-efficiency'
 
 interface Appliance {
   id: number
   name: string
+  /** Draw while actually running, not the daily average. */
   watts: number
+  /** Hours per day the appliance is in service. */
   hours: number
   qty: number
+  /** Fraction of those hours it actually draws power. Absent means 100%. */
+  duty?: number
+  /** When it runs — drives the battery scenarios. Absent means all day. */
+  profile?: LoadProfile
 }
 
-const PRESET_GROUPS = [
-  {
-    label: 'Lighting & fans',
-    items: [
-      { name: 'LED light bulb',     watts: 10,  hours: 5 },
-      { name: 'LED tube light',     watts: 20,  hours: 6 },
-      { name: 'Ceiling fan',        watts: 60,  hours: 8 },
-      { name: 'Bathroom exhaust',   watts: 30,  hours: 2 },
-    ],
-  },
-  {
-    label: 'Cooling (A/C)',
-    icon: 'ac',
-    items: [
-      { name: 'Window AC (5,000 BTU)',      watts: 450,  hours: 8 },
-      { name: 'Window AC (8,000 BTU)',      watts: 700,  hours: 8 },
-      { name: 'Window AC (12,000 BTU)',     watts: 1100, hours: 8 },
-      { name: 'Portable AC (10,000 BTU)',   watts: 1000, hours: 8 },
-      { name: 'Mini-split (9,000 BTU)',     watts: 860,  hours: 10 },
-      { name: 'Mini-split (12,000 BTU)',    watts: 1100, hours: 10 },
-      { name: 'Mini-split (18,000 BTU)',    watts: 1600, hours: 10 },
-      { name: 'Mini-split (24,000 BTU)',    watts: 2100, hours: 10 },
-      { name: 'Central AC (2 ton)',         watts: 2500, hours: 8 },
-      { name: 'Central AC (3 ton)',         watts: 3500, hours: 8 },
-      { name: 'Central AC (4 ton)',         watts: 4700, hours: 8 },
-      { name: 'Central AC (5 ton)',         watts: 6000, hours: 8 },
-      { name: 'Central AC (6 ton)',         watts: 7200, hours: 8 },
-      { name: 'Central AC (7.5 ton)',       watts: 9000, hours: 8 },
-    ],
-  },
-  {
-    label: 'Kitchen',
-    items: [
-      { name: 'Mini fridge',        watts: 80,   hours: 24 },
-      { name: 'Full-size fridge',   watts: 150,  hours: 24 },
-      { name: 'Microwave',          watts: 1000, hours: 0.5 },
-      { name: 'Coffee maker',       watts: 900,  hours: 0.25 },
-      { name: 'Toaster',            watts: 850,  hours: 0.1 },
-      { name: 'Induction cooktop',  watts: 1800, hours: 1 },
-    ],
-  },
-  {
-    label: 'Entertainment & office',
-    items: [
-      { name: 'TV (32")',           watts: 40,  hours: 4 },
-      { name: 'TV (55")',           watts: 100, hours: 4 },
-      { name: 'Laptop',             watts: 65,  hours: 6 },
-      { name: 'Desktop PC',         watts: 200, hours: 4 },
-      { name: 'Phone charger',      watts: 10,  hours: 2 },
-      { name: 'Router / modem',     watts: 15,  hours: 24 },
-    ],
-  },
-  {
-    label: 'Water & utility',
-    items: [
-      { name: 'Water pump (small)', watts: 300, hours: 1 },
-      { name: 'Water pump (1 HP)',  watts: 750, hours: 2 },
-      { name: 'Washing machine',    watts: 500, hours: 1 },
-      { name: 'Clothes dryer',      watts: 5000, hours: 0.75 },
-      { name: 'Dishwasher',         watts: 1200, hours: 1 },
-      { name: 'Water heater (elec)',watts: 4000, hours: 1 },
-    ],
-  },
-  {
-    label: 'Other',
-    items: [
-      { name: 'CPAP machine',       watts: 30,  hours: 8 },
-      { name: 'Power tool (drill)', watts: 600, hours: 0.5 },
-      { name: 'EV charger (L1)',    watts: 1400, hours: 6 },
-      { name: 'EV charger (L2)',    watts: 7200, hours: 2 },
-    ],
-  },
-]
-
-// Flat list for type inference
-const PRESETS = PRESET_GROUPS.flatMap(g => g.items)
-
 const DEFAULT_APPLIANCES: Appliance[] = [
-  { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4 },
+  { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4, profile: 'evening' },
   { id: 2, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1 },
   { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
-  { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1 },
+  { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1, duty: 0.30 },
 ]
 
 // Ids only have to be unique within the current list, which may have been
@@ -109,7 +44,7 @@ export default function LoadCalculatorPage() {
   const [appliances, setAppliances, , clearAppliances] =
     usePersistentState<Appliance[]>('zonzelf:load:appliances', DEFAULT_APPLIANCES)
   const [efficiency, setEfficiency, , clearEfficiency] =
-    usePersistentState('zonzelf:load:efficiency', 0.8)
+    usePersistentState<number>('zonzelf:load:efficiency', EFF.inverter)
   const [scanningId, setScanningId] = useState<number | null>(null)
   const [showProPrompt, setShowProPrompt] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -153,8 +88,16 @@ export default function LoadCalculatorPage() {
     return id
   }
 
-  const addPreset = (preset: typeof PRESETS[0]) =>
-    setAppliances(a => [...a, { id: nextIdFor(a), ...preset, qty: 1 }])
+  const addPreset = (preset: Preset) =>
+    setAppliances(a => [...a, {
+      id: nextIdFor(a),
+      name: preset.name,
+      watts: preset.watts,
+      hours: preset.hours,
+      duty: preset.duty,
+      profile: preset.profile,
+      qty: 1,
+    }])
 
   const resetAll = () => {
     clearAppliances()
@@ -167,9 +110,13 @@ export default function LoadCalculatorPage() {
   const remove = (id: number) =>
     setAppliances(a => a.filter(row => row.id !== id))
 
-  const totalWh = appliances.reduce((sum, a) => sum + a.watts * a.hours * a.qty, 0)
-  const totalKwh = totalWh / 1000
-  const adjustedKwh = totalKwh / efficiency
+  const totalKwh = totalDailyKwh(appliances)
+  // One shared model — see src/lib/system-efficiency.ts. This page owns the
+  // inverter stage only; battery round-trip and array losses belong to the
+  // pages that actually pay them.
+  const breakdown = breakdownByProfile(appliances)
+  const chain = energyChain({ rawKwh: totalKwh, inverter: efficiency })
+  const adjustedKwh = chain.fromBatteryKwh
 
   // Publish the result so the battery and panel calculators can pick it up.
   useEffect(() => {
@@ -177,11 +124,21 @@ export default function LoadCalculatorPage() {
       rawKwh: round2(totalKwh),
       efficiency,
       adjustedKwh: round2(adjustedKwh),
+      breakdown: {
+        always: round2(breakdown.always),
+        daytime: round2(breakdown.daytime),
+        evening: round2(breakdown.evening),
+        cooling: round2(breakdown.cooling),
+        heating: round2(breakdown.heating),
+        total: round2(breakdown.total),
+      },
     })
+    // breakdown is derived from `appliances`, which totalKwh already tracks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalKwh, efficiency, adjustedKwh])
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
+    <div className="max-w-5xl mx-auto px-4 py-12">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
@@ -207,20 +164,32 @@ export default function LoadCalculatorPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Appliance</th>
-                      <th className="text-right px-3 py-3 font-medium text-gray-600 whitespace-nowrap">Watts</th>
-                      <th className="text-right px-3 py-3 font-medium text-gray-600 whitespace-nowrap">Hrs/day</th>
-                      <th className="text-right px-3 py-3 font-medium text-gray-600">Qty</th>
-                      <th className="text-right px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Wh/day</th>
+                      <th className="text-left px-3 py-3 font-medium text-gray-600">Appliance</th>
+                      <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Watts</th>
+                      <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Hrs</th>
+                      <th className="text-left px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Runs</th>
+                      <th className="text-right px-2 py-3 font-medium text-gray-600 whitespace-nowrap">Duty</th>
+                      <th className="text-right px-2 py-3 font-medium text-gray-600">Qty</th>
+                      <th className="text-right px-3 py-3 font-medium text-gray-600 whitespace-nowrap">Wh/day</th>
                       <th className="px-2 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {appliances.map((a, i) => {
-                      const wh = a.watts * a.hours * a.qty
+                      const wh = rowDailyWh(a)
+                      // A row saved before duty cycles existed, or left at 100%, when the
+                      // preset of that name is a cycling load. Offered, never imposed.
+                      const suggested = suggestedDuty(a.name)
+                      // Same staleness as duty cycles: a row saved before cooling and
+                      // heating were split keeps its old class, so its A/C is never
+                      // suppressed on an overcast day.
+                      const betterProfile = suggestedProfile(a.name, a.profile)
+                      const stale = suggested !== undefined && normalizeDuty(a.duty) === 1
+                        ? suggested
+                        : undefined
                       return (
                         <tr key={a.id} className={`border-b ${i % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
-                          <td className="px-4 py-2">
+                          <td className="px-3 py-2 min-w-[8rem]">
                             <input
                               type="text"
                               value={a.name}
@@ -229,43 +198,85 @@ export default function LoadCalculatorPage() {
                               className="w-full text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2">
                             <input
                               type="number"
                               value={a.watts || ''}
                               onChange={e => update(a.id, 'watts', parseFloat(e.target.value) || 0)}
                               aria-label={a.name ? `Watts for ${a.name}` : 'Watts'}
-                              className="w-16 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
+                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0"
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2">
                             <input
                               type="number"
                               value={a.hours || ''}
                               onChange={e => update(a.id, 'hours', parseFloat(e.target.value) || 0)}
                               aria-label={a.name ? `Hours per day for ${a.name}` : 'Hours per day'}
-                              className="w-16 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
+                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0" max="24" step="0.5"
                             />
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2">
+                            {betterProfile !== undefined && (
+                              <button
+                                onClick={() => update(a.id, 'profile', betterProfile)}
+                                title={LOAD_PROFILES[betterProfile].hint}
+                                className="block text-xs text-yellow-700 underline decoration-dotted hover:no-underline"
+                              >
+                                use {LOAD_PROFILES[betterProfile].label}
+                              </button>
+                            )}
+                            <select
+                              value={a.profile ?? DEFAULT_PROFILE}
+                              onChange={e => update(a.id, 'profile', e.target.value)}
+                              aria-label={a.name ? `When ${a.name} runs` : 'When this runs'}
+                              title={LOAD_PROFILES[a.profile ?? DEFAULT_PROFILE].hint}
+                              className="text-xs bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-0 -ml-1 max-w-[4.75rem]"
+                            >
+                              {(Object.keys(LOAD_PROFILES) as LoadProfile[]).map(k => (
+                                <option key={k} value={k}>{LOAD_PROFILES[k].label}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-2">
+                            {stale !== undefined && (
+                              <button
+                                onClick={() => update(a.id, 'duty', stale)}
+                                title={`${a.name} cycles on and off — use ${Math.round(stale * 100)}% instead of 100%`}
+                                className="block w-full text-right text-xs text-yellow-700 underline decoration-dotted hover:no-underline"
+                              >
+                                use {Math.round(stale * 100)}%
+                              </button>
+                            )}
+                            <input
+                              type="number"
+                              value={Math.round(normalizeDuty(a.duty) * 100)}
+                              onChange={e => update(a.id, 'duty', Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) / 100)}
+                              aria-label={a.name ? `Duty cycle percent for ${a.name}` : 'Duty cycle percent'}
+                              title="Percentage of its in-service hours this appliance actually draws power"
+                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-11 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
+                              min="0" max="100" step="5"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
                             <input
                               type="number"
                               value={a.qty || ''}
                               onChange={e => update(a.id, 'qty', parseInt(e.target.value) || 1)}
                               aria-label={a.name ? `Quantity of ${a.name}` : 'Quantity'}
-                              className="w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
+                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-9 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="1"
                             />
                           </td>
-                          <td className="px-4 py-2 text-right font-medium text-gray-700 whitespace-nowrap">
+                          <td className="px-3 py-2 text-right font-medium text-gray-700 whitespace-nowrap">
                             {wh >= 1000
                               ? `${(wh / 1000).toFixed(2)} kWh`
                               : `${Math.round(wh)} Wh`}
                           </td>
-                          <td className="px-2 py-2">
-                            <div className="flex items-center gap-1">
+                          <td className="px-1 py-2">
+                            <div className="flex items-center gap-0.5">
                               <button
                                 onClick={() => handleScanClick(a.id)}
                                 title={isPro ? 'Scan appliance label' : 'Pro feature — scan label'}
@@ -298,7 +309,7 @@ export default function LoadCalculatorPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 bg-yellow-50">
-                      <td colSpan={4} className="px-4 py-3 font-semibold text-gray-700">
+                      <td colSpan={6} className="px-4 py-3 font-semibold text-gray-700">
                         Total daily consumption
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-yellow-700 whitespace-nowrap">
@@ -308,6 +319,20 @@ export default function LoadCalculatorPage() {
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+              <div className="px-4 py-3 border-t text-xs text-gray-600 space-y-1">
+                <p>
+                  <strong className="text-gray-700">Duty %</strong> — how much of its
+                  in-service hours an appliance actually draws power. A light bulb is 100%:
+                  switched on, it draws its full watts. A fridge is not — its compressor
+                  cycles against a thermostat and runs roughly a third of the time, so a
+                  fridge plugged in for 24 hours is not drawing for 24 hours.
+                </p>
+                <p>
+                  Watts stays the <em>running</em> figure, because that is what your inverter
+                  has to supply. Duty % is what turns it into energy over a day.
+                </p>
+                <p className="text-gray-500">{DUTY_CYCLE_SOURCE}</p>
               </div>
             </CardContent>
           </Card>
@@ -436,12 +461,12 @@ export default function LoadCalculatorPage() {
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Raw load</p>
                 <p className="text-2xl font-bold text-yellow-700">{totalKwh.toFixed(2)} kWh</p>
-                <p className="text-xs text-gray-500">{Math.round(totalWh)} Wh</p>
+                <p className="text-xs text-gray-500">{Math.round(totalKwh * 1000)} Wh</p>
               </div>
 
               <div className="border-t pt-3">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">System efficiency</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Inverter &amp; wiring</p>
                   <span className="text-sm font-medium">{Math.round(efficiency * 100)}%</span>
                 </div>
                 <input
@@ -449,18 +474,22 @@ export default function LoadCalculatorPage() {
                   min="0.6" max="0.95" step="0.05"
                   value={efficiency}
                   onChange={e => setEfficiency(parseFloat(e.target.value))}
-                  aria-label="System efficiency"
+                  aria-label="Inverter and wiring efficiency"
                   className="w-full accent-yellow-500"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Accounts for inverter losses, wiring, and battery inefficiency. 80% is a safe default.
+                  DC to AC conversion and cable loss. Battery and panel losses are applied on their own pages, so they are not counted twice here.
                 </p>
               </div>
 
               <div className="border-t pt-3 bg-white rounded-lg p-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Adjusted daily need</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Battery must deliver</p>
                 <p className="text-3xl font-bold text-gray-900">{adjustedKwh.toFixed(2)} kWh</p>
-                <p className="text-xs text-gray-500">Use this number for battery and panel sizing</p>
+                <p className="text-xs text-gray-500">
+                  What the bank has to supply each day, after inverter losses. Your panels
+                  need more than this — they also pay battery round-trip and array losses,
+                  which the panel calculator applies.
+                </p>
               </div>
             </CardContent>
           </Card>

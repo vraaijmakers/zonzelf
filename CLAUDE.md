@@ -72,13 +72,82 @@ that lets them close the gap.
 - Anything requiring ZonZelf-branded hardware (this contradicts differentiator #2)
 - A general-purpose home-automation platform (that is Home Assistant's job)
 
-### Monetization — the intended path
+### Monetization — revised 2026-08-22
 
-Affiliate links from day 1; **freemium monitoring** (~$5–9/mo) as the primary recurring
-revenue, because monitoring creates daily active users and daily active users are what turn a
-content site into a business. Component database, electrician lead-gen, digital products, and
-sponsored brand guides come later. Revenue work that isn't the monitoring subscription is a
-Phase 2+ distraction.
+> The previous version of this section made freemium monitoring (~$5–9/mo) the primary
+> recurring revenue and called everything else a "Phase 2+ distraction." Tested against
+> market comparables, that was backwards. Superseded.
+
+**Affiliate plus content is the primary revenue line.** Direct solar programs pay 5–6%
+(Renogy 6%, A1 6%, Bluetti 5–10%); ~6% of one $1,200 battery beats nine months of a $7
+subscription. Display advertising is the second line. Modeled at a realistic year-3 steady
+state (~40k sessions/mo), affiliate and ads together are roughly 85% of revenue.
+
+**Monitoring is free.** It is a retention and differentiation feature, not a revenue engine.
+That is not a concession — it is the original argument followed through: monitoring earns its
+place by creating daily active users, and daily active users are what make affiliate and
+content revenue work. Three things killed the subscription:
+
+1. **The incumbent is cheaper.** Solar Assistant charges $59 once plus $30/yr for updates.
+   $5–9/mo is $60–108/yr — 2–4× the price, from a newcomer with less trust.
+2. **Differentiator #2 destroys its own collectability.** Solar Assistant's $149 dongle *is*
+   their moat. An open Python MODBUS agent is forkable in an afternoon and repointable at
+   self-hosted Grafana or Home Assistant. ZonZelf cannot advertise "no lock-in" and bill a
+   subscription that depends on lock-in.
+3. **It is the only stream that meaningfully escalates liability** and support burden, while
+   being the smallest of the three.
+
+Paid tiers are not forbidden — they are **unproven**. Do not build billing, gating, or
+"Pro" UI until there is evidence users will pay. (Note that `/api/scan-label` already
+pretends to be Pro-gated with `const isPro = false` while the API itself is wide open; that
+is a phase-0 security item, not the start of a paid tier.)
+
+### Legal posture — the rule that governs calculator design
+
+**Entity: US LLC. Audience: US-first. Governing code: NEC 310.16.**
+
+US product-liability law splits on whether information is a "product," and ZonZelf straddles
+the line:
+
+- `Winter v. G.P. Putnam's Sons`, 938 F.2d 1033 (9th Cir. 1991) — a mushroom encyclopedia
+  that poisoned its readers. Held: **the informational content of a book is not a product**,
+  and **publishers owe no general duty to verify accuracy.** Guides, glossary, and resources
+  sit here.
+- `Saloomey v. Jeppesen`, `Brocklesby`, `Fluor` — aeronautical charts **were** products,
+  because a chart mechanically converts data into an output acted on directly in a hazardous
+  activity. *Winter* distinguished these rather than overruling them.
+
+> **The rule: guides teach; calculators must show the derivation and cite the code. Never
+> emit a bare authoritative recommendation.**
+
+"Recommended gauge: AWG 10" in large green type is the chart, not the book. Show the code
+table, show the arithmetic, cite the source, teach the user to derive the answer. This is
+**permanent design**, not a holding pattern until the electrician sign-off lands — and it is
+differentiator #1 executed properly, so the liability fix and the product goal are the same
+move. A bigger disclaimer is not a substitute: a footer link is weak evidence of assent, and
+US courts have struck down all-encompassing waivers as overbroad.
+
+**The capacity / protection split.** The rule above does not apply evenly, because risk
+does not. Classify every calculator output:
+
+- **Capacity** — daily kWh, bank size, panel count, inverter continuous rating. Wrong here
+  means an undersized system and a disappointing December. These stay confident and
+  specific: they are the product, and they are where the affiliate value sits (the battery
+  is $1,200; the cable is $80).
+- **Protection** — conductor gauge, overcurrent protection, battery cutoff voltage, string
+  Voc against the MPPT window. Wrong here starts fires or destroys equipment. These get the
+  full derivation treatment and never appear as a bare number.
+
+Protection is about five outputs, so this is a contained surface — the point of naming the
+split is to stop treating four calculators as one undifferentiated liability problem.
+Showing the derivation of a **wrong** number documents the error rather than excusing it, so
+the phase-0 correctness items are prerequisites for the framing work, not alternatives to it.
+
+GDPR still applies to EU visitors even with a US entity — the live signup with no deletion
+path, and household photos going to Anthropic via `/api/scan-label`, are real findings today.
+The EU Product Liability Directive (2024/2853, software-as-product, strict liability,
+transposition due 9 Dec 2026) is out of scope for a US entity, but would return if EU users
+were ever commercially *targeted*.
 
 ---
 
@@ -89,8 +158,8 @@ Phase 2+ distraction.
 - **Supabase** — Postgres, Auth, RLS, storage (`@supabase/supabase-js`, `@supabase/ssr`)
 - **Anthropic SDK** (`@anthropic-ai/sdk`) — currently powering `/api/scan-label`
 - **lucide-react** icons · `clsx` + `tailwind-merge` via `cn()` in `src/lib/utils.ts`
-- Hosting: **TBD** — not yet set up anywhere. A self-hosted Docker staging instance is
-  planned on the seecago.com VPN box (same pattern as the BOND platform: shared nginx
+- Hosting: **staging is live, production is not chosen.** A self-hosted Docker staging
+  instance runs on the seecago.com VPN box (same pattern as the BOND platform: shared nginx
   reverse proxy, container on the `webapps-docker` network, VPN-only — no public
   reachability). No production host chosen yet. **Do not write "Vercel" here again without
   it actually being configured** — it was previously listed as hosting with nothing behind
@@ -138,9 +207,13 @@ zonzelf-app/
 └── public/
 ```
 
-**Planned, not yet built** (see the roadmap module before starting any of it):
-`/dashboard` (user projects), `/monitoring` (live inverter data), `/admin` (operator portal),
-`/api/ingest` (agent telemetry), `/api/scrape` (content aggregation).
+**Planned, not yet built** (see the roadmap board before starting any of it):
+`/dashboard` (user projects), `/monitoring` (live inverter data), `/api/ingest` (agent
+telemetry), `/api/scrape` (content aggregation).
+
+`/admin` **is** built — `src/app/admin/` has the gated layout, the roadmap board, and the
+battery review queue, with Server Actions in `actions.ts` files that each re-check
+`requireAdmin()`. The tree above is abridged; read the directory rather than trusting it.
 
 ### The admin portal
 
@@ -366,6 +439,29 @@ Migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT 
 must be applied to **both** the staging and production projects. Before declaring a data fix
 done, verify the row exists in the database the running app actually reads.
 
+### 10b. The roadmap board is mutable state — dump it before you touch it
+
+`/admin/roadmap`'s Server Actions write straight to the database, so any item created or
+re-statused through the UI exists **only** there. `supabase/seed.sql` is a hand-maintained
+reconstruction, **not a backup** — on 2026-08-22 it was found to have silently drifted from
+the live board in four places, including an operator-created item that existed nowhere in
+git. A `db reset` cannot catch this: it only ever proves `seed.sql` agrees with the
+migrations, never that either agrees with reality.
+
+```bash
+npm run check:roadmap-sync        # live database vs seed.sql — needs .env.local
+npm run check:roadmap-migrations  # migrations vs seed.sql — no credentials, runs in CI
+npm run dump:roadmap              # live board as seed.sql-shaped tuples
+```
+
+Run `check:roadmap-sync` **before and after** any roadmap change, and fold drift back into
+`seed.sql` in the same PR — `dump:roadmap` emits the live rows in the right shape to paste.
+`check:roadmap-migrations` is the credential-free half and gates every PR: CI cannot read
+the live board, because rule 9 keeps the service-role key out of this repo.
+
+Never run `supabase db reset --linked` — the hosted project is shared between staging and
+dev, and it would destroy every admin-UI edit with no backup.
+
 ### 11. Column drops are the highest-risk change
 
 BOND dropped a column that code still queried and crashed a core flow in *every* environment.
@@ -378,6 +474,40 @@ Form fields and optional columns arrive as `null` or `""` and violate `NOT NULL`
 Before every insert/update, drop empty optional keys so the database default applies, or set
 them explicitly. Validate at the boundary — parse the request body, don't spread it into a
 query.
+
+### 12b. Changing what stored data *means* needs a migration path in the UI
+
+Calculator state lives in `localStorage` and outlives every deploy. When you
+change the meaning of a stored field — add a new one with a default, split one
+class into two, retag a preset — **preserving what people already saved is
+right, but it silently withholds the correction from everyone who has already
+used the tool.** Their numbers stay wrong, and they have no way to know.
+
+This shipped three times in one day:
+
+- Duty cycles arrived; saved rows had none, so they stayed at 100% and kept the
+  `150 W × 24 h` fridge figure the change existed to fix.
+- Load profiles arrived; saved rows had none, so they counted as `always`.
+- `cooling` and `heating` were split out of `daytime`; saved air conditioning
+  kept `daytime`, which is deliberately weather-neutral, so it was never
+  suppressed on an overcast day and a sunless day stayed at full summer load.
+
+Each was found by a person using the page, never by a test, because the code was
+internally consistent and simply wrong about the world.
+
+**The pattern that works:** keep the stored value, and offer the corrected one
+inline where the number appears — `use 30%`, `use Cooling` — one click, never
+imposed. See `suggestedDuty()` and `suggestedProfile()` in
+`src/lib/appliance-load.ts`.
+
+Two things that fall out of it:
+
+- A stored shape that gained fields needs a normalizer, not a cast. See
+  `normalizeBreakdown()` — a summary saved before a field existed is a real
+  runtime case, not just a type error.
+- **The seed data and the presets must agree.** A starter row tagged one way and
+  a preset of the same name tagged another makes the page disagree with itself
+  and fires a false correction on a fresh visit. Check both when you retag either.
 
 ### 13. Never end a session with dangling commits
 

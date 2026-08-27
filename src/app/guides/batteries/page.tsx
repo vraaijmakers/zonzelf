@@ -8,10 +8,14 @@ export const metadata = {
   description: 'LiFePO4 vs AGM vs Gel vs Flooded Lead-Acid. Honest comparison of every battery chemistry used in off-grid and hybrid solar systems.',
 }
 
+import { formatRoundTrip } from '@/lib/battery-chemistry'
+
 const COMPARISON = [
   { label: 'Depth of discharge',    lifepo4: '80–90%',       agm: '50%',         gel: '50%',          fla: '50%' },
   { label: 'Cycle life',            lifepo4: '3,000–6,000+', agm: '400–800',     gel: '500–1,000',    fla: '500–1,200' },
-  { label: 'Round-trip efficiency', lifepo4: '95–98%',       agm: '80–85%',      gel: '80–85%',       fla: '70–80%' },
+  // Rendered from src/lib/battery-chemistry.ts so the guide and the calculator
+  // cannot drift apart — they had, and the calculator was quietly optimistic.
+  { label: 'Round-trip efficiency', lifepo4: formatRoundTrip('lifepo4'), agm: formatRoundTrip('agm'), gel: formatRoundTrip('gel'), fla: formatRoundTrip('flooded') },
   { label: 'Maintenance',           lifepo4: 'None',         agm: 'None',        gel: 'None',         fla: 'Monthly (water)' },
   { label: 'Venting required',      lifepo4: 'No',           agm: 'No',          gel: 'No',           fla: 'Yes (H₂ gas)' },
   { label: 'BMS required',          lifepo4: 'Yes (built-in usually)', agm: 'No', gel: 'No',          fla: 'No' },
