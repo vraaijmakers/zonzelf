@@ -91,6 +91,36 @@ const clamp = (v: number, lo: number, hi: number) =>
   Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo
 
 /**
+ * Defaults the battery page asks, and the load page uses for its weather band
+ * so the two calculators do not invent different grey-day stories.
+ * `weatherAdjustedDailyKwh` itself defaults to "weather does nothing" so an
+ * absent breakdown never silently shrinks (or grows) a bank.
+ */
+export const DEFAULT_OVERCAST_FACTOR = 0.4
+export const DEFAULT_COLD_FACTOR = 1.5
+
+/**
+ * What a cold, grey, sunless day does to daily energy, given how much of the
+ * load is cooling vs heating. Cooling shrinks (overcast is cooler);
+ * heating grows (cold and grey is when you heat hardest).
+ */
+export function weatherAdjustedDailyKwh(inputs: {
+  typicalKwh: number
+  coolingShare?: number
+  heatingShare?: number
+  overcastFactor?: number
+  coldFactor?: number
+}): number {
+  const daily = Math.max(0, Number.isFinite(inputs.typicalKwh) ? inputs.typicalKwh : 0)
+  const cooling = clamp(inputs.coolingShare ?? 0, 0, 1)
+  const heating = clamp(inputs.heatingShare ?? 0, 0, 1 - cooling)
+  const neutral = Math.max(0, 1 - cooling - heating)
+  const overcast = clamp(inputs.overcastFactor ?? 1, 0, 1)
+  const cold = clamp(inputs.coldFactor ?? 1, 1, 4)
+  return daily * (neutral + cooling * overcast + heating * cold)
+}
+
+/**
  * Default overnight share for a given number of dark hours: the proportion you
  * would get if consumption were spread evenly around the clock. A starting
  * point to adjust, not a measurement.
@@ -105,19 +135,15 @@ export function buildScenarios(inputs: ScenarioInputs): Scenario[] {
   const days = Math.max(1, Number.isFinite(inputs.autonomyDays) ? inputs.autonomyDays : 1)
   const dod = clamp(inputs.depthOfDischarge, 0.1, 1)
   const volts = inputs.systemVoltage > 0 ? inputs.systemVoltage : 48
-
-  // On an overcast day the weather-driven part of the load shrinks; the rest is
-  // unchanged. Defaults to no suppression so an absent breakdown behaves as
-  // before rather than silently shrinking someone's bank.
   const cooling = clamp(inputs.coolingShare ?? 0, 0, 1)
   const heating = clamp(inputs.heatingShare ?? 0, 0, 1 - cooling)
-  const neutral = Math.max(0, 1 - cooling - heating)
-  const overcast = clamp(inputs.overcastFactor ?? 1, 0, 1)
-  // Heating grows on the bad days rather than shrinking. Capped at 4x so a
-  // slider cannot produce an absurd bank, and floored at 1 so it can never
-  // silently behave like cooling.
-  const cold = clamp(inputs.coldFactor ?? 1, 1, 4)
-  const sunlessDaily = daily * (neutral + cooling * overcast + heating * cold)
+  const sunlessDaily = weatherAdjustedDailyKwh({
+    typicalKwh: daily,
+    coolingShare: inputs.coolingShare,
+    heatingShare: inputs.heatingShare,
+    overcastFactor: inputs.overcastFactor,
+    coldFactor: inputs.coldFactor,
+  })
 
   const make = (id: ScenarioId, label: string, meaning: string, energyKwh: number): Scenario => {
     const bankKwh = energyKwh / dod
@@ -148,12 +174,14 @@ export function scenarioRange(scenarios: Scenario[]): { min: number; max: number
 }
 
 /**
- * Round to a precision the inputs justify. A bank derived from duty-cycle
+ * Round to a precision the inputs justify. A figure derived from duty-cycle
  * estimates and an efficiency assumption does not deserve two decimal places.
  */
-export function roundBank(kwh: number): number {
+export function roundKwh(kwh: number): number {
   if (!(kwh > 0)) return 0
   if (kwh < 10) return Math.round(kwh * 2) / 2
   if (kwh < 100) return Math.round(kwh)
   return Math.round(kwh / 5) * 5
 }
+
+export const roundBank = roundKwh

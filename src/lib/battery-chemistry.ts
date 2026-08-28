@@ -1,3 +1,5 @@
+import type { ProtectionView } from './calc-register'
+
 export type ChemistryId = 'lifepo4' | 'agm' | 'gel' | 'flooded'
 
 interface VoltageBand {
@@ -53,6 +55,82 @@ export function cutoffBand(chemistry: ChemistryId, systemVoltage: 12 | 24 | 48):
 
 export function formatBand(band: VoltageBand): string {
   return `${band.min.toFixed(1)}–${band.max.toFixed(1)}V`
+}
+
+export const CUTOFF_SOURCES = {
+  guide: '/guides/depth-of-discharge — resting-voltage bands by chemistry, not a live setpoint',
+  rest: 'A resting reading means nothing charging and nothing running. Voltage sags under load.',
+  lithium: 'LiFePO4 discharge is flat; voltage is not a reliable DoD proxy. Use the BMS or percent remaining.',
+  datasheet: 'Confirm against the battery manufacturer datasheet before programming an inverter.',
+} as const
+
+export function nominalSystemVoltage(v: number): 12 | 24 | 48 {
+  if (v === 12 || v === 24 || v === 48) return v
+  if (v < 18) return 12
+  if (v < 36) return 24
+  return 48
+}
+
+/**
+ * Protection-register view of inverter cutoff. Lithium options are "use the
+ * BMS", not a volt number — putting 12.8 V in the options list would be the
+ * chart this exists to avoid. The resting floor is in the derivation, labelled
+ * as already-near-empty. Lead-acid options are a resting band, never a live
+ * setpoint.
+ */
+export function cutoffProtectionView(chemistry: ChemistryId, systemVoltage: number): ProtectionView {
+  const volts = nominalSystemVoltage(systemVoltage)
+  const profile = CUTOFF_PROFILES[chemistry]
+  const band = cutoffBand(chemistry, volts)
+  const rest = formatBand(band)
+
+  if (!profile.voltageIsReliableProxy) {
+    return {
+      id: 'cutoff-voltage',
+      title: 'When the inverter should stop',
+      options: ['Use the BMS or percent remaining'],
+      empty: null,
+      steps: [
+        {
+          title: 'Voltage is not the answer',
+          body:
+            'LiFePO4 voltage barely moves until the pack is nearly empty, so a single ' +
+            'number cannot mean "leave 20% in the tank." Tell the inverter to stop on ' +
+            'percent remaining, or let the battery\'s own manager (BMS) do it.',
+        },
+        {
+          title: 'If the inverter only has a voltage setting',
+          body:
+            `A rough everything-off floor at rest is ${rest} at ${volts}V. That is already ` +
+            'close to empty, not 20% left. 12.0 V on a 12 V lithium pack is nearly empty.',
+        },
+      ],
+      sources: [CUTOFF_SOURCES.guide, CUTOFF_SOURCES.lithium, CUTOFF_SOURCES.datasheet],
+    }
+  }
+
+  return {
+    id: 'cutoff-voltage',
+    title: 'When the inverter should stop',
+    options: [`${rest} at rest`],
+    empty: null,
+    steps: [
+      {
+        title: 'Resting voltage only',
+        body:
+          `${rest} is the "about half empty" neighbourhood for this chemistry at ${volts}V, ` +
+          'measured with nothing charging and nothing running, after the bank has sat still.',
+      },
+      {
+        title: 'Under load it sags',
+        body:
+          'Voltage sags under load, so copying this resting band into a live cutoff stops ' +
+          'the inverter too late. 11.8 V while things are running on a 12 V lead-acid bank ' +
+          'is already past halfway.',
+      },
+    ],
+    sources: [CUTOFF_SOURCES.guide, CUTOFF_SOURCES.rest, CUTOFF_SOURCES.datasheet],
+  }
 }
 
 

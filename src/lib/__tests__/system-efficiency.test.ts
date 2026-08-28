@@ -5,7 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  energyChain, bankKwh, arrayWatts, describeChain, DEFAULTS, BOUNDS,
+  energyChain, bankKwh, arrayWatts, panelCount, panelCountBand, surplusPercent, describeChain, DEFAULTS, BOUNDS,
 } from '../system-efficiency'
 
 const close = (a: number, b: number, eps = 1e-9) =>
@@ -91,6 +91,46 @@ test('array watts divides generation by peak sun hours, and guards zero sun', ()
   close(arrayWatts(5, 2.5), 2000)
   assert.equal(arrayWatts(5, 0), 0, 'zero peak sun must not divide by zero')
   assert.equal(arrayWatts(5, -1), 0)
+})
+
+test('panel count rounds up and never divides by zero', () => {
+  assert.equal(panelCount(1000, 400), 3)
+  assert.equal(panelCount(800, 400), 2)
+  assert.equal(panelCount(0, 400), 0)
+  assert.equal(panelCount(1000, 0), 0)
+  assert.equal(panelCount(1000, -400), 0)
+  assert.equal(panelCount(Number.NaN, 400), 0)
+})
+
+test('a panel band is always low to high, even when winter is sunnier', () => {
+  assert.deepEqual(panelCountBand(21, 18), { min: 18, max: 21 })
+  assert.deepEqual(panelCountBand(8, 20), { min: 8, max: 20 })
+  assert.deepEqual(panelCountBand(12, 12), { min: 12, max: 12 })
+  assert.equal(panelCountBand(0, 0), null)
+})
+
+test('34 kWh/day at 5h and 500W is 21 panels under the lithium chain — not a 12-panel kit', () => {
+  // The SunGold SGR-10K25S (12 × 550W, 10 kW inverter, 25.6 kWh battery) quotes
+  // 26 kWh/day as nameplate × 4h with no losses. This load is a different
+  // system: 34 kWh at the SOCKET, so the array has to cover inverter, round
+  // trip and derate as well.
+  const c = energyChain({ rawKwh: 34.05, inverter: 0.85, batteryRoundTrip: 0.965, array: 0.8 })
+  assert.equal(panelCount(arrayWatts(c.fromArrayKwh, 5), 500), 21)
+})
+
+test('a 12 × 550W kit at 4h delivers ~17 kWh at the socket, not the 26 kWh on the box', () => {
+  const nameplateKwh = 12 * 550 * 4 / 1000
+  assert.ok(Math.abs(nameplateKwh - 26.4) < 0.05)
+  const delivered = 12 * 550 * 4 * 0.8 * 0.965 * 0.85 / 1000
+  assert.ok(delivered > 17 && delivered < 18, `got ${delivered.toFixed(2)} kWh`)
+})
+
+test('surplus percent is null when the target is zero, never NaN', () => {
+  close(surplusPercent(12, 10) ?? NaN, 20)
+  assert.equal(surplusPercent(5, 0), null)
+  assert.equal(surplusPercent(5, Number.NaN), null)
+  assert.equal(surplusPercent(Number.NaN, 10), null)
+  assert.equal(surplusPercent(0, 0), null)
 })
 
 test('the description states the same numbers the maths produced', () => {

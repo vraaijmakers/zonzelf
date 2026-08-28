@@ -21,14 +21,14 @@ const CALCULATORS = [
     icon: Sun,
     slug: 'panels',
     title: 'Solar Panel Sizing',
-    description: 'Enter your daily kWh need and local peak sun hours to get recommended panel wattage and array size.',
+    description: 'Enter your daily kWh need and local peak sun hours (annual average, plus the worst month) to get a panel count as a band, and a check that the array can refill the bank.',
     level: 'Step 3',
   },
   {
     icon: Cable,
     slug: 'awg',
     title: 'Cable AWG Calculator',
-    description: 'Input amps, cable length (one way), and voltage. Get the recommended AWG gauge with voltage drop percentage.',
+    description: 'See which cable sizes your run allows, and the fuse or breaker that can protect them — arithmetic shown, not a single recommended gauge.',
     level: 'Any time',
   },
 ]
