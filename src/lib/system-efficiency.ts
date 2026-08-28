@@ -131,6 +131,33 @@ export function arrayWatts(fromArrayKwh: number, peakSunHours: number): number {
   return (Math.max(0, fromArrayKwh) * 1000) / peakSunHours
 }
 
+/** How many panels of `panelWatt` cover `wattsNeeded`. Zero inputs → zero panels, never NaN. */
+export function panelCount(wattsNeeded: number, panelWatt: number): number {
+  if (!(panelWatt > 0) || !(wattsNeeded > 0)) return 0
+  return Math.ceil(wattsNeeded / panelWatt)
+}
+
+/**
+ * A band of panel counts, always low–high. The annual figure is not always
+ * the small end — a "worst month" that is sunnier than the annual figure
+ * sizes fewer panels, and printing "21–18" reads as a countdown.
+ */
+export function panelCountBand(a: number, b: number): { min: number; max: number } | null {
+  const nums = [a, b].filter(n => n > 0)
+  if (nums.length === 0) return null
+  return { min: Math.min(...nums), max: Math.max(...nums) }
+}
+
+/**
+ * Surplus of actual output over the target, as a percent. Null when the
+ * target is zero or either side is not finite — the panel page used to
+ * divide by dailyKwh and print "NaN%".
+ */
+export function surplusPercent(actual: number, target: number): number | null {
+  if (!(target > 0) || !Number.isFinite(actual) || !Number.isFinite(target)) return null
+  return ((actual - target) / target) * 100
+}
+
 /**
  * Human-readable statement of where the energy goes. Used on each page so the
  * copy cannot say something the maths does not do.

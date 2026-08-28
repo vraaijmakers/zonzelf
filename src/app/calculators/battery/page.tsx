@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { Battery, Info, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { Battery, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
-  usePersistentState, useLoadSummary, publishBatterySummary, round2,
+  usePersistentState, useLoadSummary, usePanelSummary, publishBatterySummary, round2,
 } from '@/lib/calc-storage'
+import { rechargeCheck } from '@/lib/recharge'
+import RechargeWarning from '@/components/RechargeWarning'
 import {
   buildScenarios, scenarioRange, roundBank, defaultOvernightShare, type ScenarioId,
 } from '@/lib/battery-scenarios'
@@ -15,8 +17,9 @@ import {
   overnightShareFrom, coolingShare, heatingShare, isCorrelatedRisk, normalizeBreakdown,
 } from '@/lib/appliance-load'
 import {
-  CUTOFF_PROFILES, cutoffBand, formatBand, roundTripMidpoint, type ChemistryId,
+  cutoffProtectionView, roundTripMidpoint, type ChemistryId,
 } from '@/lib/battery-chemistry'
+import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
 import { createClient } from '@/lib/supabase/client'
 
@@ -120,6 +123,7 @@ export default function BatterySizingPage() {
     usePersistentState<number>('zonzelf:battery:coldFactor', 1.5)
 
   const loadSummary = useLoadSummary()
+  const panelSummary = usePanelSummary()
   // The battery bank has to cover losses, so this step uses the adjusted figure.
   const fromLoadCalc = loadSummary ? round2(loadSummary.adjustedKwh) : null
 
@@ -178,6 +182,26 @@ export default function BatterySizingPage() {
   })
   const band = scenarioRange(scenarios)
   const chosen = scenarios.find(sc => sc.id === sizeFor) ?? scenarios[scenarios.length - 1]
+  const cutoffView = cutoffProtectionView(battery.id, voltage)
+
+  const annualRecharge = panelSummary
+    ? rechargeCheck({
+        arrayWatts: panelSummary.arrayWatts,
+        peakSunHours: panelSummary.peakSunHours,
+        arrayDerate: panelSummary.arrayDerate,
+        fromBatteryKwh: dailyKwh,
+        batteryRoundTrip: battery.efficiency,
+      })
+    : null
+  const worstRecharge = panelSummary
+    ? rechargeCheck({
+        arrayWatts: panelSummary.arrayWatts,
+        peakSunHours: panelSummary.worstMonthHours,
+        arrayDerate: panelSummary.arrayDerate,
+        fromBatteryKwh: dailyKwh,
+        batteryRoundTrip: battery.efficiency,
+      })
+    : null
 
   const [allModels, setAllModels] = useState<BatteryModelMatch[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
@@ -244,7 +268,7 @@ export default function BatterySizingPage() {
                     id="battery-daily-kwh"
                     type="number"
                     value={dailyKwh}
-                    onChange={e => setDailyKwh(parseFloat(e.target.value) || 0)}
+                    onChange={e => setDailyKwh(Math.max(0, parseFloat(e.target.value) || 0))}
                     step="0.1" min="0"
                     className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
@@ -290,7 +314,7 @@ export default function BatterySizingPage() {
                     id="battery-days-custom"
                     type="number"
                     value={days}
-                    onChange={e => setDays(parseInt(e.target.value) || 1)}
+                    onChange={e => setDays(Math.min(14, Math.max(1, parseInt(e.target.value) || 1)))}
                     min="1" max="14"
                     className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
@@ -487,9 +511,12 @@ export default function BatterySizingPage() {
         <div className="space-y-4">
           <Card className="border-yellow-200 bg-yellow-50">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Battery className="w-4 h-4 text-yellow-600" />
-                How big a bank?
+              <CardTitle className="text-base flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <Battery className="w-4 h-4 text-yellow-600" />
+                  How big a bank?
+                </span>
+                <RegisterBadge register="capacity" />
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -582,41 +609,31 @@ export default function BatterySizingPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex gap-2 text-xs text-gray-500">
-                <Info className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
-                {CUTOFF_PROFILES[battery.id].voltageIsReliableProxy ? (
-                  <p>
-                    <strong className="text-gray-700">Inverter cutoff:</strong> {battery.name}
-                    {' '}voltage sags close to linearly, so a resting reading is a usable clue.
-                    At {voltage}V that&apos;s around{' '}
-                    <strong className="text-gray-700">{formatBand(cutoffBand(battery.id, voltage as 12 | 24 | 48))}</strong>
-                    {' '}<em>at rest</em> — nothing charging, nothing running. Under load the
-                    voltage sags further, so copying this resting number straight into a live
-                    cutoff will stop the inverter too late. Always confirm against the battery&apos;s
-                    datasheet.
-                  </p>
-                ) : (
-                  <p>
-                    <strong className="text-gray-700">Inverter cutoff:</strong> {battery.name}
-                    {' '}voltage barely moves until the pack is nearly empty — a single voltage
-                    number can&apos;t reliably enforce an 80% DoD limit. Use the battery&apos;s
-                    built-in manager (BMS) or a monitor that reports <strong className="text-gray-700">
-                    percent remaining</strong> instead. If the inverter only has a voltage
-                    setting, a rough &ldquo;everything off&rdquo; floor at {voltage}V is about{' '}
-                    <strong className="text-gray-700">{formatBand(cutoffBand(battery.id, voltage as 12 | 24 | 48))}</strong>
-                    {' '}— that is already close to empty, not 20% left.
-                  </p>
-                )}
-              </div>
-              <p className="text-xs text-gray-400 mt-2 pl-6">
-                <Link href="/guides/depth-of-discharge" className="hover:underline">
-                  How deep can you drain a battery? →
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
+          <ProtectionOutput view={cutoffView}>
+            <p className="text-xs text-zon-muted">
+              <Link href="/guides/depth-of-discharge" className="hover:underline text-yellow-700">
+                How deep can you drain a battery? →
+              </Link>
+            </p>
+          </ProtectionOutput>
+
+          {annualRecharge && worstRecharge && panelSummary ? (
+            <RechargeWarning
+              annual={annualRecharge}
+              worst={worstRecharge}
+              worstMonthName={panelSummary.worstMonthName || 'the worst month'}
+              annualHours={panelSummary.peakSunHours}
+              worstHours={panelSummary.worstMonthHours}
+            />
+          ) : (
+            <p className="text-xs text-gray-500">
+              The{' '}
+              <Link href="/calculators/panels" className="text-yellow-700 hover:underline">
+                panel calculator
+              </Link>{' '}
+              checks whether the array can actually refill this bank in the available sun.
+            </p>
+          )}
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Next step</p>

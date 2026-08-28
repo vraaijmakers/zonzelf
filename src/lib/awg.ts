@@ -1,3 +1,5 @@
+import type { ProtectionView } from './calc-register'
+
 /**
  * Conductor ampacity and voltage drop, from a cited electrical code.
  *
@@ -223,3 +225,59 @@ export const NEC_SOURCES = {
   smallConductor: 'NEC 240.4(D) — small conductor rule (14 AWG 15 A, 12 AWG 20 A, 10 AWG 30 A)',
   terminals: 'NEC 110.14(C) — the lowest-rated termination limits the circuit',
 } as const
+
+/**
+ * Protection-register view of conductor sizing. The headline is the set of
+ * sizes that pass both limits, not a "recommended gauge."
+ */
+export function conductorProtectionView(input: EvaluateInput): ProtectionView {
+  const passing = passingGauges(input)
+  const thinnest = passing[0]
+  const roundTripFt = input.oneWayFeet * 2
+  const dropBudgetV = (input.volts * input.maxDropPercent) / 100
+  const column = input.column
+
+  if (!thinnest) {
+    return {
+      id: 'conductor-gauge',
+      title: 'Cable sizes that pass both limits',
+      options: [],
+      empty:
+        'No listed size meets both your current and your voltage-drop limit. ' +
+        'Split the load over two runs, shorten the run, raise the system voltage, or accept a larger drop.',
+      steps: [],
+      sources: [NEC_SOURCES.ampacity, NEC_SOURCES.smallConductor, NEC_SOURCES.terminals],
+    }
+  }
+
+  const cap = thinnest.ocpdLimited
+    ? ` but capped to ${thinnest.usableAmpacity}A by the small-conductor rule`
+    : ''
+  const kind = input.kind ?? 'general'
+  const pct = kind === 'pv-source' ? '156' : '125'
+
+  return {
+    id: 'conductor-gauge',
+    title: 'Cable sizes that pass both limits',
+    options: passing.map(p => `${p.label} AWG`),
+    empty: null,
+    steps: [
+      {
+        title: 'Can it carry the current?',
+        body:
+          `At ${column} °C, ${thinnest.label} AWG is rated ${thinnest.tableAmpacity}A${cap}. ` +
+          `Your ${input.amps}A must be carried as ${thinnest.designAmps.toFixed(1)}A — ` +
+          `the conductor is sized at the same ${pct}% as its protection, not at the bare current.`,
+      },
+      {
+        title: 'Is the drop acceptable?',
+        body:
+          `${input.maxDropPercent}% of ${input.volts}V is a ${dropBudgetV.toFixed(2)}V budget. ` +
+          `${thinnest.label} AWG over ${Math.round(roundTripFt)}ft of copper at ${input.amps}A ` +
+          `drops ${thinnest.voltageDrop.toFixed(2)}V (${thinnest.voltageDropPercent.toFixed(1)}%). ` +
+          `Round trip is twice the one-way run, because current flows out and back.`,
+      },
+    ],
+    sources: [NEC_SOURCES.ampacity, NEC_SOURCES.smallConductor, NEC_SOURCES.terminals],
+  }
+}

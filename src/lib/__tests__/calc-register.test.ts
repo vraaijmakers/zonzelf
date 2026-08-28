@@ -1,0 +1,113 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  CALCULATOR_OUTPUTS, shippedProtection, shippedCapacity, outputDef,
+  assertProtectionView, type OutputId,
+} from '../calc-register'
+import { conductorProtectionView } from '../awg'
+import { sizeOvercurrent, ocpdProtectionView } from '../overcurrent'
+import { cutoffProtectionView } from '../battery-chemistry'
+
+test('every output is classified exactly once, as capacity or protection', () => {
+  const ids = CALCULATOR_OUTPUTS.map(o => o.id)
+  assert.equal(new Set(ids).size, ids.length, 'duplicate ids')
+  for (const o of CALCULATOR_OUTPUTS) {
+    assert.ok(o.register === 'capacity' || o.register === 'protection', o.id)
+    assert.ok(o.label.length > 0)
+    assert.ok(o.risk.length > 20, `${o.id} must say what being wrong costs`)
+  }
+})
+
+test('the five protection outputs the design named are all in the catalog', () => {
+  // CLAUDE.md: conductor gauge, OCPD, cutoff, string Voc. Inverter VA is
+  // capacity (an undersized inverter shuts down; it does not start a fire).
+  for (const id of ['conductor-gauge', 'ocpd-rating', 'cutoff-voltage', 'string-voc'] as OutputId[]) {
+    assert.equal(outputDef(id).register, 'protection', id)
+  }
+  assert.equal(outputDef('inverter-va').register, 'capacity')
+})
+
+test('shipped protection is the three outputs the calculators already emit', () => {
+  const ids = shippedProtection().map(o => o.id).sort()
+  assert.deepEqual(ids, ['conductor-gauge', 'cutoff-voltage', 'ocpd-rating'])
+})
+
+test('shipped capacity is daily kWh, bank kWh, panel count', () => {
+  const ids = shippedCapacity().map(o => o.id).sort()
+  assert.deepEqual(ids, ['bank-kwh', 'daily-kwh', 'panel-count'])
+})
+
+test('unshipped outputs stay classified so they cannot arrive as a surprise register', () => {
+  assert.equal(outputDef('string-voc').shipped, false)
+  assert.equal(outputDef('inverter-va').shipped, false)
+})
+
+const awgInput = {
+  amps: 30, oneWayFeet: 10, volts: 24, maxDropPercent: 3, column: 75 as const,
+  kind: 'general' as const, continuous: true,
+}
+
+test('conductor view is a passing set, never a recommended gauge', () => {
+  const view = conductorProtectionView(awgInput)
+  assertProtectionView(view)
+  assert.ok(view.options.length >= 2, 'a 30A 10ft 24V run must have more than one passing size')
+  assert.ok(view.options.every(o => /AWG$/.test(o)))
+  assert.ok(view.sources.some(s => /310\.16/.test(s)))
+  assert.equal(view.empty, null)
+})
+
+test('conductor view says so when nothing passes', () => {
+  const view = conductorProtectionView({ ...awgInput, amps: 400, maxDropPercent: 1, volts: 12 })
+  assertProtectionView(view)
+  assert.equal(view.options.length, 0)
+  assert.ok(view.empty && view.empty.length > 40)
+})
+
+test('OCPD view is the set of standard ratings that fit, not one device', () => {
+  const ocpd = sizeOvercurrent({ amps: 20, continuous: true, kind: 'general', awg: 10, column: 75 })
+  assert.ok(ocpd && !ocpd.impossible)
+  const view = ocpdProtectionView(ocpd)
+  assertProtectionView(view)
+  assert.ok(view.options.length >= 1)
+  assert.ok(view.options.every(o => /^\d+ A$/.test(o)))
+  assert.ok(view.sources.some(s => /240\.6/.test(s)))
+})
+
+test('OCPD view refuses to invent a device when the conductor cannot be protected', () => {
+  const ocpd = sizeOvercurrent({ amps: 40, continuous: true, kind: 'general', awg: 14, column: 75 })
+  assert.ok(ocpd && ocpd.impossible)
+  const view = ocpdProtectionView(ocpd)
+  assertProtectionView(view)
+  assert.equal(view.options.length, 0)
+  assert.match(view.empty ?? '', /thicker cable/i)
+})
+
+test('lithium cutoff options are the BMS, not a voltage', () => {
+  const view = cutoffProtectionView('lifepo4', 12)
+  assertProtectionView(view)
+  assert.deepEqual(view.options, ['Use the BMS or percent remaining'])
+  assert.ok(view.options.every(o => !/\d/.test(o) || !/V/.test(o)))
+  // The resting floor lives in the derivation, labelled as already-near-empty.
+  assert.ok(view.steps.some(s => /12\.8/.test(s.body)))
+  assert.ok(view.sources.some(s => /depth-of-discharge/.test(s)))
+})
+
+test('lead-acid cutoff options are a resting band, not a live setpoint', () => {
+  const view = cutoffProtectionView('agm', 24)
+  assertProtectionView(view)
+  assert.equal(view.options.length, 1)
+  assert.match(view.options[0], /24\.2–24\.4V at rest/)
+  assert.ok(view.steps.some(s => /sags/i.test(s.body)))
+  assert.ok(!/\brecommended\b/i.test(view.options.join(' ')))
+})
+
+test('assertProtectionView rejects a "recommended" headline', () => {
+  assert.throws(() => assertProtectionView({
+    id: 'conductor-gauge',
+    title: 'Recommended gauge',
+    options: ['10 AWG'],
+    empty: null,
+    steps: [{ title: 'x', body: 'y' }],
+    sources: ['NEC'],
+  }), /recommended/i)
+})

@@ -7,12 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
+import { RegisterBadge } from '@/components/ProtectionOutput'
 import {
   PRESET_GROUPS, rowDailyWh, totalDailyKwh, normalizeDuty, suggestedDuty, DUTY_CYCLE_SOURCE,
   breakdownByProfile, LOAD_PROFILES, DEFAULT_PROFILE, suggestedProfile,
+  coolingShare, heatingShare,
   type Preset, type LoadProfile,
 } from '@/lib/appliance-load'
 import { energyChain, DEFAULTS as EFF } from '@/lib/system-efficiency'
+import {
+  weatherAdjustedDailyKwh, roundKwh,
+  DEFAULT_OVERCAST_FACTOR, DEFAULT_COLD_FACTOR,
+} from '@/lib/battery-scenarios'
 
 interface Appliance {
   id: number
@@ -115,8 +121,23 @@ export default function LoadCalculatorPage() {
   // inverter stage only; battery round-trip and array losses belong to the
   // pages that actually pay them.
   const breakdown = breakdownByProfile(appliances)
+  const cooling = coolingShare(breakdown)
+  const heating = heatingShare(breakdown)
+  const greyKwh = weatherAdjustedDailyKwh({
+    typicalKwh: totalKwh,
+    coolingShare: cooling,
+    heatingShare: heating,
+    overcastFactor: DEFAULT_OVERCAST_FACTOR,
+    coldFactor: DEFAULT_COLD_FACTOR,
+  })
   const chain = energyChain({ rawKwh: totalKwh, inverter: efficiency })
+  const greyChain = energyChain({ rawKwh: greyKwh, inverter: efficiency })
   const adjustedKwh = chain.fromBatteryKwh
+  const loadMin = Math.min(totalKwh, greyKwh)
+  const loadMax = Math.max(totalKwh, greyKwh)
+  const deliverMin = Math.min(chain.fromBatteryKwh, greyChain.fromBatteryKwh)
+  const deliverMax = Math.max(chain.fromBatteryKwh, greyChain.fromBatteryKwh)
+  const loadSpreads = Math.abs(greyKwh - totalKwh) > 0.05 * Math.max(totalKwh, 0.01)
 
   // Publish the result so the battery and panel calculators can pick it up.
   useEffect(() => {
@@ -148,8 +169,9 @@ export default function LoadCalculatorPage() {
         </div>
         <h1 className="text-3xl font-bold mb-2">Load Calculator</h1>
         <p className="text-gray-600">
-          Add every appliance you want to run. The total daily kWh is the foundation
-          for sizing your battery bank and solar panels.
+          Add every appliance you want to run. Daily kWh is the foundation for
+          sizing your battery bank and solar panels — shown as a band when weather
+          moves the load, not as a number more precise than the inputs.
         </p>
       </div>
 
@@ -202,7 +224,7 @@ export default function LoadCalculatorPage() {
                             <input
                               type="number"
                               value={a.watts || ''}
-                              onChange={e => update(a.id, 'watts', parseFloat(e.target.value) || 0)}
+                              onChange={e => update(a.id, 'watts', Math.max(0, parseFloat(e.target.value) || 0))}
                               aria-label={a.name ? `Watts for ${a.name}` : 'Watts'}
                               className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0"
@@ -212,7 +234,7 @@ export default function LoadCalculatorPage() {
                             <input
                               type="number"
                               value={a.hours || ''}
-                              onChange={e => update(a.id, 'hours', parseFloat(e.target.value) || 0)}
+                              onChange={e => update(a.id, 'hours', Math.min(24, Math.max(0, parseFloat(e.target.value) || 0)))}
                               aria-label={a.name ? `Hours per day for ${a.name}` : 'Hours per day'}
                               className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="0" max="24" step="0.5"
@@ -264,7 +286,7 @@ export default function LoadCalculatorPage() {
                             <input
                               type="number"
                               value={a.qty || ''}
-                              onChange={e => update(a.id, 'qty', parseInt(e.target.value) || 1)}
+                              onChange={e => update(a.id, 'qty', Math.max(1, parseInt(e.target.value) || 1))}
                               aria-label={a.name ? `Quantity of ${a.name}` : 'Quantity'}
                               className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-9 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-yellow-400 rounded px-1"
                               min="1"
@@ -313,7 +335,9 @@ export default function LoadCalculatorPage() {
                         Total daily consumption
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-yellow-700 whitespace-nowrap">
-                        {totalKwh.toFixed(2)} kWh
+                        {loadSpreads
+                          ? `${roundKwh(loadMin)}–${roundKwh(loadMax)} kWh`
+                          : `${roundKwh(totalKwh)} kWh`}
                       </td>
                       <td />
                     </tr>
@@ -452,17 +476,37 @@ export default function LoadCalculatorPage() {
         <div className="space-y-4">
           <Card className="border-yellow-200 bg-yellow-50">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Zap className="w-4 h-4 text-yellow-600" />
-                Daily consumption
+              <CardTitle className="flex items-center justify-between gap-2 text-base">
+                <span className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-yellow-600" />
+                  Daily consumption
+                </span>
+                <RegisterBadge register="capacity" />
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Raw load</p>
-                <p className="text-2xl font-bold text-yellow-700">{totalKwh.toFixed(2)} kWh</p>
-                <p className="text-xs text-gray-500">{Math.round(totalKwh * 1000)} Wh</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                  {loadSpreads ? 'Daily load (band)' : 'Typical day'}
+                </p>
+                <p className="text-2xl font-bold text-yellow-700">
+                  {loadSpreads
+                    ? `${roundKwh(loadMin)}–${roundKwh(loadMax)} kWh`
+                    : `${roundKwh(totalKwh)} kWh`}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {loadSpreads
+                    ? `Typical ${roundKwh(totalKwh)} kWh · grey/cold day ${roundKwh(greyKwh)} kWh`
+                    : `${Math.round(totalKwh * 1000)} Wh · duty-cycle estimate, not a measurement`}
+                </p>
               </div>
+              {loadSpreads && (
+                <p className="text-xs text-gray-500">
+                  {heating > cooling
+                    ? 'Heating runs harder on a cold grey day, so the top of the band is the day you actually care about.'
+                    : 'Cooling runs less on an overcast day, so the bottom of the band is a grey day and the top is a typical one.'}
+                </p>
+              )}
 
               <div className="border-t pt-3">
                 <div className="flex items-center justify-between mb-1">
@@ -484,7 +528,11 @@ export default function LoadCalculatorPage() {
 
               <div className="border-t pt-3 bg-white rounded-lg p-3">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Battery must deliver</p>
-                <p className="text-3xl font-bold text-gray-900">{adjustedKwh.toFixed(2)} kWh</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {loadSpreads
+                    ? `${roundKwh(deliverMin)}–${roundKwh(deliverMax)} kWh`
+                    : `${roundKwh(adjustedKwh)} kWh`}
+                </p>
                 <p className="text-xs text-gray-500">
                   What the bank has to supply each day, after inverter losses. Your panels
                   need more than this — they also pay battery round-trip and array losses,

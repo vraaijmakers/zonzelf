@@ -159,6 +159,24 @@ export interface BatterySummary {
 
 export const BATTERY_SUMMARY_KEY = 'zonzelf:battery:summary'
 
+/**
+ * What the panel calculator publishes so the battery page can check whether
+ * the array actually refills the bank. Absent until the user has visited
+ * the panel calculator.
+ */
+export interface PanelSummary {
+  peakSunHours: number
+  worstMonthHours: number
+  worstMonthName: string
+  /** Installed nameplate watts after rounding up to a whole number of panels. */
+  arrayWatts: number
+  arrayDerate: number
+  panelWatt: number
+  panels: number
+}
+
+export const PANEL_SUMMARY_KEY = 'zonzelf:panels:summary'
+
 /** The result the load calculator last published, or null if it was never used. */
 export function useLoadSummary(): LoadSummary | null {
   const [summary] = usePersistentState<LoadSummary | null>(LOAD_SUMMARY_KEY, null)
@@ -177,6 +195,15 @@ export function useBatterySummary(): BatterySummary | null {
 
 export function publishBatterySummary(summary: BatterySummary) {
   writeStored(BATTERY_SUMMARY_KEY, summary)
+}
+
+export function usePanelSummary(): PanelSummary | null {
+  const [summary] = usePersistentState<PanelSummary | null>(PANEL_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishPanelSummary(summary: PanelSummary) {
+  writeStored(PANEL_SUMMARY_KEY, summary)
 }
 
 export const round2 = (n: number) => Math.round(n * 100) / 100

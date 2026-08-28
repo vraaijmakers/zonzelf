@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildScenarios, scenarioRange, roundBank, defaultOvernightShare,
+  buildScenarios, scenarioRange, roundBank, roundKwh, defaultOvernightShare,
+  weatherAdjustedDailyKwh, DEFAULT_OVERCAST_FACTOR, DEFAULT_COLD_FACTOR,
 } from '../battery-scenarios'
 
 const base = {
@@ -177,6 +178,26 @@ test('the cold factor can never behave like suppression', () => {
   assert.ok(sabotage[1].energyKwh >= base.dailyDeliveredKwh)
   const absurd = buildScenarios({ ...base, heatingShare: 1, coldFactor: 99 })
   assert.ok(absurd[1].energyKwh <= base.dailyDeliveredKwh * 4, 'capped so a slider cannot run away')
+})
+
+test('weatherAdjustedDailyKwh is the same maths the scenarios use', () => {
+  const typical = 10
+  const adjusted = weatherAdjustedDailyKwh({
+    typicalKwh: typical, coolingShare: 0.5, overcastFactor: DEFAULT_OVERCAST_FACTOR,
+    heatingShare: 0.2, coldFactor: DEFAULT_COLD_FACTOR,
+  })
+  // 0.3 neutral + 0.5*0.4 + 0.2*1.5 = 0.3 + 0.2 + 0.3 = 0.8
+  assert.ok(Math.abs(adjusted - 8) < 1e-9, `got ${adjusted}`)
+  const [ , oneDay] = buildScenarios({
+    ...base, dailyDeliveredKwh: typical, coolingShare: 0.5, overcastFactor: 0.4,
+    heatingShare: 0.2, coldFactor: 1.5,
+  })
+  assert.equal(oneDay.energyKwh, adjusted)
+})
+
+test('roundKwh is the same function as roundBank', () => {
+  assert.equal(roundKwh(4.31), roundBank(4.31))
+  assert.equal(roundKwh(0), 0)
 })
 
 test('cooling and heating shares cannot together exceed the whole load', () => {
