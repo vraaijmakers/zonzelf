@@ -47,6 +47,7 @@ import {
   AWG_SPECS, awgLabel, usableAmpacity, sizingFactor,
   type AwgSpec, type TempColumn, type CircuitKind,
 } from './awg'
+import type { ProtectionView } from './calc-register'
 
 export { sizingFactor, type CircuitKind }
 
@@ -143,3 +144,45 @@ export const OCPD_SOURCES = {
  */
 export const DC_RATING_WARNING =
   'On the DC side the device must be rated for DC at your system voltage. An AC-only breaker of the right amperage will still fail to break a DC fault, because DC never crosses zero to help the arc go out. Look for a DC voltage rating on the device itself, not just an amp rating.'
+
+/**
+ * Protection-register view of fuse/breaker sizing. The headline is the set of
+ * standard ratings that fit between the two bounds, not a single device.
+ */
+export function ocpdProtectionView(ocpd: OcpdResult): ProtectionView {
+  const sources = [OCPD_SOURCES.standard, OCPD_SOURCES.continuous, OCPD_SOURCES.smallConductor]
+  if (ocpd.impossible) {
+    return {
+      id: 'ocpd-rating',
+      title: `Fuse or breaker for ${ocpd.conductorLabel} AWG`,
+      options: [],
+      empty:
+        `No standard device can protect ${ocpd.conductorLabel} AWG at this load. ` +
+        `It would need at least ${ocpd.minimumAmps.toFixed(1)}A, but the conductor may not ` +
+        `be protected above ${ocpd.maximumAmps}A. The answer is thicker cable, never a bigger breaker.`,
+      steps: [],
+      sources,
+    }
+  }
+  return {
+    id: 'ocpd-rating',
+    title: `Fuse or breaker for ${ocpd.conductorLabel} AWG`,
+    options: ocpd.allowed.map(a => `${a} A`),
+    empty: null,
+    steps: [
+      {
+        title: 'Not below',
+        body:
+          `${ocpd.minimumAmps.toFixed(1)}A — ${ocpd.factor}× the operating current. ${ocpd.factorReason}.`,
+      },
+      {
+        title: 'Not above',
+        body:
+          `${ocpd.maximumAmps}A — what ${ocpd.conductorLabel} AWG can carry` +
+          (ocpd.ceilingIsSmallConductorRule ? ', capped by the small-conductor rule' : '') +
+          '. Above this the wire becomes the fuse.',
+      },
+    ],
+    sources,
+  }
+}
