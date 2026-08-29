@@ -20,7 +20,7 @@ import {
   cutoffProtectionView, roundTripMidpoint, type ChemistryId,
 } from '@/lib/battery-chemistry'
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
-import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
+import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { createClient } from '@/lib/supabase/client'
 
 type BatteryModelMatch = {
@@ -228,35 +228,254 @@ export default function BatterySizingPage() {
     [allModels, voltage]
   )
 
+  // What the sticky strip shows once the answer card scrolls away. The rows
+  // make the scenario switchable from anywhere on the page — that choice is
+  // what the model counts below are computed against, so being able to change
+  // it without scrolling back up is the point.
+  const answerSummary = {
+    headline: `${roundBank(band.min)}–${roundBank(band.max)} kWh`,
+    detail: `for ${chosen.label.toLowerCase()} · ${roundBank(chosen.bankKwh)} kWh`,
+    rows: scenarios.map(sc => ({
+      id: sc.id,
+      label: sc.label,
+      value: `${roundBank(sc.bankKwh)} kWh`,
+      sub: `delivers ${sc.energyKwh.toFixed(1)} kWh · ${Math.round(sc.bankAh)} Ah`,
+      selected: sizeFor === sc.id,
+      onSelect: () => setSizeFor(sc.id),
+    })),
+  }
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
-      <div className="mb-8">
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-          <Link href="/calculators" className="hover:underline">Calculators</Link>
-          <span>›</span>
-          <span>Battery Sizing</span>
-        </div>
-        <h1 className="text-3xl font-bold mb-2">Battery Bank Sizing</h1>
-        <p className="text-gray-600">
-          How much battery storage do you need? Enter your daily consumption, how many days
-          of backup you want, and your battery chemistry.
-        </p>
-        <p className="text-sm text-gray-500 mt-2">
+    <CalculatorChrome
+      step="battery"
+      title="Battery Bank Sizing"
+      lede="How much battery storage do you need? Enter your daily consumption, how many days of backup you want, and your battery chemistry."
+      note={
+        <>
           This sizes storage capacity (kWh) — not the charging current from your panels or the
           cable/controller amp ratings. See{' '}
-          <Link href="/guides/how-it-works" className="text-yellow-700 hover:underline">
+          <Link href="/guides/how-it-works" className="text-zon-gold-deep hover:underline">
             how a solar system actually works
           </Link>{' '}
           for how charging and supplying the house fit together.
+        </>
+      }
+      answer={answerSummary}
+      actionSummary={
+        <p className="flex items-baseline gap-2 text-sm text-zon-muted">
+          Sizing for
+          <span className="font-semibold text-zon-ink">{chosen.label.toLowerCase()}</span>·
+          <span className="font-bold tabular-nums text-zon-gold-deep">
+            {roundBank(chosen.bankKwh)} kWh
+          </span>
         </p>
+      }
+    >
+      {/* The answer, and what it buys, both full width and both above the
+          inputs. The product list is the only part of this page with money
+          attached, and it was in a 400px strip beside a column that ran out of
+          content halfway down. Order matches the phone: answer, products, then
+          the controls that move them. */}
+      <AnswerAnchor>
+        <Card className="border-zon-gold-light bg-zon-gold-tint">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <Battery className="w-4 h-4 text-zon-gold-deep" />
+                How big a bank?
+              </span>
+              <RegisterBadge register="capacity" />
+            </CardTitle>
+          </CardHeader>
+          {/* Three columns at full width: what you need, what you are sizing
+              for, and what that assumed. Stacked below lg. */}
+          <CardContent className="space-y-4 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,0.9fr)] lg:gap-7 lg:space-y-0">
+            <div>
+              <p className="text-xs text-zon-muted uppercase tracking-wide mb-1">
+                Depending on what you want it to survive
+              </p>
+              <p className="text-2xl font-bold text-zon-gold-deep">
+                {roundBank(band.min)}–{roundBank(band.max)} kWh
+              </p>
+              <p className="text-sm text-zon-muted">
+                {Math.round((band.min * 1000) / voltage)}–{Math.round((band.max * 1000) / voltage)} Ah
+                {' '}at {voltage}V · {Math.round(battery.dod * 100)}% DoD
+              </p>
+            </div>
+
+            <div className="border-t pt-3 space-y-3 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0">
+              {scenarios.map(sc => (
+                <button
+                  key={sc.id}
+                  onClick={() => setSizeFor(sc.id)}
+                  aria-pressed={sizeFor === sc.id}
+                  className={`w-full text-left rounded-lg p-2 -mx-2 transition-colors ${
+                    sizeFor === sc.id ? 'bg-zon-gold-tint ring-1 ring-zon-gold-light' : 'hover:bg-zon-rule-soft'
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm font-medium text-zon-ink">{sc.label}</span>
+                    <span className="text-base font-bold text-zon-ink whitespace-nowrap tabular-nums">
+                      {roundBank(sc.bankKwh)} kWh
+                    </span>
+                  </div>
+                  <p className="text-xs text-zon-muted leading-relaxed">{sc.meaning}</p>
+                  <p className="text-xs text-zon-muted tabular-nums">
+                    delivers {sc.energyKwh.toFixed(1)} kWh · {Math.round(sc.bankAh)} Ah
+                  </p>
+                </button>
+              ))}
+              <p className="text-xs text-zon-muted pt-1">
+                Pick one — the real battery models below are counted against it.
+              </p>
+              {cooling > 0.01 && heating > 0.01 && (
+                <div className="mt-2 rounded-lg border border-zon-blue-tint bg-zon-blue-tint p-3">
+                  <p className="text-xs text-zon-body leading-relaxed">
+                    <strong>You have listed both cooling and heating.</strong> These scenarios
+                    describe a single day, and a day that is both hot enough for air
+                    conditioning and cold enough for heating does not happen — so the sunless
+                    figure here blends two seasons that never overlap. Size for whichever season
+                    is harder on your system, and list only that season&apos;s loads while you do.
+                    A heat pump that both heats and cools is two entries, not one.
+                  </p>
+                </div>
+              )}
+              {correlatedRisk && (
+                <div className="mt-2 rounded-lg border border-zon-amber-tint bg-zon-amber-tint p-3">
+                  <p className="text-xs text-zon-body leading-relaxed">
+                    <strong>Your worst weather and your highest demand arrive together.</strong>{' '}
+                    A heating-dominated system has no slack in it: a cold, dark, still week is
+                    maximum load and minimum generation at the same time. Size against the
+                    multi-day figure, not the optimistic one — a cooling-dominated system in a
+                    hot climate forgives an undersized bank, because grey days are also cool
+                    days. This one does not.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-3 text-xs text-zon-muted space-y-1 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0">
+              <div className="flex justify-between">
+                <span>Daily use</span>
+                <span className="font-medium text-zon-body">{dailyKwh} kWh</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Days of autonomy</span>
+                <span className="font-medium text-zon-body">{days}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Used after dark</span>
+                <span className="font-medium text-zon-body">{Math.round(overnightShare * 100)}% of {darkHours}h</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Max depth of discharge</span>
+                <span className="font-medium text-zon-body">{Math.round(battery.dod * 100)}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span>System voltage</span>
+                <span className="font-medium text-zon-body">{voltage}V</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </AnswerAnchor>
+
+      <div className="mt-4">
+        <Card>
+          <CardHeader className="pb-2">
+            {/* The sub-line was a flex sibling of the title, so in the rail it
+                sat beside it and squeezed both. It belongs underneath. */}
+            <CardTitle className="text-base">
+              <span className="flex items-center gap-2">
+                <Battery className="h-4 w-4 shrink-0 text-zon-gold-deep" aria-hidden="true" />
+                Batteries that add up to {roundBank(chosen.bankKwh)} kWh
+              </span>
+              <span className="mt-1 block text-xs font-normal text-zon-muted">
+                {voltage}V {battery.name} · counted for{' '}
+                <strong className="font-medium text-zon-body">{chosen.label.toLowerCase()}</strong>
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {modelsLoading ? (
+              <p className="text-sm text-zon-muted">Loading published battery models…</p>
+            ) : matchingModels.length === 0 ? (
+              <p className="text-sm text-zon-muted">
+                No published {voltage}V {battery.name} models yet — this list grows as scraped
+                models are reviewed and published.
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {matchingModels.map(m => {
+                  const units = Math.ceil(chosen.bankKwh / m.capacity_kwh)
+                  const totalPrice = m.price_usd != null ? units * m.price_usd : null
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex h-full flex-col gap-3 rounded-xl border border-zon-rule p-4 transition-colors hover:border-zon-gold-light"
+                    >
+                      <div className="min-w-0">
+                        {/* Clamped so every card on the shelf is the same
+                            height; the full name is on the title attribute. */}
+                        <p
+                          title={`${m.brand} ${m.model}`}
+                          className="line-clamp-2 text-sm font-medium text-zon-ink"
+                        >
+                          {m.brand} {m.model}
+                        </p>
+                        <p className="mt-1 text-xs tabular-nums text-zon-muted">
+                          {m.voltage}V · {m.capacity_ah}Ah · {m.capacity_kwh} kWh each
+                        </p>
+                      </div>
+
+                      <div className="mt-auto flex items-end justify-between gap-3 border-t border-zon-rule-soft pt-3">
+                        <div className="flex min-w-0 flex-col">
+                          <span className="text-[11px] uppercase tracking-wide text-zon-muted">
+                            You need
+                          </span>
+                          <span className="text-lg font-bold leading-tight tabular-nums text-zon-ink">
+                            {units}{' '}
+                            <span className="text-sm font-medium text-zon-body">
+                              {units === 1 ? 'unit' : 'units'}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="flex min-w-0 flex-col items-end text-right">
+                          {totalPrice != null ? (
+                            <>
+                              <span className="text-[11px] uppercase tracking-wide text-zon-muted">
+                                Together
+                              </span>
+                              <span className="text-lg font-bold leading-tight tabular-nums text-zon-gold-deep">
+                                ~${totalPrice.toLocaleString()}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-zon-muted">Price not published</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <a
+                        href={m.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold text-zon-gold-deep ring-1 ring-zon-gold-light transition-colors hover:bg-zon-gold-tint"
+                      >
+                        View the spec sheet
+                        <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      </a>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <CalculatorDisclaimer />
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-5">
-
-          {/* Inputs */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+        <div className="min-w-0 space-y-5 lg:col-span-3">
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
@@ -270,17 +489,17 @@ export default function BatterySizingPage() {
                     value={dailyKwh}
                     onChange={e => setDailyKwh(Math.max(0, parseFloat(e.target.value) || 0))}
                     step="0.1" min="0"
-                    className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    className="w-28 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
                   />
-                  <span className="text-sm text-gray-500">kWh/day</span>
-                  <Link href="/calculators/load" className="text-xs text-yellow-700 hover:underline ml-auto">
+                  <span className="text-sm text-zon-muted">kWh/day</span>
+                  <Link href="/calculators/load" className="text-xs text-zon-gold-deep hover:underline ml-auto">
                     Calculate from appliances →
                   </Link>
                 </div>
                 {fromLoadCalc !== null && Math.abs(fromLoadCalc - dailyKwh) > 0.01 && (
                   <button
                     onClick={() => setDailyKwh(fromLoadCalc)}
-                    className="mt-2 text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1 hover:bg-yellow-100 transition-colors"
+                    className="mt-2 text-xs text-zon-gold-deep bg-zon-gold-tint border border-zon-gold-light rounded-full px-3 py-1 hover:bg-zon-gold-tint transition-colors"
                   >
                     Use {fromLoadCalc.toFixed(2)} kWh from your load calculator →
                   </button>
@@ -290,11 +509,11 @@ export default function BatterySizingPage() {
               <div role="group" aria-labelledby="battery-days-label">
                 <span id="battery-days-label" className="block text-sm font-medium mb-1">
                   Days of autonomy
-                  <span className="ml-1 font-normal text-gray-400 text-xs">
+                  <span className="ml-1 font-normal text-zon-muted text-xs">
                     (days to run without sun)
                   </span>
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {[1, 2, 3, 5, 7].map(d => (
                     <button
                       key={d}
@@ -302,8 +521,8 @@ export default function BatterySizingPage() {
                       aria-pressed={days === d}
                       className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                         days === d
-                          ? 'bg-yellow-500 text-white border-yellow-500'
-                          : 'border-gray-200 hover:border-yellow-300'
+                          ? 'bg-zon-gold text-zon-ink border-zon-gold'
+                          : 'border-zon-rule hover:border-zon-gold-light'
                       }`}
                     >
                       {d} {d === 1 ? 'day' : 'days'}
@@ -316,7 +535,7 @@ export default function BatterySizingPage() {
                     value={days}
                     onChange={e => setDays(Math.min(14, Math.max(1, parseInt(e.target.value) || 1)))}
                     min="1" max="14"
-                    className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
                   />
                 </div>
               </div>
@@ -331,15 +550,15 @@ export default function BatterySizingPage() {
                       aria-pressed={voltage === v}
                       className={`px-4 py-1.5 rounded-lg text-sm border transition-colors ${
                         voltage === v
-                          ? 'bg-yellow-500 text-white border-yellow-500'
-                          : 'border-gray-200 hover:border-yellow-300'
+                          ? 'bg-zon-gold text-zon-ink border-zon-gold'
+                          : 'border-zon-rule hover:border-zon-gold-light'
                       }`}
                     >
                       {v}V
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-zon-muted mt-1">
                   48V is recommended for systems above 2 kWh — lower current means thinner cables.
                 </p>
               </div>
@@ -355,11 +574,11 @@ export default function BatterySizingPage() {
                       type="number" min="0" max="24" step="1"
                       value={darkHours}
                       onChange={e => setDarkHours(Math.min(24, Math.max(0, parseFloat(e.target.value) || 0)))}
-                      className="w-20 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                      className="w-20 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
                     />
-                    <span className="text-sm text-gray-500">hours</span>
+                    <span className="text-sm text-zon-muted">hours</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-zon-muted mt-1">
                     Sunset to sunrise, for the time of year you care about. This varies far more
                     than people expect — in the Netherlands it is about 8 hours in June and 16 in
                     December. Size on a summer night and December will disappoint you.
@@ -369,16 +588,16 @@ export default function BatterySizingPage() {
                 <div>
                   <label htmlFor="battery-overnight-share" className="block text-sm font-medium mb-1">
                     Share of daily use after dark:{' '}
-                    <span className="text-yellow-700">{Math.round(overnightShare * 100)}%</span>
+                    <span className="text-zon-gold-deep">{Math.round(overnightShare * 100)}%</span>
                   </label>
                   <input
                     id="battery-overnight-share"
                     type="range" min="0" max="100" step="5"
                     value={Math.round(overnightShare * 100)}
                     onChange={e => setShareOverride(parseFloat(e.target.value) / 100)}
-                    className="w-full accent-yellow-500"
+                    className="w-full accent-zon-gold"
                   />
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-zon-muted mt-1">
                     {breakdown ? (
                       <>
                         Worked out from what you listed on the load calculator and when each
@@ -399,7 +618,7 @@ export default function BatterySizingPage() {
                         {' '}
                         <button
                           onClick={() => setShareOverride(null)}
-                          className="underline decoration-dotted hover:no-underline text-yellow-700"
+                          className="underline decoration-dotted hover:no-underline text-zon-gold-deep"
                         >
                           reset to {Math.round(defaultOvernightShare(darkHours) * 100)}%
                         </button>
@@ -412,16 +631,16 @@ export default function BatterySizingPage() {
                   <div>
                     <label htmlFor="battery-overcast" className="block text-sm font-medium mb-1">
                       Weather-driven load on an overcast day:{' '}
-                      <span className="text-yellow-700">{Math.round(overcastFactor * 100)}%</span>
+                      <span className="text-zon-gold-deep">{Math.round(overcastFactor * 100)}%</span>
                     </label>
                     <input
                       id="battery-overcast"
                       type="range" min="0" max="100" step="5"
                       value={Math.round(overcastFactor * 100)}
                       onChange={e => setOvercastFactor(parseFloat(e.target.value) / 100)}
-                      className="w-full accent-yellow-500"
+                      className="w-full accent-zon-gold"
                     />
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-zon-muted mt-1">
                       {Math.round(cooling * 100)}% of your daily use is cooling. A sunless day is sunless because it is overcast,
                       which usually means cooler — so that load runs less on exactly the days you
                       have least sun. Sizing a bank as if it ran flat out through three grey days
@@ -435,16 +654,16 @@ export default function BatterySizingPage() {
                   <div>
                     <label htmlFor="battery-cold" className="block text-sm font-medium mb-1">
                       Heating load on a cold sunless day:{' '}
-                      <span className="text-yellow-700">{Math.round(coldFactor * 100)}%</span>
+                      <span className="text-zon-gold-deep">{Math.round(coldFactor * 100)}%</span>
                     </label>
                     <input
                       id="battery-cold"
                       type="range" min="100" max="300" step="10"
                       value={Math.round(coldFactor * 100)}
                       onChange={e => setColdFactor(parseFloat(e.target.value) / 100)}
-                      className="w-full accent-yellow-500"
+                      className="w-full accent-zon-gold"
                     />
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-zon-muted mt-1">
                       {Math.round(heating * 100)}% of your daily use is heating, and heating is
                       not cooling in reverse. It runs hardest through the coldest hours — at
                       night, with no sun — and it runs <em>more</em> on a cold grey day, not less.
@@ -474,10 +693,10 @@ export default function BatterySizingPage() {
             >
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Battery className="w-4 h-4 text-yellow-600" />
-                  Battery chemistry: <span className="text-yellow-700">{battery.name}</span>
+                  <Battery className="w-4 h-4 text-zon-gold-deep" />
+                  Battery chemistry: <span className="text-zon-gold-deep">{battery.name}</span>
                 </CardTitle>
-                {showTypes ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                {showTypes ? <ChevronUp className="w-4 h-4 text-zon-muted" /> : <ChevronDown className="w-4 h-4 text-zon-muted" />}
               </div>
             </CardHeader>
             {showTypes && (
@@ -488,8 +707,8 @@ export default function BatterySizingPage() {
                     onClick={() => { setSelectedType(b.id); setShowTypes(false) }}
                     className={`w-full text-left p-3 rounded-lg border transition-colors ${
                       selectedType === b.id
-                        ? 'border-yellow-400 bg-yellow-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-zon-gold-light bg-zon-gold-tint'
+                        : 'border-zon-rule hover:border-zon-rule'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -499,7 +718,7 @@ export default function BatterySizingPage() {
                         <Badge variant="secondary">{b.cycles} cycles</Badge>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-500">{b.notes}</p>
+                    <p className="text-xs text-zon-muted">{b.notes}</p>
                   </button>
                 ))}
               </CardContent>
@@ -507,111 +726,10 @@ export default function BatterySizingPage() {
           </Card>
         </div>
 
-        {/* Results */}
-        <div className="space-y-4">
-          <Card className="border-yellow-200 bg-yellow-50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2">
-                  <Battery className="w-4 h-4 text-yellow-600" />
-                  How big a bank?
-                </span>
-                <RegisterBadge register="capacity" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                  Depending on what you want it to survive
-                </p>
-                <p className="text-2xl font-bold text-yellow-700">
-                  {roundBank(band.min)}–{roundBank(band.max)} kWh
-                </p>
-                <p className="text-sm text-gray-500">
-                  {Math.round((band.min * 1000) / voltage)}–{Math.round((band.max * 1000) / voltage)} Ah
-                  {' '}at {voltage}V · {Math.round(battery.dod * 100)}% DoD
-                </p>
-              </div>
-
-              <div className="border-t pt-3 space-y-3">
-                {scenarios.map(sc => (
-                  <button
-                    key={sc.id}
-                    onClick={() => setSizeFor(sc.id)}
-                    aria-pressed={sizeFor === sc.id}
-                    className={`w-full text-left rounded-lg p-2 -mx-2 transition-colors ${
-                      sizeFor === sc.id ? 'bg-yellow-100/70 ring-1 ring-yellow-300' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-sm font-medium text-gray-800">{sc.label}</span>
-                      <span className="text-base font-bold text-gray-900 whitespace-nowrap tabular-nums">
-                        {roundBank(sc.bankKwh)} kWh
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed">{sc.meaning}</p>
-                    <p className="text-xs text-gray-400 tabular-nums">
-                      delivers {sc.energyKwh.toFixed(1)} kWh · {Math.round(sc.bankAh)} Ah
-                    </p>
-                  </button>
-                ))}
-                <p className="text-xs text-gray-400 pt-1">
-                  Pick one — the real battery models below are counted against it.
-                </p>
-                {cooling > 0.01 && heating > 0.01 && (
-                  <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
-                    <p className="text-xs text-blue-900 leading-relaxed">
-                      <strong>You have listed both cooling and heating.</strong> These scenarios
-                      describe a single day, and a day that is both hot enough for air
-                      conditioning and cold enough for heating does not happen — so the sunless
-                      figure here blends two seasons that never overlap. Size for whichever season
-                      is harder on your system, and list only that season&apos;s loads while you do.
-                      A heat pump that both heats and cools is two entries, not one.
-                    </p>
-                  </div>
-                )}
-                {correlatedRisk && (
-                  <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50 p-3">
-                    <p className="text-xs text-orange-900 leading-relaxed">
-                      <strong>Your worst weather and your highest demand arrive together.</strong>{' '}
-                      A heating-dominated system has no slack in it: a cold, dark, still week is
-                      maximum load and minimum generation at the same time. Size against the
-                      multi-day figure, not the optimistic one — a cooling-dominated system in a
-                      hot climate forgives an undersized bank, because grey days are also cool
-                      days. This one does not.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t pt-3 text-xs text-gray-500 space-y-1">
-                <div className="flex justify-between">
-                  <span>Daily use</span>
-                  <span className="font-medium text-gray-700">{dailyKwh} kWh</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Days of autonomy</span>
-                  <span className="font-medium text-gray-700">{days}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Used after dark</span>
-                  <span className="font-medium text-gray-700">{Math.round(overnightShare * 100)}% of {darkHours}h</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Max depth of discharge</span>
-                  <span className="font-medium text-gray-700">{Math.round(battery.dod * 100)}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>System voltage</span>
-                  <span className="font-medium text-gray-700">{voltage}V</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <ProtectionOutput view={cutoffView}>
             <p className="text-xs text-zon-muted">
-              <Link href="/guides/depth-of-discharge" className="hover:underline text-yellow-700">
+              <Link href="/guides/depth-of-discharge" className="hover:underline text-zon-gold-deep">
                 How deep can you drain a battery? →
               </Link>
             </p>
@@ -626,86 +744,16 @@ export default function BatterySizingPage() {
               worstHours={panelSummary.worstMonthHours}
             />
           ) : (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-zon-muted">
               The{' '}
-              <Link href="/calculators/panels" className="text-yellow-700 hover:underline">
+              <Link href="/calculators/panels" className="text-zon-gold-deep hover:underline">
                 panel calculator
               </Link>{' '}
               checks whether the array can actually refill this bank in the available sun.
             </p>
           )}
-
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Next step</p>
-            <Link
-              href="/calculators/panels"
-              className="flex items-center justify-between p-3 rounded-lg border hover:border-yellow-400 hover:bg-yellow-50 transition-colors"
-            >
-              <div>
-                <p className="text-sm font-medium">Panel sizing →</p>
-                <p className="text-xs text-gray-500">How many solar panels do you need?</p>
-              </div>
-              <Badge variant="secondary" className="text-xs">Step 3</Badge>
-            </Link>
-          </div>
         </div>
       </div>
-
-      <Card className="mt-6">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Battery className="w-4 h-4 text-yellow-600" />
-            Real battery models — {voltage}V {battery.name}
-            <span className="block text-xs font-normal text-gray-500 mt-0.5">
-              counted for <strong className="text-gray-700">{chosen.label.toLowerCase()}</strong> · {roundBank(chosen.bankKwh)} kWh
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {modelsLoading ? (
-            <p className="text-sm text-gray-400">Loading published battery models…</p>
-          ) : matchingModels.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              No published {voltage}V {battery.name} models yet — this list grows as scraped
-              models are reviewed and published.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {matchingModels.map(m => {
-                const units = Math.ceil(chosen.bankKwh / m.capacity_kwh)
-                const totalPrice = m.price_usd != null ? units * m.price_usd : null
-                return (
-                  <div
-                    key={m.id}
-                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 rounded-lg border border-gray-200"
-                  >
-                    <div>
-                      <a
-                        href={m.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm font-medium hover:underline inline-flex items-center gap-1"
-                      >
-                        {m.brand} {m.model}
-                        <ExternalLink className="w-3 h-3 text-gray-400" aria-hidden="true" />
-                      </a>
-                      <p className="text-xs text-gray-500">
-                        {m.voltage}V · {m.capacity_ah}Ah · {m.capacity_kwh} kWh each
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <Badge variant="secondary">You need {units}</Badge>
-                      <span className="text-sm text-gray-600">
-                        {totalPrice != null ? `~$${totalPrice.toLocaleString()}` : 'Price not published'}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    </CalculatorChrome>
   )
 }

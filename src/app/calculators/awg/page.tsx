@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { usePersistentState } from '@/lib/calc-storage'
-import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
+import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { Info } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -50,25 +49,89 @@ export default function AwgCalculatorPage() {
   const conductorView = conductorProtectionView(input)
   const ocpdView = ocpd ? ocpdProtectionView(ocpd) : null
 
+  // Protection register: the bar mirrors what ProtectionOutput already shows —
+  // the set of gauges that pass — never a single recommended one. A capacity
+  // answer can be a confident number in gold; this one cannot.
+  const answerSummary = {
+    headline: conductorView.options.length > 0
+      ? conductorView.options.slice(0, 3).join(' · ')
+      : 'none pass',
+    detail: conductorView.options.length > 0
+      ? `AWG that pass at ${amps}A over ${lengthFt}ft`
+      : `nothing passes at ${amps}A over ${lengthFt}ft`,
+  }
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
-      <div className="mb-8">
-        <div className="flex items-center gap-2 text-sm text-zon-muted mb-2">
-          <Link href="/calculators" className="hover:underline">Calculators</Link>
-          <span>›</span>
-          <span>AWG Calculator</span>
-        </div>
-        <h1 className="text-3xl font-bold mb-2 text-zon-ink">Cable AWG Calculator</h1>
-        <p className="text-zon-body">
-          Work out which cable sizes your run allows, and see exactly how each limit was
-          worked out. Enter the <strong>one-way</strong> length — the return wire is added for you.
+    <CalculatorChrome
+      step="protection"
+      title="Cable AWG Calculator"
+      lede="Work out which cable sizes your run allows, and see exactly how each limit was worked out. Enter the one-way length — the return wire is added for you."
+      answer={answerSummary}
+      actionSummary={
+        <p className="flex items-baseline gap-2 text-sm text-zon-muted">
+          Passing at {amps}A over {lengthFt}ft
+          <span className="font-mono font-semibold text-zon-ink">{answerSummary.headline}</span>
         </p>
-      </div>
+      }
+    >
+      <div className="grid gap-6 lg:grid-cols-5">
+        {/* Protection register — sets and arithmetic, never a verdict */}
+        <div className="order-first min-w-0 space-y-4 lg:order-last lg:col-span-2">
+          <AnswerAnchor>
+            <div className="lg:sticky lg:top-32 space-y-4">
+            <ProtectionOutput view={conductorView}>
+              {thinnest && (
+                <p className="text-xs text-zon-muted">
+                  Thicker is always electrically safer — it runs cooler and wastes less.
+                  Round trip is {Math.round(roundTripFt)}ft ({(roundTripFt * 0.3048).toFixed(1)}m).
+                </p>
+              )}
+              {byAmpsOnly && thinnest && byAmpsOnly.spec.awg !== thinnest.spec.awg && (
+                <p className="text-xs text-zon-body">
+                  On current alone, <span className="font-mono text-zon-ink">{byAmpsOnly.label} AWG</span>{' '}
+                  would do. Its drop would be{' '}
+                  <span className="tabular-nums">{byAmpsOnly.voltageDropPercent.toFixed(1)}%</span>,
+                  over your {maxDrop}% limit — so it is <strong>distance</strong>, not current,
+                  that rules out the thinner sizes.
+                </p>
+              )}
+            </ProtectionOutput>
 
-      <CalculatorDisclaimer />
+            {ocpdView && (
+              <ProtectionOutput view={ocpdView}>
+                {protectable && (
+                  <p className="text-xs text-zon-body">
+                    {awgLabel(protectable.awg)} AWG takes a{' '}
+                    <span className="tabular-nums">{protectable.rating}A</span> device.
+                  </p>
+                )}
+                {!ocpd?.impossible && (
+                  <p className="text-xs text-zon-muted">
+                    Smallest is usual — a larger device still protects the wire but trips later
+                    into a fault.
+                  </p>
+                )}
+                <p className="text-xs text-zon-muted">
+                  NEC 240.4(B) may permit the next size above the conductor ampacity under
+                  conditions this page cannot check. That is an electrician&apos;s call, not a
+                  default — nothing here exceeds what the wire can carry.
+                </p>
+              </ProtectionOutput>
+            )}
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-5">
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex gap-2 text-xs text-zon-body">
+                  <Info className="w-4 h-4 shrink-0 text-zon-blue mt-0.5" aria-hidden="true" />
+                  <p><strong className="text-zon-ink">DC needs a DC-rated device.</strong> {DC_RATING_WARNING}</p>
+                </div>
+              </CardContent>
+            </Card>
+            </div>
+          </AnswerAnchor>
+        </div>
+
+        <div className="min-w-0 space-y-5 lg:col-span-3">
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
@@ -266,59 +329,7 @@ export default function AwgCalculatorPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Protection register — sets and arithmetic, never a verdict */}
-        <div className="space-y-4">
-          <ProtectionOutput view={conductorView}>
-            {thinnest && (
-              <p className="text-xs text-zon-muted">
-                Thicker is always electrically safer — it runs cooler and wastes less.
-                Round trip is {Math.round(roundTripFt)}ft ({(roundTripFt * 0.3048).toFixed(1)}m).
-              </p>
-            )}
-            {byAmpsOnly && thinnest && byAmpsOnly.spec.awg !== thinnest.spec.awg && (
-              <p className="text-xs text-zon-body">
-                On current alone, <span className="font-mono text-zon-ink">{byAmpsOnly.label} AWG</span>{' '}
-                would do. Its drop would be{' '}
-                <span className="tabular-nums">{byAmpsOnly.voltageDropPercent.toFixed(1)}%</span>,
-                over your {maxDrop}% limit — so it is <strong>distance</strong>, not current,
-                that rules out the thinner sizes.
-              </p>
-            )}
-          </ProtectionOutput>
-
-          {ocpdView && (
-            <ProtectionOutput view={ocpdView}>
-              {protectable && (
-                <p className="text-xs text-zon-body">
-                  {awgLabel(protectable.awg)} AWG takes a{' '}
-                  <span className="tabular-nums">{protectable.rating}A</span> device.
-                </p>
-              )}
-              {!ocpd?.impossible && (
-                <p className="text-xs text-zon-muted">
-                  Smallest is usual — a larger device still protects the wire but trips later
-                  into a fault.
-                </p>
-              )}
-              <p className="text-xs text-zon-muted">
-                NEC 240.4(B) may permit the next size above the conductor ampacity under
-                conditions this page cannot check. That is an electrician&apos;s call, not a
-                default — nothing here exceeds what the wire can carry.
-              </p>
-            </ProtectionOutput>
-          )}
-
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex gap-2 text-xs text-zon-body">
-                <Info className="w-4 h-4 shrink-0 text-zon-blue mt-0.5" aria-hidden="true" />
-                <p><strong className="text-zon-ink">DC needs a DC-rated device.</strong> {DC_RATING_WARNING}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
-    </div>
+    </CalculatorChrome>
   )
 }
