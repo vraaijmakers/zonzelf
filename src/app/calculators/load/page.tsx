@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
@@ -310,7 +310,7 @@ export default function LoadCalculatorPage() {
                       <th className="text-left px-2 py-3 font-medium text-zon-body whitespace-nowrap">Runs</th>
                       <th className="text-right px-2 py-3 font-medium text-zon-body whitespace-nowrap">Duty</th>
                       <th className="text-right px-2 py-3 font-medium text-zon-body">Qty</th>
-                      <th className="text-right px-3 py-3 font-medium text-zon-body whitespace-nowrap">Wh/day</th>
+                      <th className="text-right px-2 py-3 font-medium text-zon-body whitespace-nowrap">Wh/day</th>
                       <th className="px-2 py-3"></th>
                     </tr>
                   </thead>
@@ -329,7 +329,7 @@ export default function LoadCalculatorPage() {
                         : undefined
                       return (
                         <tr key={a.id} className={`border-b ${i % 2 === 0 ? '' : 'bg-zon-rule-soft/50'}`}>
-                          <td className="px-3 py-2 min-w-[8rem]">
+                          <td className="px-3 py-2 min-w-[7rem]">
                             <input
                               type="text"
                               value={a.name}
@@ -368,17 +368,23 @@ export default function LoadCalculatorPage() {
                                 use {LOAD_PROFILES[betterProfile].label}
                               </button>
                             )}
-                            <select
-                              value={a.profile ?? DEFAULT_PROFILE}
-                              onChange={e => update(a.id, 'profile', e.target.value)}
-                              aria-label={a.name ? `When ${a.name} runs` : 'When this runs'}
-                              title={LOAD_PROFILES[a.profile ?? DEFAULT_PROFILE].hint}
-                              className="text-xs bg-transparent border-0 outline-none focus:ring-1 focus:ring-zon-gold-light rounded px-0 -ml-1 max-w-[4.75rem]"
-                            >
-                              {(Object.keys(LOAD_PROFILES) as LoadProfile[]).map(k => (
-                                <option key={k} value={k}>{LOAD_PROFILES[k].label}</option>
-                              ))}
-                            </select>
+                            <span className="relative -ml-1 inline-flex items-center">
+                              <select
+                                value={a.profile ?? DEFAULT_PROFILE}
+                                onChange={e => update(a.id, 'profile', e.target.value)}
+                                aria-label={a.name ? `When ${a.name} runs` : 'When this runs'}
+                                title={LOAD_PROFILES[a.profile ?? DEFAULT_PROFILE].hint}
+                                className="max-w-[4.75rem] appearance-none rounded border-0 bg-transparent pl-0 pr-3.5 text-xs outline-none focus:ring-1 focus:ring-zon-gold-light"
+                              >
+                                {(Object.keys(LOAD_PROFILES) as LoadProfile[]).map(k => (
+                                  <option key={k} value={k}>{LOAD_PROFILES[k].label}</option>
+                                ))}
+                              </select>
+                              <ChevronDown
+                                aria-hidden="true"
+                                className="pointer-events-none absolute right-0.5 h-3 w-3 text-zon-muted"
+                              />
+                            </span>
                           </td>
                           <td className="px-2 py-2">
                             {stale !== undefined && (
@@ -411,7 +417,7 @@ export default function LoadCalculatorPage() {
                               min="1"
                             />
                           </td>
-                          <td className="px-3 py-2 text-right font-medium text-zon-body whitespace-nowrap">
+                          <td className="px-2 py-2 text-right font-medium text-zon-body whitespace-nowrap">
                             {wh >= 1000
                               ? `${(wh / 1000).toFixed(2)} kWh`
                               : `${Math.round(wh)} Wh`}
