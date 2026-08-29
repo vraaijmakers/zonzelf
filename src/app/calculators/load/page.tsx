@@ -310,7 +310,7 @@ export default function LoadCalculatorPage() {
                       <th className="text-left px-2 py-3 font-medium text-zon-body whitespace-nowrap">Runs</th>
                       <th className="text-right px-2 py-3 font-medium text-zon-body whitespace-nowrap">Duty</th>
                       <th className="text-right px-2 py-3 font-medium text-zon-body">Qty</th>
-                      <th className="text-right px-3 py-3 font-medium text-zon-body whitespace-nowrap">Wh/day</th>
+                      <th className="text-right px-2 py-3 font-medium text-zon-body whitespace-nowrap">Wh/day</th>
                       <th className="px-2 py-3"></th>
                     </tr>
                   </thead>
@@ -329,7 +329,7 @@ export default function LoadCalculatorPage() {
                         : undefined
                       return (
                         <tr key={a.id} className={`border-b ${i % 2 === 0 ? '' : 'bg-zon-rule-soft/50'}`}>
-                          <td className="px-3 py-2 min-w-[8rem]">
+                          <td className="px-3 py-2 min-w-[7rem]">
                             <input
                               type="text"
                               value={a.name}
@@ -407,11 +407,11 @@ export default function LoadCalculatorPage() {
                               onChange={e => update(a.id, 'qty', Math.max(1, parseInt(e.target.value) || 1))}
                               onFocus={e => e.target.select()}
                               aria-label={a.name ? `Quantity of ${a.name}` : 'Quantity'}
-                              className="w-14 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-zon-gold-light rounded px-1"
+                              className="w-12 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-zon-gold-light rounded px-1"
                               min="1"
                             />
                           </td>
-                          <td className="px-3 py-2 text-right font-medium text-zon-body whitespace-nowrap">
+                          <td className="px-2 py-2 text-right font-medium text-zon-body whitespace-nowrap">
                             {wh >= 1000
                               ? `${(wh / 1000).toFixed(2)} kWh`
                               : `${Math.round(wh)} Wh`}
