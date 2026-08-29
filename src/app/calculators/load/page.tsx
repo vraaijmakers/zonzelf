@@ -532,25 +532,19 @@ export default function LoadCalculatorPage() {
                 <div className="w-12 h-12 bg-zon-gold-tint rounded-full flex items-center justify-center mx-auto mb-4">
                   <Camera className="w-6 h-6 text-zon-gold-deep" />
                 </div>
-                <h3 className="text-lg font-bold text-center mb-2">Label Scan — Pro Feature</h3>
+                <h3 className="text-lg font-bold text-center mb-2">Label Scan — not available yet</h3>
                 <p className="text-sm text-zon-body text-center mb-4">
-                  Walk around your home, photograph each appliance nameplate, and let ZonZelf read the wattage automatically — no guessing.
+                  The plan is to let you photograph each appliance nameplate and have ZonZelf read
+                  the wattage off it. It is not finished, and accounts are not open, so there is
+                  nothing to sign up for yet.
                 </p>
-                <ul className="text-sm text-zon-body space-y-1.5 mb-5">
-                  <li className="flex items-center gap-2"><span className="text-zon-green">✓</span> Works on any appliance nameplate</li>
-                  <li className="flex items-center gap-2"><span className="text-zon-green">✓</span> Reads BTU, SEER, amps×volts automatically</li>
-                  <li className="flex items-center gap-2"><span className="text-zon-green">✓</span> Mobile camera or desktop upload</li>
-                  <li className="flex items-center gap-2"><span className="text-zon-green">✓</span> Saves your load list to your project</li>
-                </ul>
-                <a
-                  href="/auth/signup"
-                  className="block w-full text-center bg-zon-gold-tint0 hover:bg-zon-gold-deep text-white font-medium py-2.5 rounded-lg transition-colors"
-                >
-                  Create a free account
-                </a>
+                <p className="text-sm text-zon-body text-center mb-5">
+                  Enter the wattage by hand for now — the presets below cover most appliances, and
+                  the calculator does not need an account.
+                </p>
                 <button
                   onClick={() => setShowProPrompt(false)}
-                  className="block w-full text-center text-sm text-zon-muted hover:text-zon-body mt-3"
+                  className="block w-full text-center bg-zon-gold hover:bg-zon-gold-deep text-zon-ink font-medium py-2.5 rounded-lg transition-colors"
                 >
                   Continue without scanning
                 </button>

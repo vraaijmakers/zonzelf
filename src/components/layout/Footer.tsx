@@ -37,7 +37,6 @@ export default function Footer() {
         <div>
           <h4 className="font-semibold text-sm mb-3 text-zon-ink">Account</h4>
           <ul className="space-y-2 text-sm text-zon-body">
-            <li><Link href="/auth/signup" className="hover:underline">Get started</Link></li>
             <li><Link href="/auth/login" className="hover:underline">Sign in</Link></li>
           </ul>
         </div>

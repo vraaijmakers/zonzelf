@@ -68,10 +68,16 @@ export default function PrivacyPage() {
 
       <Section title="Your rights">
         <p>
-          You can view and delete your project data from your dashboard, and request deletion
-          of your account and associated data at any time by contacting us. If you are in the
-          EU/EEA, you have rights under the GDPR, including access, correction, deletion, and
-          data portability.
+          ZonZelf is not opening accounts at the moment, so for almost every visitor there is no
+          account and no stored personal data to exercise rights over: the calculators and guides
+          run without one. There is no dashboard yet, and no self-service deletion flow — so
+          rather than promise one, we have closed sign-ups until it exists.
+        </p>
+        <p>
+          If you already hold an account from an earlier version of the site, you can request
+          access to or deletion of it and its associated data by contacting us, and we will
+          action it by hand. If you are in the EU/EEA, you have rights under the GDPR, including
+          access, correction, deletion, and data portability.
         </p>
       </Section>
 
