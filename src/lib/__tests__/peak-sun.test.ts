@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   PEAK_SUN_REGIONS, DEFAULT_ANNUAL, DEFAULT_WORST_MONTH,
-  normalizePeakSun, regionForAnnual, regionForHours, seasonalRatio, worstMonthIsSunnier,
+  highlightedRegion, normalizePeakSun, regionForAnnual, regionForHours, seasonalRatio,
+  worstMonthIsSunnier,
 } from '../peak-sun'
 
 test('every region has a worst month strictly below its annual figure', () => {
@@ -71,4 +72,18 @@ test('5.0h annual is not enough to name a region — Spain and Florida share it'
   assert.equal(regionForHours(5.0, 2.5)?.region, 'Spain / Italy (S)')
   assert.equal(regionForHours(5.0, 3.4)?.region, 'Florida (US)')
   assert.equal(regionForHours(5.0, 6), undefined)
+})
+
+test('one preset row highlights, never two — the 5.0h Spain/Florida collision', () => {
+  // The screenshot bug: 5h annual lit both Spain / Italy (S) and Florida.
+  assert.equal(highlightedRegion(5.0, 3.4)?.region, 'Florida (US)')
+  assert.equal(highlightedRegion(5.0, 2.5)?.region, 'Spain / Italy (S)')
+  // A custom worst month claims neither, so neither row takes the 5h.
+  assert.equal(highlightedRegion(5.0, 4.0), undefined)
+  // A unique annual figure still highlights on its own, custom worst month or not.
+  assert.equal(highlightedRegion(2.5, 4.0)?.region, 'Netherlands / Belgium')
+  // Clicking any preset highlights that preset and no other.
+  for (const r of PEAK_SUN_REGIONS) {
+    assert.equal(highlightedRegion(r.annual, r.worstMonth), r, `${r.region} must select itself`)
+  }
 })
