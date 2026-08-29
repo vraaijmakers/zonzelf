@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { sanitizeNextPath } from '@/lib/safe-redirect'
 
 export async function GET(request: Request) {
   const { searchParams, origin: rawOrigin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/'
+  const next = sanitizeNextPath(searchParams.get('next'))
 
   // Next's standalone server (see Dockerfile) reports request.url using its
   // own bind address (HOSTNAME=0.0.0.0, PORT=3000), not the host the client
