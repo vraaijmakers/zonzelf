@@ -164,7 +164,8 @@ were ever commercially *targeted*.
   reachability). No production host chosen yet. **Do not write "Vercel" here again without
   it actually being configured** — it was previously listed as hosting with nothing behind
   it (no `.vercel` dir, no deploy step in CI, no linked account) and misled a session.
-- CI: GitHub Actions (`ci.yml` — lint + build on every push/PR). Staging deploys
+- CI: GitHub Actions (`ci.yml` — lint, roadmap-migrations check, tests, and build on every
+  push/PR). Staging deploys
   automatically on push to `staging` via `deploy-staging.yml`, run by a self-hosted runner
   ("zonzelf-staging") on the seecago.com VPN box. See that workflow file's header comment
   for one-time runner setup, and `docker-compose.staging.yml`'s header for the app
@@ -399,9 +400,9 @@ closing the task. A passing type-check does not prove the page renders.
 
 ### 5. Regression prevention — verify before declaring done
 
-Before committing: `npm run build` and `npm run lint` must pass, and every page you touched
-must load without a console error. If a previously working feature breaks mid-session, stop
-all new work and restore it first. Never move on while a regression is live.
+Before committing: `npm run build`, `npm run lint`, and `npm test` must pass, and every page
+you touched must load without a console error. If a previously working feature breaks
+mid-session, stop all new work and restore it first. Never move on while a regression is live.
 
 ### 6. Two strikes, then look at runtime evidence
 
@@ -539,6 +540,7 @@ fails the Blue Ocean feature-creep test, say so before building it.
 npm run dev      # next dev — http://localhost:3000
 npm run build    # next build — must pass before any commit
 npm run lint     # eslint
+npm test         # node --test over src/lib/__tests__/*.test.ts — must pass before any commit
 npm start        # production server
 ```
 
@@ -553,15 +555,21 @@ npm start        # production server
   not always recover on its own — check `curl -sf http://localhost:3000` after clearing
   `.next` and restart the dev server if it doesn't respond. Prefer stopping the dev server
   before clearing `.next`.
-- **`npm run lint` is clean as of the `feature/claude-md-and-version` PR** — the 13
-  `react/no-unescaped-entities` errors that used to live in
-  `src/app/guides/batteries/page.tsx` are fixed. Two pre-existing warnings remain in
-  `src/app/calculators/load/page.tsx` (`no-unused-vars` on `CardDescription`, `PRESETS`) —
-  harmless, clean up when next touching that file. "Lint passes" now means **zero errors**;
-  CI (`.github/workflows/ci.yml`) enforces this on every PR.
+- **`npm run lint` is clean of errors** — the 13 `react/no-unescaped-entities` errors that
+  used to live in `src/app/guides/batteries/page.tsx` are fixed, and the two warnings that
+  were once in `src/app/calculators/load/page.tsx` are gone too. One unrelated warning
+  remains, in `src/app/guides/grounding/page.tsx` (`no-unused-vars` on `Link`) — harmless,
+  clean up when next touching that file. "Lint passes" means **zero errors**; CI
+  (`.github/workflows/ci.yml`) enforces this on every PR. Don't re-cite the old warning
+  locations above as today's baseline — check `npm run lint`'s actual output instead.
 
-There is **no test suite yet**. Until there is, "verified" means: the build passes, lint is
-clean, and the affected pages were opened and screenshotted. Do not claim more.
+There **is** a test suite: `src/lib/__tests__/*.test.ts`, run with `npm test`, gated in CI.
+It covers the pure calculation modules in `src/lib/` (peak sun, batteries, AWG, overcurrent,
+appliance load, system voltage/efficiency, recharge) — not components or pages. "Verified"
+means: `npm test` and `npm run lint` are clean, `npm run build` passes, and the affected pages
+were opened and screenshotted. New or changed logic in `src/lib/` gets a test in the same PR;
+new or changed UI still needs the screenshot — a passing test suite does not prove a page
+renders correctly. Do not claim more than you actually ran.
 
 ---
 
