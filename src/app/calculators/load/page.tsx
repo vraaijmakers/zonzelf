@@ -405,8 +405,9 @@ export default function LoadCalculatorPage() {
                               type="number"
                               value={a.qty || ''}
                               onChange={e => update(a.id, 'qty', Math.max(1, parseInt(e.target.value) || 1))}
+                              onFocus={e => e.target.select()}
                               aria-label={a.name ? `Quantity of ${a.name}` : 'Quantity'}
-                              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-9 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-zon-gold-light rounded px-1"
+                              className="w-14 text-right text-sm bg-transparent border-0 outline-none focus:ring-1 focus:ring-zon-gold-light rounded px-1"
                               min="1"
                             />
                           </td>
