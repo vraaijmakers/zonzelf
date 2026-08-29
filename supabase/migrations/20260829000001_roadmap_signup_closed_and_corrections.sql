@@ -1,0 +1,22 @@
+-- Closes the GDPR item by the "stop collecting emails" branch, and corrects two
+-- rows that had drifted from the code they describe:
+--   * the guides dead-link item, fixed by writing the pages, never marked done;
+--   * the scan-label item, which claimed `const isPro = false` was gone. It is not.
+--
+-- Keep in sync with supabase/seed.sql (CI enforces this).
+
+update public.roadmap_items
+  set status = 'in_test',
+      dev_percent_complete = 90,
+      description = 'Fixed by closing sign-ups — the second of the two branches this item offered, not the deletion flow. The nav links were never the mechanism: /auth/login and /auth/signup rendered the same LoginForm calling signInWithOtp with no shouldCreateUser option, which defaults to true, so signing in created an account for any address typed into it. Removing the signup links alone would have left collection running through the sign-in path and closed this item while the finding stayed live. LoginForm now passes shouldCreateUser: false and maps Supabase''s "Signups not allowed for otp" (422 otp_disabled, verified live against the project''s auth endpoint) to a message that reads as policy rather than a server fault. The four public entry points are gone — navbar desktop and mobile, footer, and the load calculator''s label-scan modal; sign-in is untouched. /auth/signup keeps its route, because it has been linked from three places and a bookmark should land on an explanation rather than a 404, but renders that explanation instead of a form: a form there would keep creating users. The privacy policy no longer promises that users can view and delete project data from a dashboard that does not exist; it states sign-ups are closed and that any pre-existing account is actioned by hand. NOT done, and deliberately so: there is still no self-service deletion path. This item is satisfied by having nothing to delete, not by having built one — so re-opening sign-ups requires building it first, and that dependency is the point of closing it this way.'
+  where title = 'GDPR: account deletion path, or stop collecting emails';
+
+update public.roadmap_items
+  set status = 'in_test',
+      dev_percent_complete = 100,
+      description = 'Fixed, by writing the missing pages rather than trimming the index. All seven slugs the guides index cards — how-it-works, batteries, depth-of-discharge, wiring, grounding, inverter-settings, glossary — resolve to a real src/app/guides/*/page.tsx. Verified 2026-08-29 by enumerating every internal /guides/* link across src/ and checking each against the directories on disk, so the footer links (wiring, grounding, glossary) and the battery guide''s two depth-of-discharge links resolve as well. The item sat at planned long after the work that closed it had shipped, because writing the guides dissolved it rather than anyone completing it as scoped. The production gate it set — do not index or footer-link a guide until its page exists — is met, and stays in force for new guides.'
+  where title = 'Fix /guides index dead links';
+
+update public.roadmap_items
+  set description = 'Fixed, deliberately not with a login wall: this route is called anonymously from the public load calculator, and calculators working without an account is core to the product, so "auth-gate" would break the feature it protects. Instead: an 8MB size cap (413), a MIME allowlist matching what Anthropic actually accepts — jpeg/png/webp/gif (415) — and an in-memory rate limit of 10 requests/hour per IP (429), process-local since staging and any near-term host run one container. All three verified live: a 9MB upload gets 413, an application/pdf upload gets 415, and the 11th request in an hour from one IP gets 429. CORRECTION (2026-08-29): this description previously claimed the stale `const isPro = false` UI text was gone from the current code. It is not — it is still at src/app/calculators/load/page.tsx, gating the label-scan button behind a Pro wall for a tier that does not exist, over a route that is open to anyone. The modal it opens no longer sells an account (sign-ups closed 2026-08-29) but the gate itself stands and needs a decision: drop it so the button works, or keep it and label it honestly. Also still open: the privacy policy discloses neither Anthropic nor the scan anywhere on the page, so it does not say that nameplate photos leave the site — household images are personal data under GDPR. That is copy, not code, and belongs with the other legal-page items.'
+  where title = 'Gate /api/scan-label (auth, rate limit, size, privacy)';
