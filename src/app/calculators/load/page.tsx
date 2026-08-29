@@ -196,9 +196,9 @@ export default function LoadCalculatorPage() {
         </p>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-5">
         {/* Results — first on a phone, right-hand rail on a desktop */}
-        <div className="order-first min-w-0 space-y-4 lg:order-last">
+        <div className="order-first min-w-0 space-y-4 lg:order-last lg:col-span-2">
           <AnswerAnchor>
             <div className="lg:sticky lg:top-32 space-y-4">
             <Card className="border-zon-gold-light bg-zon-gold-tint">
@@ -297,7 +297,7 @@ export default function LoadCalculatorPage() {
         {/* The appliance table. min-w-0 is what makes its overflow-x-auto
             wrapper actually work: without it the grid column stretches to the
             table's min-content and scrolls the whole page sideways instead. */}
-        <div className="min-w-0 space-y-4 lg:col-span-2">
+        <div className="min-w-0 space-y-4 lg:col-span-3">
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">

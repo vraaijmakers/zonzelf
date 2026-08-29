@@ -274,8 +274,8 @@ export default function BatterySizingPage() {
       {/* min-w-0 on both columns: a grid child defaults to min-width:auto, so
           without it the widest unbreakable row inside stretches the column and
           scrolls the whole page sideways on a phone. */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="order-first min-w-0 space-y-4 lg:order-last">
+      <div className="grid gap-6 lg:grid-cols-5">
+        <div className="order-first min-w-0 space-y-4 lg:order-last lg:col-span-2">
 
 
           {/* The answer, and the models it is counted against. First on a
@@ -387,11 +387,16 @@ export default function BatterySizingPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Battery className="w-4 h-4 text-zon-gold-deep" />
-                Real battery models — {voltage}V {battery.name}
-                <span className="block text-xs font-normal text-zon-muted mt-0.5">
-                  counted for <strong className="text-zon-body">{chosen.label.toLowerCase()}</strong> · {roundBank(chosen.bankKwh)} kWh
+              {/* The sub-line was a flex sibling of the title, so in the rail it
+                  sat beside it and squeezed both. It belongs underneath. */}
+              <CardTitle className="text-base">
+                <span className="flex items-center gap-2">
+                  <Battery className="h-4 w-4 shrink-0 text-zon-gold-deep" aria-hidden="true" />
+                  Batteries that add up to {roundBank(chosen.bankKwh)} kWh
+                </span>
+                <span className="mt-1 block text-xs font-normal text-zon-muted">
+                  {voltage}V {battery.name} · counted for{' '}
+                  <strong className="font-medium text-zon-body">{chosen.label.toLowerCase()}</strong>
                 </span>
               </CardTitle>
             </CardHeader>
@@ -411,25 +416,33 @@ export default function BatterySizingPage() {
                     return (
                       <div
                         key={m.id}
-                        className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 rounded-lg border border-zon-rule"
+                        className="flex flex-col gap-2 p-3 rounded-lg border border-zon-rule"
                       >
-                        <div>
-                          <a
-                            href={m.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium hover:underline inline-flex items-center gap-1"
-                          >
+                        {/* Stacked, not md:flex-row: this row lives in a ~400px
+                            rail whatever the viewport is doing, and Card clips
+                            rather than scrolls, so a side-by-side layout lost
+                            the price off the right edge. */}
+                        {/* Name and spec are one link, with the icon on the spec
+                            line: clamping the name to keep rows even would
+                            otherwise swallow an icon sitting after it. */}
+                        <a
+                          href={m.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`${m.brand} ${m.model}`}
+                          className="group/model block min-w-0"
+                        >
+                          <span className="line-clamp-2 text-sm font-medium group-hover/model:underline">
                             {m.brand} {m.model}
-                            <ExternalLink className="w-3 h-3 text-zon-muted" aria-hidden="true" />
-                          </a>
-                          <p className="text-xs text-zon-muted">
+                          </span>
+                          <span className="mt-0.5 flex items-center gap-1 text-xs tabular-nums text-zon-muted">
                             {m.voltage}V · {m.capacity_ah}Ah · {m.capacity_kwh} kWh each
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <Badge variant="secondary">You need {units}</Badge>
-                          <span className="text-sm text-zon-body">
+                            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          </span>
+                        </a>
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                          <Badge variant="secondary" className="shrink-0">You need {units}</Badge>
+                          <span className="text-sm tabular-nums text-zon-body">
                             {totalPrice != null ? `~$${totalPrice.toLocaleString()}` : 'Price not published'}
                           </span>
                         </div>
@@ -468,7 +481,7 @@ export default function BatterySizingPage() {
           )}
         </div>
 
-        <div className="min-w-0 space-y-5 lg:col-span-2">
+        <div className="min-w-0 space-y-5 lg:col-span-3">
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>

@@ -74,9 +74,9 @@ export default function AwgCalculatorPage() {
         </p>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-5">
         {/* Protection register — sets and arithmetic, never a verdict */}
-        <div className="order-first min-w-0 space-y-4 lg:order-last">
+        <div className="order-first min-w-0 space-y-4 lg:order-last lg:col-span-2">
           <AnswerAnchor>
             <div className="lg:sticky lg:top-32 space-y-4">
             <ProtectionOutput view={conductorView}>
@@ -131,7 +131,7 @@ export default function AwgCalculatorPage() {
           </AnswerAnchor>
         </div>
 
-        <div className="min-w-0 space-y-5 lg:col-span-2">
+        <div className="min-w-0 space-y-5 lg:col-span-3">
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
