@@ -46,7 +46,13 @@ export default function AccessibilityWidget() {
   const reset = () => setPrefs(DEFAULT_PREFS)
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    // Calculator steps pin an action bar to the bottom of the viewport and
+    // publish its height; without this the widget sits on top of the Next
+    // button. --zon-action-bar-h is unset everywhere else, so this is bottom-4.
+    <div
+      className="fixed right-4 z-50"
+      style={{ bottom: 'calc(1rem + var(--zon-action-bar-h, 0px))' }}
+    >
       {open && (
         <div
           role="dialog"

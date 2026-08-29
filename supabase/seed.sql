@@ -126,12 +126,12 @@ values
    'planned', 0, false, 62),
 
   (0, 'infrastructure', 'Auth: sanitize the next= redirect (open redirect)',
-   'src/app/auth/login/page.tsx and signup do redirect(next) with an unsanitized query param. next=https://evil.com is a phishing vector on a magic-link product. The callback concatenates origin+next (safer) but still does not require a same-origin relative path. Allow only paths that start with a single slash and do not start with //.',
-   'planned', 0, false, 63),
+   'Fixed. src/lib/safe-redirect.ts allows only a same-site path: one leading slash, not two, and no backslash. login/page.tsx, signup/page.tsx, and callback/route.ts all route next through it before redirect(). Without it, next=@evil.com is parsed as userinfo once appended to origin (https://zonzelf.com@evil.com navigates to evil.com) and next=//evil.com is the standard protocol-relative bypass — both send an authenticated user off-site from a link that looks like our own. Verified directly against the function: both bypasses and a bare host with no leading slash collapse to "/", ordinary paths pass through unchanged.',
+   'in_test', 90, false, 63),
 
   (0, 'infrastructure', 'Gate /api/scan-label (auth, rate limit, size, privacy)',
-   'The route is an unauthenticated paid LLM endpoint: any client can POST an image, no auth, no rate limit, no file-size cap, no MIME allowlist. The UI pretends it is Pro-gated with `const isPro = false`; the API is not. Either auth-gate + rate-limit + size-limit it, or delete the route until Pro exists. Privacy policy must disclose that nameplate photos go to Anthropic. Household images are personal data under GDPR.',
-   'planned', 0, false, 64),
+   'Fixed, deliberately not with a login wall: this route is called anonymously from the public load calculator, and calculators working without an account is core to the product, so "auth-gate" would break the feature it protects. Instead: an 8MB size cap (413), a MIME allowlist matching what Anthropic actually accepts — jpeg/png/webp/gif (415) — and an in-memory rate limit of 10 requests/hour per IP (429), process-local since staging and any near-term host run one container. All three verified live: a 9MB upload gets 413, an application/pdf upload gets 415, and the 11th request in an hour from one IP gets 429. The stale `const isPro = false` UI text this item cited is gone from the current code. Remaining: the privacy policy still needs to disclose that nameplate photos go to Anthropic (household images are personal data under GDPR) — that is copy, not code, and belongs with the other legal-page items.',
+   'in_test', 90, false, 64),
 
   (0, 'infrastructure', 'Separate staging and production Supabase projects',
    'Staging currently shares the one Supabase project with local dev (see the Staging environment item). If production keeps that model, staging scrapes, admin clicks, and test accounts live in the same database as real users. Split projects before collecting real emails. Migrations must be applied to both.',
@@ -146,8 +146,8 @@ values
    'in_test', 90, false, 67),
 
   (0, 'infrastructure', 'HTTP security headers',
-   'next.config.ts sets no CSP, HSTS, X-Frame-Options, Referrer-Policy, or Permissions-Policy. Cookie flags are whatever @supabase/ssr defaults to. Minimum before public: CSP (start strict, loosen for Supabase/auth), HSTS on the real domain, frame-ancestors none. XSS on a future comment feature becomes session theft without this.',
-   'planned', 0, false, 68),
+   'Partially fixed. next.config.ts now sets X-Frame-Options: SAMEORIGIN, X-Content-Type-Options: nosniff, Referrer-Policy: origin-when-cross-origin, Permissions-Policy (camera/microphone/geolocation off), and Strict-Transport-Security — verified live via curl against every route. Content-Security-Policy is deliberately not included yet: getting it wrong silently breaks the app (hydration, Supabase auth redirects, fonts) rather than loudly, and writing one honestly needs an inventory of every script/style/font origin the app actually loads, which has not been done. Cookie flags (still whatever @supabase/ssr defaults to) are also unreviewed. Do not treat this item as closed until CSP and cookie flags are addressed.',
+   'in_development', 60, false, 68),
 
   (0, 'infrastructure', 'error.tsx, not-found.tsx, and calculator NaN guards',
    'Fixed for the original findings. src/app/error.tsx and src/app/not-found.tsx exist (Next.js 16 error boundaries, using retry not reset). Panel surplus % is null rather than NaN when dailyKwh is 0. Hours are clamped 0–24, watts ≥ 0, quantity ≥ 1, peak sun 0–12, autonomy 1–14. Remaining: failed label scans still alert() — that route is the separate "Gate /api/scan-label" security item.',
