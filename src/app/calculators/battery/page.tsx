@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Battery, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +9,9 @@ import {
   usePersistentState, useLoadSummary, usePanelSummary, publishBatterySummary, round2,
 } from '@/lib/calc-storage'
 import { rechargeCheck } from '@/lib/recharge'
+import {
+  recommendedSystemVoltage, systemVoltageAdvice, SYSTEM_VOLTAGE_SOURCE, SYSTEM_VOLTAGES,
+} from '@/lib/system-voltage'
 import RechargeWarning from '@/components/RechargeWarning'
 import {
   buildScenarios, scenarioRange, roundBank, defaultOvernightShare, type ScenarioId,
@@ -101,7 +104,7 @@ const BATTERY_TYPES: BatteryType[] = [
 export default function BatterySizingPage() {
   const [savedKwh, setDailyKwh, kwhMeta] = usePersistentState('zonzelf:battery:dailyKwh', 3.5)
   const [days, setDays] = usePersistentState('zonzelf:battery:days', 2)
-  const [voltage, setVoltage] = usePersistentState('zonzelf:battery:voltage', 24)
+  const [voltage, setVoltage, voltageMeta] = usePersistentState('zonzelf:battery:voltage', 24)
   const [selectedType, setSelectedType] = usePersistentState('zonzelf:battery:type', 'lifepo4')
   const [showTypes, setShowTypes] = useState(false)
   // Which scenario the battery-model counts answer. Without this the list
@@ -169,7 +172,7 @@ export default function BatterySizingPage() {
     ? shareOverride
     : derivedShare
 
-  const scenarios = buildScenarios({
+  const scenarioInputs = {
     dailyDeliveredKwh: dailyKwh,
     overnightShare,
     overcastFactor,
@@ -178,11 +181,41 @@ export default function BatterySizingPage() {
     heatingShare: heating,
     autonomyDays: days,
     depthOfDischarge: battery.dod,
-    systemVoltage: voltage,
-  })
+  }
+  const pickScenario = (list: ReturnType<typeof buildScenarios>) =>
+    list.find(sc => sc.id === sizeFor) ?? list[list.length - 1]
+
+  // The picker used to sit on a hardcoded 24V whatever the numbers said, so a
+  // 27.8 kWh/day load was told "48V is recommended" and handed 24V. An
+  // untouched picker now follows the bank it is sizing; an explicit choice is
+  // never overridden, only disagreed with. Waiting for `hydrated` keeps the
+  // server render on the stored value rather than flashing a recommendation
+  // and then correcting it.
+  //
+  // Two passes because bankAh depends on the system voltage while bankKwh does
+  // not: the first pass yields the bank size the recommendation reads, the
+  // second states the Ah figures at the voltage actually in effect so the page
+  // never shows amp-hours computed at a voltage it is not displaying.
+  // buildScenarios is pure and cheap, so this costs nothing worth saving.
+  const provisionalBankKwh = pickScenario(
+    buildScenarios({ ...scenarioInputs, systemVoltage: voltage }),
+  ).bankKwh
+  const recommendedVoltage = recommendedSystemVoltage(provisionalBankKwh)
+  const voltageIsOwnChoice = voltageMeta.hydrated && voltageMeta.restored
+  // Before hydration `restored` cannot be known, so hold the stored value and
+  // decide once. Following the recommendation first and correcting afterwards
+  // would flash a voltage the user never picked.
+  const effectiveVoltage =
+    voltageMeta.hydrated && !voltageMeta.restored ? recommendedVoltage : voltage
+  // Advice compares against what the page is actually showing, not the raw
+  // stored value — otherwise an auto-followed recommendation reports as a
+  // disagreement with itself.
+  const voltageAdvice = systemVoltageAdvice(provisionalBankKwh, effectiveVoltage)
+
+  const scenarios = buildScenarios({ ...scenarioInputs, systemVoltage: effectiveVoltage })
   const band = scenarioRange(scenarios)
-  const chosen = scenarios.find(sc => sc.id === sizeFor) ?? scenarios[scenarios.length - 1]
-  const cutoffView = cutoffProtectionView(battery.id, voltage)
+  const chosen = pickScenario(scenarios)
+  const cutoffView = cutoffProtectionView(battery.id, effectiveVoltage)
 
   const annualRecharge = panelSummary
     ? rechargeCheck({
@@ -223,10 +256,10 @@ export default function BatterySizingPage() {
     return () => { cancelled = true }
   }, [battery.id])
 
-  const matchingModels = useMemo(
-    () => allModels.filter(m => voltageFamily(m.voltage) === voltage),
-    [allModels, voltage]
-  )
+  // Plain derivation, not useMemo: effectiveVoltage is itself derived, and the
+  // React Compiler cannot preserve a manual memo over it. It memoizes this for
+  // us, and the filter is a pass over a short list either way.
+  const matchingModels = allModels.filter(m => voltageFamily(m.voltage) === effectiveVoltage)
 
   // What the sticky strip shows once the answer card scrolls away. The rows
   // make the scenario switchable from anywhere on the page — that choice is
@@ -298,8 +331,8 @@ export default function BatterySizingPage() {
                 {roundBank(band.min)}–{roundBank(band.max)} kWh
               </p>
               <p className="text-sm text-zon-muted">
-                {Math.round((band.min * 1000) / voltage)}–{Math.round((band.max * 1000) / voltage)} Ah
-                {' '}at {voltage}V · {Math.round(battery.dod * 100)}% DoD
+                {Math.round((band.min * 1000) / effectiveVoltage)}–{Math.round((band.max * 1000) / effectiveVoltage)} Ah
+                {' '}at {effectiveVoltage}V · {Math.round(battery.dod * 100)}% DoD
               </p>
             </div>
 
@@ -373,7 +406,7 @@ export default function BatterySizingPage() {
               </div>
               <div className="flex justify-between">
                 <span>System voltage</span>
-                <span className="font-medium text-zon-body">{voltage}V</span>
+                <span className="font-medium text-zon-body">{effectiveVoltage}V</span>
               </div>
             </div>
           </CardContent>
@@ -391,7 +424,7 @@ export default function BatterySizingPage() {
                 Batteries that add up to {roundBank(chosen.bankKwh)} kWh
               </span>
               <span className="mt-1 block text-xs font-normal text-zon-muted">
-                {voltage}V {battery.name} · counted for{' '}
+                {effectiveVoltage}V {battery.name} · counted for{' '}
                 <strong className="font-medium text-zon-body">{chosen.label.toLowerCase()}</strong>
               </span>
             </CardTitle>
@@ -401,7 +434,7 @@ export default function BatterySizingPage() {
               <p className="text-sm text-zon-muted">Loading published battery models…</p>
             ) : matchingModels.length === 0 ? (
               <p className="text-sm text-zon-muted">
-                No published {voltage}V {battery.name} models yet — this list grows as scraped
+                No published {effectiveVoltage}V {battery.name} models yet — this list grows as scraped
                 models are reviewed and published.
               </p>
             ) : (
@@ -543,13 +576,13 @@ export default function BatterySizingPage() {
               <div role="group" aria-labelledby="battery-voltage-label">
                 <span id="battery-voltage-label" className="block text-sm font-medium mb-1">System voltage</span>
                 <div className="flex gap-2">
-                  {[12, 24, 48].map(v => (
+                  {SYSTEM_VOLTAGES.map(v => (
                     <button
                       key={v}
                       onClick={() => setVoltage(v)}
-                      aria-pressed={voltage === v}
+                      aria-pressed={effectiveVoltage === v}
                       className={`px-4 py-1.5 rounded-lg text-sm border transition-colors ${
-                        voltage === v
+                        effectiveVoltage === v
                           ? 'bg-zon-gold text-zon-ink border-zon-gold'
                           : 'border-zon-rule hover:border-zon-gold-light'
                       }`}
@@ -558,9 +591,28 @@ export default function BatterySizingPage() {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-zon-muted mt-1">
-                  48V is recommended for systems above 2 kWh — lower current means thinner cables.
+                {/* Derived from the bank being sized, never a static sentence:
+                    the old copy asserted a threshold the picker then ignored. */}
+                <p className="text-xs text-zon-body mt-1.5">
+                  {voltageAdvice.why}
+                  {!voltageAdvice.agrees && (
+                    <>
+                      {' '}
+                      <button
+                        onClick={() => setVoltage(voltageAdvice.recommended)}
+                        className="text-zon-gold-deep underline decoration-dotted hover:no-underline"
+                      >
+                        use {voltageAdvice.recommended}V
+                      </button>
+                    </>
+                  )}
                 </p>
+                {!voltageIsOwnChoice && (
+                  <p className="text-xs text-zon-muted mt-1">
+                    Following the bank size — pick one yourself and it stays picked.
+                  </p>
+                )}
+                <p className="text-xs text-zon-muted mt-1">{SYSTEM_VOLTAGE_SOURCE}</p>
               </div>
 
               <div className="border-t pt-5 space-y-4">
