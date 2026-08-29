@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { sanitizeNextPath } from '@/lib/safe-redirect'
 import LoginForm from '@/components/auth/LoginForm'
 
 export default async function LoginPage(props: PageProps<'/auth/login'>) {
   const params = await props.searchParams
-  const next = typeof params.next === 'string' ? params.next : '/'
+  const next = sanitizeNextPath(typeof params.next === 'string' ? params.next : null)
 
   const supabase = await createClient()
   const {
