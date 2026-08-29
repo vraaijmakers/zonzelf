@@ -66,17 +66,9 @@ export default function Navbar() {
               <SignOutButton className="text-sm text-zon-body hover:text-zon-ink transition-colors" />
             </>
           ) : (
-            <>
-              <Link href="/auth/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-                Sign in
-              </Link>
-              <Link
-                href="/auth/signup"
-                className={cn(buttonVariants({ size: 'sm' }), 'bg-zon-gold hover:bg-zon-gold-deep text-zon-ink')}
-              >
-                Get started
-              </Link>
-            </>
+            <Link href="/auth/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+              Sign in
+            </Link>
           )}
         </div>
 
@@ -110,18 +102,12 @@ export default function Navbar() {
               <SignOutButton className="text-sm text-zon-body hover:text-zon-ink transition-colors" />
             </div>
           ) : (
-            <div className="flex gap-2 pt-2 border-t mt-1">
+            <div className="flex pt-2 border-t mt-1">
               <Link
                 href="/auth/login"
                 className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'flex-1 justify-center')}
               >
                 Sign in
-              </Link>
-              <Link
-                href="/auth/signup"
-                className={cn(buttonVariants({ size: 'sm' }), 'flex-1 justify-center bg-zon-gold hover:bg-zon-gold-deep text-zon-ink')}
-              >
-                Get started
               </Link>
             </div>
           )}
