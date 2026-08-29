@@ -10,7 +10,8 @@ import {
 import { energyChain, arrayWatts, panelCount, panelCountBand, surplusPercent, DEFAULTS as EFF } from '@/lib/system-efficiency'
 import {
   PEAK_SUN_REGIONS, DEFAULT_ANNUAL, DEFAULT_WORST_MONTH,
-  normalizePeakSun, regionForAnnual, regionForHours, seasonalRatio, worstMonthIsSunnier,
+  highlightedRegion, normalizePeakSun, regionForAnnual, regionForHours, seasonalRatio,
+  worstMonthIsSunnier,
 } from '@/lib/peak-sun'
 import { rechargeCheck } from '@/lib/recharge'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
@@ -74,6 +75,7 @@ export default function PanelSizingPage() {
     * efficiency * chain.batteryRoundTrip * chain.inverter / 1000
   const surplus = surplusPercent(actualOutput, dailyKwh)
   const matchedRegion = regionForHours(sunHours, worstHours)
+  const selectedRegion = highlightedRegion(sunHours, worstHours)
   const ratio = seasonalRatio(sunHours, worstHours)
   const invertedSun = worstMonthIsSunnier(sunHours, worstHours)
   const worstMonthName = matchedRegion?.worstMonthName
@@ -330,7 +332,7 @@ export default function PanelSizingPage() {
                           setWorstMonth(ex.worstMonth)
                         }}
                         className={`text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                          peakSun === ex.annual
+                          selectedRegion === ex
                             ? 'bg-zon-gold-tint text-zon-gold-deep font-medium'
                             : 'hover:bg-zon-rule-soft text-zon-body'
                         }`}
@@ -346,9 +348,11 @@ export default function PanelSizingPage() {
               <div>
                 <label htmlFor="panels-worst-month" className="block text-sm font-medium mb-1">
                   Worst-month peak sun hours
-                  <span className="ml-1 font-normal text-zon-muted text-xs">
-                    ({worstMonthName}{matchedRegion ? ` in ${matchedRegion.region}` : ''})
-                  </span>
+                  {matchedRegion && (
+                    <span className="ml-1 font-normal text-zon-muted text-xs">
+                      ({matchedRegion.worstMonthName} in {matchedRegion.region})
+                    </span>
+                  )}
                 </label>
                 <div className="flex items-center gap-3">
                   <input

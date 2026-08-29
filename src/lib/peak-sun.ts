@@ -76,6 +76,16 @@ export function regionForHours(annual: number, worstMonth: number): PeakSunRegio
 }
 
 /**
+ * The single preset row to mark as selected. An exact match on both figures
+ * wins; failing that, a match on the annual figure alone, but only when that
+ * figure names one region. Highlighting on the annual figure alone lit both
+ * Spain / Italy (S) and Florida at once, since both publish 5.0h.
+ */
+export function highlightedRegion(annual: number, worstMonth: number): PeakSunRegion | undefined {
+  return regionForHours(annual, worstMonth) ?? regionForAnnual(annual)
+}
+
+/**
  * How much larger the array must be in the worst month than on the annual
  * average, as a ratio. 2.5 annual / 1.0 worst = 2.5×. Null when the "worst"
  * figure is not actually worse — that produced "0.8× more in December" for a
