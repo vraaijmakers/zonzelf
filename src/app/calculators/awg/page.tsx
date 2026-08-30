@@ -3,7 +3,9 @@
 import {
   usePersistentState, useInverterSummary, useArraySummary, useLoadSummary,
 } from '@/lib/calc-storage'
-import { resolveRuns, combinerAdvice, type RunId } from '@/lib/circuit-runs'
+import {
+  resolveRuns, combinerAdvice, mpptArrival, looksLikeBatteryVoltage, type RunId,
+} from '@/lib/circuit-runs'
 import { COPPER_ONLY_HEADLINE, CCA_WARNING } from '@/lib/conductor-material'
 import Link from 'next/link'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
@@ -18,7 +20,7 @@ import {
   sizeOvercurrent, thinnestProtectableAwg, ocpdProtectionView,
   DC_RATING_WARNING, type CircuitKind,
 } from '@/lib/overcurrent'
-import ProtectionOutput from '@/components/ProtectionOutput'
+import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 
 const TEMP_COLUMNS: { value: TempColumn; label: string; hint: string }[] = [
   { value: 60, label: '60 °C', hint: 'TW, UF — older or budget terminals' },
@@ -73,6 +75,16 @@ export default function AwgCalculatorPage() {
     ? thinnestProtectableAwg({ amps, continuous: true, kind, column })
     : undefined
   const conductorView = conductorProtectionView(input)
+
+  // The percentage budget is a proxy; this is the question it stands in for.
+  // Uses the thinnest gauge that passed, because that is the one most likely
+  // to be bought.
+  const arrival = kind === 'pv-source' && thinnest && array && inverter
+    ? mpptArrival(array.vmpHotV, thinnest.voltageDrop, inverter.mpptMinV)
+    : null
+  const batteryVoltageOnPv = activeRun
+    ? looksLikeBatteryVoltage(activeRun.kind, voltage)
+    : false
   const ocpdView = ocpd ? ocpdProtectionView(ocpd) : null
 
   // Protection register: the bar mirrors what ProtectionOutput already shows —
@@ -179,6 +191,54 @@ export default function AwgCalculatorPage() {
                 </p>
               </CardContent>
             </Card>
+
+            {arrival && (
+              <Card className={arrival.clears ? undefined : 'border-zon-red'}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between gap-2 text-base text-zon-ink">
+                    What reaches the inverter
+                    <RegisterBadge register="capacity" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-xs text-zon-body">
+                  <p className="text-sm">
+                    <span className="font-mono tabular-nums text-zon-ink">
+                      {arrival.sourceV.toFixed(0)}V
+                    </span>{' '}
+                    at the array on the hottest day, minus{' '}
+                    <span className="font-mono tabular-nums">{arrival.dropV.toFixed(1)}V</span> in
+                    the cable, leaves{' '}
+                    <span className="font-mono tabular-nums font-semibold text-zon-ink">
+                      {arrival.arrivingV.toFixed(0)}V
+                    </span>{' '}
+                    at the input.
+                  </p>
+                  {arrival.clears ? (
+                    <p>
+                      That is {Math.round(arrival.marginV)}V above the {arrival.floorV}V tracking
+                      floor. The percentage budget is the binding constraint here, not the floor —
+                      which is the usual case on a tall string, and worth knowing so you tighten
+                      the right one.
+                    </p>
+                  ) : (
+                    <p className="flex gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-zon-red" aria-hidden="true" />
+                      <span>
+                        <strong className="text-zon-ink">That is under the {arrival.floorV}V
+                        floor.</strong> On the hottest afternoon this string stops tracking and
+                        harvests nothing. Thicker cable recovers some of it; more panels in
+                        series is the real fix, if the cold-morning limit allows it.
+                      </span>
+                    </p>
+                  )}
+                  <p className="text-zon-muted">
+                    Computed at your entered current, which for a PV run is Isc. Power actually
+                    flows at Imp, a few percent lower, so the real drop is slightly smaller than
+                    this — the pessimistic direction.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             {combiner && (
               <Card>
@@ -389,6 +449,28 @@ export default function AwgCalculatorPage() {
                   />
                   <span className="text-sm text-zon-muted">V</span>
                 </div>
+                {batteryVoltageOnPv && (
+                  <p className="mt-2 rounded-lg border border-zon-amber-tint bg-zon-amber-tint px-3 py-2 text-xs text-zon-body">
+                    <strong className="text-zon-ink">{voltage}V is a battery voltage.</strong> A
+                    panel string is hundreds of volts — {activeRun?.volts
+                      ? `yours is about ${activeRun.volts}V.`
+                      : 'seven 41V panels in series is 287V, for instance.'}{' '}
+                    Sizing a string against a battery figure overstates the drop percentage by
+                    roughly ten times and can cost you several gauge sizes of copper you do not
+                    need.
+                    {activeRun?.volts && (
+                      <>
+                        {' '}
+                        <button
+                          onClick={() => setVoltage(activeRun.volts!)}
+                          className="font-medium text-zon-gold-deep underline"
+                        >
+                          Use {activeRun.volts}V →
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
                 <p className="text-xs text-zon-muted mt-1">
                   {activeRun
                     ? activeRun.voltageMeans

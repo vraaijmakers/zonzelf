@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CIRCUIT_RUNS, resolveRuns, combinerAdvice, runById } from '../circuit-runs'
+import {
+  CIRCUIT_RUNS, resolveRuns, combinerAdvice, runById, mpptArrival, looksLikeBatteryVoltage,
+} from '../circuit-runs'
 import { sizingFactor } from '../awg'
 import {
   METAL_PROPERTIES, CREEP_CYCLE, IDENTIFY_CCA, CCA_WARNING, COPPER_ONLY_HEADLINE,
@@ -177,4 +179,42 @@ test('the PV string voltage comes from the array, not from a preset', () => {
   // Seven panels in series, working hot — nowhere near any battery voltage.
   assert.equal(pv.volts, Math.round(ARRAY.vmpHotV))
   assert.ok(pv.volts! > 200, `got ${pv.volts}V, which cannot be a string`)
+})
+
+test('the arrival check answers the question the percentage only proxies', () => {
+  // 246.6V hot string, 0.8V lost in 10 AWG, against a 125V floor.
+  const a = mpptArrival(246.6, 0.8, 125)!
+  assert.ok(Math.abs(a.arrivingV - 245.8) < 0.01)
+  assert.equal(a.clears, true)
+  assert.ok(Math.abs(a.marginV - 120.8) < 0.01)
+})
+
+test('a short string can be inside its percentage budget and still fall under', () => {
+  // This is why the percentage is only a proxy: 2% of 130V is 2.6V, well
+  // within budget, and the string still arrives below a 130V floor.
+  const a = mpptArrival(130, 2.6, 130)!
+  assert.equal(a.clears, false)
+  assert.ok(a.marginV < 0)
+  assert.ok(a.dropV / a.sourceV < 0.021, 'the drop percentage alone would have passed this')
+})
+
+test('arrival refuses to compute from nonsense rather than returning a number', () => {
+  assert.equal(mpptArrival(0, 1, 125), null)
+  assert.equal(mpptArrival(246, 1, 0), null)
+  assert.equal(mpptArrival(246, Number.NaN, 125), null)
+  // A negative drop cannot add voltage back.
+  assert.equal(mpptArrival(246, -5, 125)!.arrivingV, 246)
+})
+
+test('a battery voltage on a PV run is caught by value, not by guesswork', () => {
+  for (const v of [12, 24, 48, 120, 240]) {
+    assert.equal(looksLikeBatteryVoltage('pv-source', v), true, `${v}V should be flagged`)
+  }
+  // A real string voltage is not flagged.
+  assert.equal(looksLikeBatteryVoltage('pv-source', 287), false)
+  assert.equal(looksLikeBatteryVoltage('pv-source', 410), false)
+  // And the same values are perfectly correct on a non-PV run.
+  for (const v of [12, 24, 48, 120, 240]) {
+    assert.equal(looksLikeBatteryVoltage('general', v), false)
+  }
 })

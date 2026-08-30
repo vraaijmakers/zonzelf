@@ -294,3 +294,77 @@ export function combinerAdvice(arr: ArraySummary | null | undefined): {
             'though a combiner box and a disconnect still are.',
   }
 }
+
+/**
+ * What the inverter actually sees after the cable, against its tracking floor.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * A voltage-drop percentage is a PROXY for the thing that matters. On a PV
+ * string the real question is not "did I lose more than 2%" but "does enough
+ * voltage arrive for the tracker to work". Those are different questions and
+ * they bind in different situations: a long thin run on a tall string loses a
+ * lot of percent and still clears the floor easily, while a short fat run on a
+ * two-panel string can be inside its percentage budget and still fall under.
+ *
+ * WHICH VOLTAGE, AND WHY THE HOT ONE
+ * ----------------------------------
+ * Vmp at the hottest cell temperature, because that is the lowest the string
+ * ever operates at — and it is the same condition that puts it closest to the
+ * floor. The conservative choice for the drop percentage and the actual
+ * failure case turn out to be the same number, which is a good sign the
+ * reasoning is sound rather than a coincidence.
+ *
+ * WHICH CURRENT
+ * -------------
+ * Voltage drop is computed at the current that actually flows while power is
+ * being delivered. That is Imp, not Isc: a short-circuited panel delivers no
+ * power, so it is not the operating case. The cable page works from Isc
+ * because NEC 690.8 sizes the CONDUCTOR from Isc, which makes its drop figure
+ * about 4% pessimistic for a typical module — the safe direction, and worth
+ * saying rather than hiding.
+ */
+export interface MpptArrival {
+  /** String voltage at the array on the hottest day. */
+  sourceV: number
+  /** Volts lost in the cable, round trip. */
+  dropV: number
+  /** What reaches the inverter. */
+  arrivingV: number
+  /** The bottom of the tracking window. */
+  floorV: number
+  clears: boolean
+  /** How far above the floor, in volts. Negative when it falls under. */
+  marginV: number
+}
+
+export function mpptArrival(
+  vmpHotV: number,
+  dropV: number,
+  mpptMinV: number,
+): MpptArrival | null {
+  if (!(vmpHotV > 0) || !(mpptMinV > 0) || !Number.isFinite(dropV)) return null
+  const arrivingV = vmpHotV - Math.max(0, dropV)
+  return {
+    sourceV: vmpHotV,
+    dropV: Math.max(0, dropV),
+    arrivingV,
+    floorV: mpptMinV,
+    clears: arrivingV > mpptMinV,
+    marginV: arrivingV - mpptMinV,
+  }
+}
+
+/**
+ * A battery or AC voltage left sitting in the field on a PV run.
+ *
+ * The field used to be labelled "System voltage" and offered 12/24/48/120/240
+ * for every run, so this is the exact state someone lands in after selecting a
+ * PV run: a plausible-looking number that is wrong by an order of magnitude,
+ * and which silently changes the answer by several gauge sizes.
+ */
+const NON_PV_VOLTAGES = [12, 24, 48, 120, 240]
+
+export function looksLikeBatteryVoltage(kind: CircuitKind, volts: number): boolean {
+  return kind === 'pv-source' && NON_PV_VOLTAGES.includes(volts)
+}
