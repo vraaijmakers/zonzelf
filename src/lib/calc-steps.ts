@@ -67,7 +67,7 @@ export const CALC_STEPS: readonly CalcStep[] = [
   },
   {
     id: 'array', n: 5, label: 'Array wiring', short: 'Wiring',
-    href: null,
+    href: '/calculators/strings',
     blurb: 'Series, parallel, and the cold morning that decides both',
   },
   {

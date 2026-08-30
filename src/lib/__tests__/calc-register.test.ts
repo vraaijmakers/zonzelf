@@ -28,14 +28,19 @@ test('the five protection outputs the design named are all in the catalog', () =
   assert.equal(outputDef('inverter-va').register, 'capacity')
 })
 
-test('shipped protection is the three outputs the calculators already emit', () => {
+test('shipped protection is every output the calculators actually emit', () => {
   const ids = shippedProtection().map(o => o.id).sort()
-  assert.deepEqual(ids, ['conductor-gauge', 'cutoff-voltage', 'ocpd-rating'])
+  assert.deepEqual(ids, [
+    'conductor-gauge', 'cutoff-voltage', 'ocpd-rating',
+    'string-current', 'string-fuse', 'string-voc',
+  ])
 })
 
-test('shipped capacity is daily kWh, bank kWh, panel count, inverter rating', () => {
+test('shipped capacity is every sizing output the calculators emit', () => {
   const ids = shippedCapacity().map(o => o.id).sort()
-  assert.deepEqual(ids, ['bank-kwh', 'daily-kwh', 'inverter-va', 'panel-count'])
+  assert.deepEqual(ids, [
+    'array-dc-power', 'bank-kwh', 'daily-kwh', 'inverter-va', 'mppt-window', 'panel-count',
+  ])
 })
 
 test('the inverter step is where its rating is emitted, ahead of panels', () => {
@@ -47,8 +52,25 @@ test('the inverter step is where its rating is emitted, ahead of panels', () => 
   assert.ok(steps.indexOf('panels') < steps.indexOf('array'))
 })
 
-test('unshipped outputs stay classified so they cannot arrive as a surprise register', () => {
-  assert.equal(outputDef('string-voc').shipped, false)
+test('the string outputs split across both registers, and the split is the lesson', () => {
+  // Too much voltage or current destroys hardware; too little voltage only
+  // wastes sunshine. Same page, same physics, different register — and the
+  // page has to render them differently because of it.
+  assert.equal(outputDef('string-voc').register, 'protection')
+  assert.equal(outputDef('string-current').register, 'protection')
+  assert.equal(outputDef('string-fuse').register, 'protection')
+  assert.equal(outputDef('mppt-window').register, 'capacity')
+  assert.equal(outputDef('array-dc-power').register, 'capacity')
+})
+
+test('every output ships from the page that owns it', () => {
+  // Nothing may claim a page that does not exist, and nothing may sit
+  // unclassified — an unshipped output is fine, an unregistered one is not.
+  const built = new Set(CALC_STEPS.filter(s => s.href).map(s => s.href))
+  for (const o of CALCULATOR_OUTPUTS) {
+    if (!o.shipped) continue
+    assert.ok(built.has(o.page), `${o.id} ships from ${o.page}, which has no step`)
+  }
 })
 
 const awgInput = {

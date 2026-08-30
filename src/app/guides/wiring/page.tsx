@@ -34,6 +34,17 @@ export default function WiringGuidePage() {
           sized at 125% of it — a panel string at 156%. And you measure cable length one
           way; the calculator already counts the return wire.
         </p>
+        <p>
+          Parallel panel strings need a second kind of fuse for a different reason: each
+          string is a fault path as well as a source, so with three or more in parallel the
+          others can back-feed more current into a faulted one than its panels can survive.
+          That is{' '}
+          <Link href="/guides/strings-and-mppt" className="text-zon-gold-deep hover:underline">
+            string fusing
+          </Link>
+          , and it is decided by the max series fuse rating on the panel label rather than by
+          the cable.
+        </p>
       </Tldr>
 
       <section className="mb-10">

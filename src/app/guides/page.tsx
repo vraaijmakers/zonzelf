@@ -29,6 +29,14 @@ const GUIDES = [
     readTime: '5 min',
   },
   {
+    icon: Sun,
+    slug: 'strings-and-mppt',
+    title: 'Strings, Voc & the MPPT Window',
+    description: 'Why solar panels make MORE voltage when they are cold, what the two numbers on your inverter\u2019s solar input actually mean, and how to work out how many panels can go in a string. With the formulas.',
+    tags: ['arrays', 'intermediate'],
+    readTime: '15 min',
+  },
+  {
     icon: Cable,
     slug: 'wiring',
     title: 'Cable AWG & Wiring',

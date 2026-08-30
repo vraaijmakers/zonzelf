@@ -31,6 +31,10 @@ export type OutputId =
   | 'ocpd-rating'
   | 'cutoff-voltage'
   | 'string-voc'
+  | 'string-current'
+  | 'string-fuse'
+  | 'mppt-window'
+  | 'array-dc-power'
 
 export interface OutputDef {
   id: OutputId
@@ -108,10 +112,45 @@ export const CALCULATOR_OUTPUTS: OutputDef[] = [
   {
     id: 'string-voc',
     register: 'protection',
-    label: 'String voltage vs MPPT window',
-    page: '/calculators/panels',
-    shipped: false,
+    label: 'String voltage vs the maximum PV input',
+    page: '/calculators/strings',
+    shipped: true,
     risk: 'A string sized in July can exceed the controller maximum in January.',
+  },
+  {
+    id: 'string-current',
+    register: 'protection',
+    label: 'Array current vs the tracker input rating',
+    page: '/calculators/strings',
+    shipped: true,
+    risk: 'Too many strings in parallel pushes current past what the input can take.',
+  },
+  {
+    id: 'string-fuse',
+    register: 'protection',
+    label: 'Parallel string fusing',
+    page: '/calculators/strings',
+    shipped: true,
+    risk: 'Three or more strings back-feed a fault past what a module can survive.',
+  },
+  {
+    // Capacity, not protection, and the distinction is the teaching point: a
+    // string below the tracking window harvests nothing, but nothing is
+    // damaged. Too much voltage destroys the unit; too little wastes sunshine.
+    id: 'mppt-window',
+    register: 'capacity',
+    label: 'String voltage inside the MPPT window',
+    page: '/calculators/strings',
+    shipped: true,
+    risk: 'A string that sags below the window stops harvesting on hot afternoons.',
+  },
+  {
+    id: 'array-dc-power',
+    register: 'capacity',
+    label: 'Array watts vs the inverter PV input',
+    page: '/calculators/strings',
+    shipped: true,
+    risk: 'Past the PV input rating the extra array is clipped, not harvested.',
   },
 ]
 
@@ -135,7 +174,11 @@ export function shippedCapacity(): OutputDef[] {
  * single "recommended" field.
  */
 export interface ProtectionView {
-  id: Extract<OutputId, 'conductor-gauge' | 'ocpd-rating' | 'cutoff-voltage'>
+  id: Extract<
+    OutputId,
+    | 'conductor-gauge' | 'ocpd-rating' | 'cutoff-voltage'
+    | 'string-voc' | 'string-current' | 'string-fuse'
+  >
   title: string
   /** The options that pass. A set of one is still a set, not a verdict. */
   options: string[]

@@ -294,6 +294,38 @@ export function publishPanelSummary(summary: PanelSummary) {
   writeStored(PANEL_SUMMARY_KEY, summary)
 }
 
+/**
+ * The arrangement chosen at the array step. Published for the cable step,
+ * which needs the array's design current and can pre-set its circuit type.
+ */
+export interface ArraySummary {
+  series: number
+  parallel: number
+  panels: number
+  arrayWatts: number
+  /** String voltage at the design low. The number that destroys inverters. */
+  vocColdV: number
+  /** String working voltage at the design high. */
+  vmpHotV: number
+  /** Array Isc after NEC 690.8(A)(1)'s 125%. */
+  designIscA: number
+  designLowC: number
+  designHighC: number
+  /** Null when the panel's max series fuse rating was not entered. */
+  stringFuseRequired: boolean | null
+}
+
+export const ARRAY_SUMMARY_KEY = 'zonzelf:array:summary'
+
+export function useArraySummary(): ArraySummary | null {
+  const [summary] = usePersistentState<ArraySummary | null>(ARRAY_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishArraySummary(summary: ArraySummary) {
+  writeStored(ARRAY_SUMMARY_KEY, summary)
+}
+
 /** The inverter chosen at step 3, or null until that step has been used. */
 export function useInverterSummary(): InverterSummary | null {
   const [summary] = usePersistentState<InverterSummary | null>(INVERTER_SUMMARY_KEY, null)

@@ -147,6 +147,51 @@ const ENTRIES = [
     html: 'A common way of wiring a house\'s AC supply as two 120 V "legs" that are out of phase with each other, so a 240 V appliance can be fed by using both legs together (mainly a North American convention). An inverter or generator described as "split-phase" or "120/240 V" is built to produce that pair, not a single 230 V feed like most of Europe.',
   },
   {
+    term: 'Voc',
+    aka: 'open-circuit voltage',
+    html: 'The voltage a solar panel produces with nothing connected to it — the <strong>highest</strong> voltage it ever makes, and the number your inverter\'s maximum PV input has to survive. It is not the voltage the panel works at (that is <a href="/guides/glossary#vmp">Vmp</a>). Crucially, Voc goes <em>up</em> as the panel gets colder, so a string that reads safely on the datasheet can be 10–15&#37; higher on a frosty morning. See <a href="/guides/strings-and-mppt">strings, Voc and the MPPT window</a>.',
+  },
+  {
+    term: 'Vmp',
+    aka: 'voltage at maximum power',
+    html: 'The voltage a panel actually sits at while working, roughly 80–85&#37; of its <a href="/guides/glossary#voc">Voc</a>. This is the number that has to stay <em>above</em> the bottom of your charge controller\'s <a href="/guides/glossary#mppt-window">MPPT window</a> — and it sags in heat, which is why a string that works in spring can drop out of the window on a hot July afternoon.',
+  },
+  {
+    term: 'Imp',
+    aka: 'current at maximum power',
+    html: 'The current a panel delivers while working, slightly below its <a href="/guides/glossary#isc">Isc</a>. Vmp × Imp is the panel\'s rated wattage. Protective sizing uses Isc rather than Imp, because Isc is the worst case.',
+  },
+  {
+    term: 'Temperature coefficient',
+    aka: 'temp co, beta',
+    html: 'How much a panel\'s voltage or power changes per degree, printed on every datasheet in &#37;/°C. It is <strong>negative</strong>: colder means more voltage, hotter means less. Typically about −0.28&#37;/°C for Voc and −0.35&#37;/°C for power. This single number is what turns a datasheet figure into the voltage your inverter actually sees, and getting its sign backwards is the most expensive mistake in DIY solar. The <a href="/calculators/strings">array wiring calculator</a> shows the arithmetic.',
+  },
+  {
+    term: 'STC',
+    aka: 'Standard Test Conditions',
+    html: 'The laboratory conditions every panel spec is quoted at: 1000 W/m² of light and a cell temperature of exactly 25 °C. Your roof is neither. Real panels run 25–30 °C hotter than the air in full sun and much colder than 25 °C on a winter morning, which is why <a href="/guides/strings-and-mppt">string design</a> corrects every figure for temperature before using it.',
+  },
+  {
+    term: 'String',
+    aka: 'series string',
+    html: 'A run of solar panels wired in series, positive to negative, so their voltages add up while the current stays as one panel\'s. Six 45 V panels in a string make 270 V. How many may go in one string is set by your inverter\'s maximum PV input voltage — checked at your coldest temperature, not at <a href="/guides/glossary#stc">STC</a>.',
+  },
+  {
+    term: 'MPPT window',
+    aka: 'MPPT operating range, PV input range',
+    html: 'The voltage range within which a charge controller can actually track. Below the bottom it cannot work and you harvest nothing; above the top it clips or drops out. This is <strong>not</strong> the same as the maximum PV input voltage, which is a damage limit — a datasheet may say "MPPT range 120–450 V" and "max PV input 500 V" in different tables. Going over the window costs you harvest; going over the maximum destroys the unit. See <a href="/guides/strings-and-mppt">strings, Voc and the MPPT window</a>.',
+  },
+  {
+    term: 'String fuse',
+    aka: 'series fuse, PV source circuit OCPD',
+    html: 'A fuse in each parallel string of panels. Needed because every string is a fault path as well as a source: if one string faults, the others push current <em>into</em> it, through wiring sized for one string. With one or two strings the back-feed is small enough that panels survive it; with three or more it usually is not, which is where the common "three strings need fuses" rule comes from. The exact test is (n − 1) × Isc × 1.25 against the module\'s max series fuse rating, printed on its label. NEC 690.9(A).',
+  },
+  {
+    term: 'Max series fuse rating',
+    aka: 'maximum overcurrent protection rating',
+    html: 'A number printed on the back of every solar panel — commonly 15 A or 20 A — saying the largest fuse that may protect it. It is what decides whether parallel <a href="/guides/glossary#string">strings</a> need <a href="/guides/glossary#string-fuse">string fuses</a>, and it caps how big those fuses may be. Without it, string fusing cannot be worked out at all.',
+  },
+  {
     term: 'Voltage drop',
     html: 'The loss of voltage along a cable run, caused by the cable\'s own resistance. Longer and thinner cables drop more. A cable can be thick enough to avoid overheating and still lose too much voltage over a long run — see <a href="/guides/wiring">cables and thickness</a>.',
   },
