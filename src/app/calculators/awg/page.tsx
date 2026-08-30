@@ -1,8 +1,13 @@
 'use client'
 
-import { usePersistentState } from '@/lib/calc-storage'
+import {
+  usePersistentState, useInverterSummary, useArraySummary, useLoadSummary,
+} from '@/lib/calc-storage'
+import { resolveRuns, combinerAdvice, type RunId } from '@/lib/circuit-runs'
+import { COPPER_ONLY_HEADLINE, CCA_WARNING } from '@/lib/conductor-material'
+import Link from 'next/link'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
-import { Info } from 'lucide-react'
+import { Info, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   evaluateGauges, passingGauges, thinnestByAmpacity,
@@ -29,6 +34,27 @@ export default function AwgCalculatorPage() {
   const [maxDrop, setMaxDrop]     = usePersistentState('zonzelf:awg:maxDrop', 3)
   const [column, setColumn]       = usePersistentState<TempColumn>('zonzelf:awg:tempColumn', 75)
   const [kind, setKind]           = usePersistentState<CircuitKind>('zonzelf:awg:circuitKind', 'general')
+  const [runId, setRunId]         = usePersistentState<RunId | ''>('zonzelf:awg:runId', '')
+
+  // The page used to ask for a naked current with no indication of which cable
+  // it was sizing. The chain already knows most of these, so it offers them.
+  const inverter = useInverterSummary()
+  const array = useArraySummary()
+  const load = useLoadSummary()
+  const runs = resolveRuns({ inverter, array, load })
+  const activeRun = runs.find(r => r.id === runId) ?? null
+  const combiner = combinerAdvice(array)
+
+  const applyRun = (id: RunId) => {
+    const run = runs.find(r => r.id === id)
+    if (!run) return
+    setRunId(id)
+    setKind(run.kind)
+    setMaxDrop(run.suggestedDropPercent)
+    setLengthFt(run.typicalFeet)
+    if (run.amps !== null) setAmps(run.amps)
+    if (run.volts !== null) setVoltage(run.volts)
+  }
 
   // lengthFt is always stored in feet; the metric toggle is display-only.
   const input = { amps, oneWayFeet: lengthFt, volts: voltage, maxDropPercent: maxDrop, column, kind, continuous: true }
@@ -127,16 +153,139 @@ export default function AwgCalculatorPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Every figure on this page is NEC 310.16's copper column. That
+                was true and said nowhere the reader could see it. */}
+            <Card className="border-zon-amber">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base text-zon-ink">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-zon-amber" aria-hidden="true" />
+                  Copper only
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs text-zon-body">
+                <p>
+                  <strong className="text-zon-ink">{COPPER_ONLY_HEADLINE}</strong> Aluminium
+                  carries about 61% of the current for the same gauge, so every number here is
+                  wrong for it — in the undersizing direction.
+                </p>
+                <p>{CCA_WARNING}</p>
+                <p className="text-zon-muted">
+                  How to tell what you bought, and why the joint is what fails:{' '}
+                  <Link href="/guides/wiring#conductor-material" className="text-zon-gold-deep hover:underline">
+                    conductor material in the wiring guide
+                  </Link>
+                  .
+                </p>
+              </CardContent>
+            </Card>
+
+            {combiner && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base text-zon-ink">
+                    {combiner.needed ? 'You need a combiner' : 'No combiner needed'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-xs text-zon-body">
+                  <p>{combiner.why}</p>
+                  {combiner.needed && combiner.fused === true && (
+                    <p className="text-zon-muted">
+                      Size those string fuses on the{' '}
+                      <Link href="/calculators/strings" className="text-zon-gold-deep hover:underline">
+                        array wiring step
+                      </Link>
+                      , which works them out from your panel&apos;s Isc and its maximum series
+                      fuse rating.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             </div>
           </AnswerAnchor>
         </div>
 
         <div className="min-w-0 space-y-5 lg:col-span-3">
+          {/* Which cable, before how many amps. A system has at least four
+              runs and they are not interchangeable. */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-zon-body">
+                Which run are you sizing?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-1">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {runs.filter(r => r.applies).map(run => {
+                  const active = runId === run.id
+                  return (
+                    <button
+                      key={run.id}
+                      onClick={() => applyRun(run.id)}
+                      aria-pressed={active}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                        active
+                          ? 'border-zon-gold bg-zon-gold-tint'
+                          : 'border-zon-rule hover:border-zon-gold-light'
+                      }`}
+                    >
+                      <span className="block text-sm font-medium text-zon-ink">{run.label}</span>
+                      <span className="mt-0.5 block text-xs text-zon-muted">{run.where}</span>
+                      {run.amps !== null && (
+                        <span className="mt-1 block text-xs font-medium text-zon-gold-deep">
+                          {run.amps}A at {run.volts}V — from your system
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {activeRun ? (
+                <div className="space-y-2 border-t border-zon-rule pt-3 text-xs text-zon-body">
+                  {activeRun.derivation && (
+                    <p>
+                      <strong className="text-zon-ink">Where that current comes from.</strong>{' '}
+                      {activeRun.derivation}
+                    </p>
+                  )}
+                  <p>{activeRun.note}</p>
+                  <p className="text-zon-muted">
+                    The length below is a typical starting point, not your run — measure it.
+                  </p>
+                </div>
+              ) : (
+                <p className="border-t border-zon-rule pt-3 text-xs text-zon-muted">
+                  Pick a run and the current, voltage and circuit type fill in from the steps you
+                  have already done. Or size any cable by hand below — nothing here is locked.
+                  {!inverter && !array && (
+                    <>
+                      {' '}
+                      You have not been through the{' '}
+                      <Link href="/calculators/inverter" className="text-zon-gold-deep hover:underline">
+                        inverter
+                      </Link>{' '}
+                      or{' '}
+                      <Link href="/calculators/strings" className="text-zon-gold-deep hover:underline">
+                        array wiring
+                      </Link>{' '}
+                      steps, so there is nothing to fill in from yet.
+                    </>
+                  )}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
                 <label htmlFor="awg-amps" className="block text-sm font-medium mb-1 text-zon-ink">
                   Current (amps)
+                  {activeRun && (
+                    <span className="ml-1 font-normal text-zon-muted">— {activeRun.label}</span>
+                  )}
                 </label>
                 <div className="flex items-center gap-3">
                   <input

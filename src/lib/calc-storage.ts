@@ -307,8 +307,18 @@ export interface ArraySummary {
   vocColdV: number
   /** String working voltage at the design high. */
   vmpHotV: number
-  /** Array Isc after NEC 690.8(A)(1)'s 125%. */
+  /** Design current into the worst-loaded tracker, after NEC 690.8(A)(1)'s 125%. */
   designIscA: number
+  /**
+   * ONE panel's short-circuit current, raw — no code factor applied.
+   *
+   * Carried separately from designIscA on purpose. The cable step applies its
+   * own 156% for a PV source circuit, so handing it the already-multiplied
+   * figure would apply the factor twice and oversize everything.
+   */
+  panelIscA: number
+  /** Strings on the worst-loaded tracker, for sizing the combiner run. */
+  stringsPerTracker: number
   designLowC: number
   designHighC: number
   /** Null when the panel's max series fuse rating was not entered. */

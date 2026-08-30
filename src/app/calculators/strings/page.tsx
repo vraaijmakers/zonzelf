@@ -195,6 +195,8 @@ export default function ArrayWiringPage() {
   const currentView = ready ? stringCurrentProtectionView(panel!, tracker!) : null
   const fuseView = ready && best ? stringFuseProtectionView(panel!, best.parallel) : null
 
+  const publishedIscA = panel?.iscStc ?? 0
+
   useEffect(() => {
     if (!ready || !best || useExample || !anySafe) return
     publishArraySummary({
@@ -205,11 +207,13 @@ export default function ArrayWiringPage() {
       vocColdV: best.vocColdV,
       vmpHotV: best.vmpHotV,
       designIscA: best.designIscA,
+      panelIscA: publishedIscA,
+      stringsPerTracker: best.stringsPerTracker,
       designLowC: lowC,
       designHighC: highC,
       stringFuseRequired: best.stringFuseRequired,
     })
-  }, [ready, best, useExample, anySafe, lowC, highC])
+  }, [ready, best, useExample, anySafe, lowC, highC, publishedIscA])
 
   const setPanel = <K extends keyof PanelDraft>(k: K, v: PanelDraft[K]) => {
     setPanelDraft(p => ({ ...p, [k]: v }))

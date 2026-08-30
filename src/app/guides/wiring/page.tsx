@@ -3,6 +3,9 @@ import { Cable, Calculator } from 'lucide-react'
 import {
   GuideBreadcrumb, GuideDisclaimer, GuideHeader, Note, NextSteps, Tldr, Warn,
 } from '@/components/guides/GuideChrome'
+import {
+  METAL_PROPERTIES, CREEP_CYCLE, CCA_WARNING, IDENTIFY_CCA,
+} from '@/lib/conductor-material'
 
 export const metadata = {
   title: 'Cables, Thickness, and Why It Matters — ZonZelf Guide',
@@ -46,6 +49,89 @@ export default function WiringGuidePage() {
           the cable.
         </p>
       </Tldr>
+
+      <section id="conductor-material" className="mb-10 scroll-mt-24">
+        <h2 className="text-xl font-bold mb-3">Copper only — and how to tell what you bought</h2>
+        <p className="text-zon-body mb-4">
+          Every ampacity figure in the <Link href="/calculators/awg" className="text-zon-gold-deep hover:underline">cable
+          calculator</Link>, and every table you will find online, is for <strong>copper</strong>.
+          Aluminium carries about 61% of the current for the same gauge, so those numbers are not
+          merely approximate for it — they are wrong, in the direction that undersizes.
+        </p>
+
+        <h3 className="text-base font-semibold mb-2 mt-6">The two temperature properties, and which one burns things</h3>
+        <p className="text-zon-body mb-4">
+          People are right to worry that the metals behave differently with heat, and usually name
+          the wrong property. There are two, and only one of them matters here.
+        </p>
+        <div className="my-5 overflow-x-auto rounded-xl border border-zon-rule">
+          <table className="w-full text-sm">
+            <caption className="sr-only">Copper and aluminium compared, property by property</caption>
+            <thead>
+              <tr className="border-b border-zon-rule bg-zon-cream text-left text-zon-muted">
+                <th scope="col" className="px-4 py-2 font-medium">Property</th>
+                <th scope="col" className="px-4 py-2 text-right font-medium">Copper</th>
+                <th scope="col" className="px-4 py-2 text-right font-medium">Aluminium</th>
+                <th scope="col" className="px-4 py-2 font-medium">What it means</th>
+              </tr>
+            </thead>
+            <tbody>
+              {METAL_PROPERTIES.map(m => (
+                <tr key={m.label} className="border-b border-zon-rule-soft last:border-0 align-top">
+                  <td className="px-4 py-3 font-medium text-zon-ink">
+                    {m.label}
+                    {m.decisive && (
+                      <span className="mt-0.5 block text-xs font-normal text-zon-amber">
+                        this is the one
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono tabular-nums text-zon-body">{m.copper}</td>
+                  <td className="px-4 py-3 text-right font-mono tabular-nums text-zon-body">{m.aluminium}</td>
+                  <td className="px-4 py-3 text-zon-body">{m.soWhat}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-zon-body mb-4">
+          Notice the second row. The <em>temperature coefficient of resistance</em> — how much
+          resistance climbs as the metal warms — is almost identical for the two metals, about 3%
+          apart. It is the property most often named and it is not the problem.
+        </p>
+        <p className="text-zon-body mb-4">
+          The one that matters is <strong>thermal expansion</strong>, and it does its damage at the{' '}
+          <em>joint</em> rather than along the cable:
+        </p>
+        <ol className="mb-4 ml-5 list-decimal space-y-1 text-zon-body">
+          {CREEP_CYCLE.map(step => <li key={step}>{step}</li>)}
+        </ol>
+        <Warn>
+          <p>
+            That loop is self-reinforcing and slow. No single cycle is dramatic, which is exactly
+            why it takes months or years and then ends at a terminal hot enough to char. It is the
+            mechanism behind the aluminium branch-circuit fires in 1960s–70s American housing, and
+            it is why aluminium needs terminals listed for it (CO/ALR, AL-CU) and an antioxidant
+            compound rather than being a drop-in for copper.
+          </p>
+        </Warn>
+
+        <h3 className="text-base font-semibold mb-2 mt-6">Copper-clad aluminium is the one to watch for</h3>
+        <p className="text-zon-body mb-4">{CCA_WARNING}</p>
+        <p className="text-zon-body mb-2">Four ways to tell what you actually have:</p>
+        <ul className="mb-4 ml-5 list-disc space-y-1 text-zon-body">
+          {IDENTIFY_CCA.map(t => <li key={t}>{t}</li>)}
+        </ul>
+        <Note>
+          <p>
+            None of this says aluminium is unusable. It is used legitimately in large feeders every
+            day, by people who terminate it properly. It says that this site&apos;s figures are
+            copper figures, that CCA sold as battery cable is a different thing again, and that
+            aluminium terminations are a conversation with an electrician rather than a
+            substitution you make to save money on a battery run.
+          </p>
+        </Note>
+      </section>
 
       <section className="mb-10">
         <h2 className="text-xl font-bold mb-3">What AWG even is</h2>
