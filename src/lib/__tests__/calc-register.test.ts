@@ -7,6 +7,7 @@ import {
 import { conductorProtectionView } from '../awg'
 import { sizeOvercurrent, ocpdProtectionView } from '../overcurrent'
 import { cutoffProtectionView } from '../battery-chemistry'
+import { CALC_STEPS } from '../calc-steps'
 
 test('every output is classified exactly once, as capacity or protection', () => {
   const ids = CALCULATOR_OUTPUTS.map(o => o.id)
@@ -32,14 +33,22 @@ test('shipped protection is the three outputs the calculators already emit', () 
   assert.deepEqual(ids, ['conductor-gauge', 'cutoff-voltage', 'ocpd-rating'])
 })
 
-test('shipped capacity is daily kWh, bank kWh, panel count', () => {
+test('shipped capacity is daily kWh, bank kWh, panel count, inverter rating', () => {
   const ids = shippedCapacity().map(o => o.id).sort()
-  assert.deepEqual(ids, ['bank-kwh', 'daily-kwh', 'panel-count'])
+  assert.deepEqual(ids, ['bank-kwh', 'daily-kwh', 'inverter-va', 'panel-count'])
+})
+
+test('the inverter step is where its rating is emitted, ahead of panels', () => {
+  // The whole reason the chain was reordered: the array is designed against
+  // this unit's tracker, so the unit has to be chosen before the panel step.
+  assert.equal(outputDef('inverter-va').page, '/calculators/inverter')
+  const steps = CALC_STEPS.map(s => s.id)
+  assert.ok(steps.indexOf('inverter') < steps.indexOf('panels'))
+  assert.ok(steps.indexOf('panels') < steps.indexOf('array'))
 })
 
 test('unshipped outputs stay classified so they cannot arrive as a surprise register', () => {
   assert.equal(outputDef('string-voc').shipped, false)
-  assert.equal(outputDef('inverter-va').shipped, false)
 })
 
 const awgInput = {

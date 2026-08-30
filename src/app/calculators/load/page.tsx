@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
+import {
+  usePersistentState, publishLoadSummary, round2,
+  LOAD_APPLIANCES_KEY, DEFAULT_APPLIANCES, type StoredAppliance,
+} from '@/lib/calc-storage'
+import { peakDemand } from '@/lib/inverter-sizing'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { RegisterBadge } from '@/components/ProtectionOutput'
 import {
@@ -18,26 +22,8 @@ import {
   DEFAULT_OVERCAST_FACTOR, DEFAULT_COLD_FACTOR,
 } from '@/lib/battery-scenarios'
 
-interface Appliance {
-  id: number
-  name: string
-  /** Draw while actually running, not the daily average. */
-  watts: number
-  /** Hours per day the appliance is in service. */
-  hours: number
-  qty: number
-  /** Fraction of those hours it actually draws power. Absent means 100%. */
-  duty?: number
-  /** When it runs — drives the battery scenarios. Absent means all day. */
-  profile?: LoadProfile
-}
+type Appliance = StoredAppliance
 
-const DEFAULT_APPLIANCES: Appliance[] = [
-  { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4, profile: 'evening' },
-  { id: 2, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1 },
-  { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
-  { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1, duty: 0.30 },
-]
 
 // Ids only have to be unique within the current list, which may have been
 // restored from a previous session.
@@ -46,7 +32,7 @@ const nextIdFor = (rows: Appliance[]) =>
 
 export default function LoadCalculatorPage() {
   const [appliances, setAppliances, , clearAppliances] =
-    usePersistentState<Appliance[]>('zonzelf:load:appliances', DEFAULT_APPLIANCES)
+    usePersistentState<Appliance[]>(LOAD_APPLIANCES_KEY, DEFAULT_APPLIANCES)
   const [efficiency, setEfficiency, , clearEfficiency] =
     usePersistentState<number>('zonzelf:load:efficiency', EFF.inverter)
   const [scanningId, setScanningId] = useState<number | null>(null)
@@ -100,6 +86,7 @@ export default function LoadCalculatorPage() {
       hours: preset.hours,
       duty: preset.duty,
       profile: preset.profile,
+      surge: preset.surgeFactor,
       qty: 1,
     }])
 
@@ -136,6 +123,10 @@ export default function LoadCalculatorPage() {
   const deliverMin = Math.min(chain.fromBatteryKwh, greyChain.fromBatteryKwh)
   const deliverMax = Math.max(chain.fromBatteryKwh, greyChain.fromBatteryKwh)
   const loadSpreads = Math.abs(greyKwh - totalKwh) > 0.05 * Math.max(totalKwh, 0.01)
+  // Published for the inverter step. Computed here because this is where the
+  // appliance rows live; explained and adjusted there, because that is where a
+  // start-up spike decides something.
+  const peak = peakDemand(appliances)
 
   // Publish the result so the battery and panel calculators can pick it up.
   useEffect(() => {
@@ -151,10 +142,14 @@ export default function LoadCalculatorPage() {
         heating: round2(breakdown.heating),
         total: round2(breakdown.total),
       },
+      peakConcurrentW: Math.round(peak.continuousW),
+      surgeW: Math.round(peak.surgeW),
     })
-    // breakdown is derived from `appliances`, which totalKwh already tracks.
+    // breakdown and peak are derived from `appliances`, which totalKwh already
+    // tracks — except the surge figures, which move when a row's surge factor
+    // changes without changing a single watt-hour.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalKwh, efficiency, adjustedKwh])
+  }, [totalKwh, efficiency, adjustedKwh, peak.continuousW, peak.surgeW])
 
   // Drives the sticky readout once the consumption card scrolls away. Two rows
   // because this step produces two numbers people confuse: what the appliances

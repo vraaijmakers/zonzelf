@@ -36,7 +36,13 @@ export interface OutputDef {
   id: OutputId
   register: Register
   label: string
-  page: '/calculators/load' | '/calculators/battery' | '/calculators/panels' | '/calculators/awg'
+  page:
+    | '/calculators/load'
+    | '/calculators/battery'
+    | '/calculators/inverter'
+    | '/calculators/panels'
+    | '/calculators/strings'
+    | '/calculators/awg'
   shipped: boolean
   /** What being wrong actually costs. */
   risk: string
@@ -71,8 +77,8 @@ export const CALCULATOR_OUTPUTS: OutputDef[] = [
     id: 'inverter-va',
     register: 'capacity',
     label: 'Inverter continuous / surge rating',
-    page: '/calculators/load',
-    shipped: false,
+    page: '/calculators/inverter',
+    shipped: true,
     risk: 'Inverter shuts down on motor start. Capacity, not fire.',
   },
   {

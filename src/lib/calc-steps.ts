@@ -11,9 +11,24 @@
  * system with no inverter sizing and no MPPT string check. Naming the gap is
  * differentiator #1 — the honest version of "you are not done yet". Give a
  * step its href in the same PR that ships its page and it lights up.
+ *
+ * WHY THE INVERTER COMES BEFORE THE PANELS
+ * ----------------------------------------
+ * It used to be step 4, after panels. That order cannot work, and the panel
+ * calculator was dangerous because of it: it emitted a panel count and had no
+ * way to say how to wire them, because how to wire them is decided entirely by
+ * the tracker they connect to. Series count is bounded by the unit's maximum
+ * PV input voltage; parallel count by its maximum input current; total array
+ * watts by its maximum PV power; and the sensible panel WATTAGE falls out of
+ * all three. Sizing an array before choosing the unit means designing against
+ * limits you have not read yet.
+ *
+ * So the unit is picked at step 3, and steps 4 and 5 design the array into it.
+ * Energy sizing (how many watts of panel the load needs) is genuinely
+ * independent and stays at step 4; step 5 is the arrangement.
  */
 export type StepId =
-  | 'load' | 'battery' | 'panels' | 'inverter' | 'controller' | 'protection' | 'system'
+  | 'load' | 'battery' | 'inverter' | 'panels' | 'array' | 'protection' | 'system'
 
 export interface CalcStep {
   id: StepId
@@ -41,19 +56,19 @@ export const CALC_STEPS: readonly CalcStep[] = [
     blurb: 'What stores it through the night and the grey days',
   },
   {
-    id: 'panels', n: 3, label: 'Panels', short: 'Panels',
+    id: 'inverter', n: 3, label: 'Inverter & surge', short: 'Inverter',
+    href: '/calculators/inverter',
+    blurb: 'What runs the house — and what starting a motor costs',
+  },
+  {
+    id: 'panels', n: 4, label: 'Panels', short: 'Panels',
     href: '/calculators/panels',
     blurb: 'What refills the bank in the sun you actually get',
   },
   {
-    id: 'inverter', n: 4, label: 'Inverter & surge', short: 'Inverter',
+    id: 'array', n: 5, label: 'Array wiring', short: 'Wiring',
     href: null,
-    blurb: 'What runs the house — and what starting a motor costs',
-  },
-  {
-    id: 'controller', n: 5, label: 'Charge controller', short: 'Charging',
-    href: null,
-    blurb: 'String voltage against the controller’s input window',
+    blurb: 'Series, parallel, and the cold morning that decides both',
   },
   {
     id: 'protection', n: 6, label: 'Cable & protection', short: 'Protection',
