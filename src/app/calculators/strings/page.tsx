@@ -11,13 +11,14 @@ import {
   vocAtTemperature, vmpAtTemperature, cellTempHot, vmpCoefficient,
   maxSeries, minSeries, evaluateArrangements,
   stringVocProtectionView, stringCurrentProtectionView, stringFuseProtectionView,
-  EXAMPLE_PANEL, EXAMPLE_TRACKER,
+  EXAMPLE_PANEL, EXAMPLE_TRACKER, PANEL_PRESETS,
   DEFAULT_CELL_RISE_C, DEFAULT_MPPT_HEADROOM,
   type PanelSpec, type TrackerSpec, type SiteConditions,
 } from '@/lib/pv-string'
 import {
-  PEAK_SUN_REGIONS, DEFAULT_DESIGN_LOW_C, DEFAULT_DESIGN_HIGH_C,
-} from '@/lib/peak-sun'
+  searchSites, siteById, sitesByRegion, recordMargin,
+  DEFAULT_DESIGN_LOW_C, DEFAULT_DESIGN_HIGH_C, SITE_CLIMATE_SOURCE, SITE_CLIMATES,
+} from '@/lib/site-climate'
 import { fieldHelp } from '@/lib/datasheet-vocabulary'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
@@ -122,7 +123,20 @@ export default function ArrayWiringPage() {
   const [lowC, setLowC] = usePersistentState<number>('zonzelf:array:lowC', DEFAULT_DESIGN_LOW_C)
   const [highC, setHighC] = usePersistentState<number>('zonzelf:array:highC', DEFAULT_DESIGN_HIGH_C)
   const [riseC, setRiseC] = usePersistentState<number>('zonzelf:array:riseC', DEFAULT_CELL_RISE_C)
+  const [siteId, setSiteId] = usePersistentState<string>('zonzelf:array:siteId', '')
+  const [placeQuery, setPlaceQuery] = usePersistentState<string>('zonzelf:array:placeQuery', '')
   const [count, setCount, countMeta] = usePersistentState<number>('zonzelf:array:panelCount', 8)
+
+  const chosenSite = siteId ? siteById(siteId) : undefined
+  const matches = searchSites(placeQuery)
+  const applySite = (id: string) => {
+    const site = siteById(id)
+    if (!site) return
+    setSiteId(id)
+    setPlaceQuery(site.place)
+    setLowC(site.designLowC)
+    setHighC(site.designHighC)
+  }
 
   const inverter = useInverterSummary()
   const panelSummary = usePanelSummary()
@@ -159,7 +173,7 @@ export default function ArrayWiringPage() {
         }
       : null
 
-  const site: SiteConditions = { recordLowC: lowC, designHighC: highC, cellRiseC: riseC }
+  const site: SiteConditions = { lowestExpectedC: lowC, designHighC: highC, cellRiseC: riseC }
   const ready = panel !== null && tracker !== null
 
   const perPanelCold = panel ? vocAtTemperature(panel.vocStc, panel.betaVoc, lowC) : 0
@@ -196,8 +210,29 @@ export default function ArrayWiringPage() {
     })
   }, [ready, best, useExample, anySafe, lowC, highC])
 
-  const setPanel = <K extends keyof PanelDraft>(k: K, v: PanelDraft[K]) =>
+  const setPanel = <K extends keyof PanelDraft>(k: K, v: PanelDraft[K]) => {
     setPanelDraft(p => ({ ...p, [k]: v }))
+    // Edited figures are no longer the preset's, and must stop citing it.
+    setPanelBrand('')
+  }
+
+  const [panelBrand, setPanelBrand] = usePersistentState<string>('zonzelf:array:panelModel', '')
+  const activePanel = PANEL_PRESETS.find(p => `${p.brand} ${p.model}` === panelBrand)
+
+  const applyPanelPreset = (preset: (typeof PANEL_PRESETS)[number]) => {
+    setUseExample(false)
+    setPanelBrand(`${preset.brand} ${preset.model}`)
+    setPanelDraft({
+      wattsStc: preset.wattsStc,
+      vocStc: preset.vocStc,
+      vmpStc: preset.vmpStc,
+      iscStc: preset.iscStc,
+      impStc: preset.impStc ?? null,
+      betaVoc: preset.betaVoc,
+      betaPmax: preset.betaPmax ?? null,
+      maxSeriesFuseA: preset.maxSeriesFuseA ?? null,
+    })
+  }
 
   const markers: WindowMarker[] = best
     ? [
@@ -486,34 +521,112 @@ export default function ArrayWiringPage() {
             </CardHeader>
             <CardContent className="space-y-4 pt-1">
               <p className="text-xs text-zon-muted">
-                This is the input the calculator most needs you to replace. The presets are ranges
-                across whole countries and states, and the record figures come from frost hollows
-                and mountains rather than from where people build. Get your own site&apos;s figure
-                — a local weather station&apos;s record low is a good source.
+                The coldest figure decides how many panels may go in a string, so it is worth
+                getting right. Each place below is a real thirty-year record for that spot — not a
+                region — and the spread inside one state is the reason: Phoenix and Flagstaff are
+                about fifteen degrees apart.
               </p>
 
               <div className="rounded-lg bg-zon-rule-soft p-3">
-                <p className="mb-2 text-xs font-medium text-zon-muted">
-                  Starting points by region — design low, and the all-time record
-                </p>
-                <div className="grid gap-1 sm:grid-cols-2">
-                  {PEAK_SUN_REGIONS.map(r => (
-                    <button
-                      key={r.region}
-                      onClick={() => { setLowC(r.designLowC); setHighC(r.designHighC) }}
-                      className={`rounded px-2 py-1.5 text-left text-xs transition-colors ${
-                        lowC === r.designLowC && highC === r.designHighC
-                          ? 'bg-zon-gold-tint font-medium text-zon-gold-deep'
-                          : 'text-zon-body hover:bg-zon-rule-soft'
-                      }`}
-                    >
-                      {r.region}
-                      <span className="float-right font-mono">
-                        {r.designLowC}° / {r.recordLowC}°
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                <label htmlFor="site-place" className="mb-1 block text-xs font-medium text-zon-muted">
+                  Find the nearest place to your site
+                </label>
+                <input
+                  id="site-place"
+                  type="search"
+                  value={placeQuery}
+                  onChange={e => { setPlaceQuery(e.target.value); setSiteId('') }}
+                  placeholder={`Type a town or country — ${SITE_CLIMATES.length} places`}
+                  className="w-full rounded-lg border border-zon-rule bg-zon-paper px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
+                />
+
+                {matches.length > 0 && !chosenSite && (
+                  <ul className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-zon-rule bg-zon-paper">
+                    {matches.map(match => (
+                      <li key={match.id}>
+                        <button
+                          onClick={() => applySite(match.id)}
+                          className="flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-zon-gold-tint"
+                        >
+                          <span className="text-zon-ink">
+                            {match.place}
+                            <span className="ml-1.5 text-zon-muted">{match.region}</span>
+                          </span>
+                          <span className="shrink-0 font-mono tabular-nums text-zon-body">
+                            {match.designLowC}° / {match.recordLowC}°
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {placeQuery.trim().length > 1 && matches.length === 0 && !chosenSite && (
+                  <p className="mt-2 text-xs text-zon-body">
+                    No match. This is a short list of named places, not a gazetteer — pick the
+                    nearest one you recognise, or type your own figures below. Yours is the
+                    better number either way.
+                  </p>
+                )}
+
+                {chosenSite && (
+                  <div className="mt-2 rounded-lg border border-zon-gold-light bg-zon-gold-tint px-3 py-2">
+                    <p className="text-xs font-medium text-zon-ink">{chosenSite.place}</p>
+                    <div className="mt-1 space-y-0.5 text-xs text-zon-body">
+                      <div className="flex justify-between gap-3">
+                        <span>Design low — mean of 30 annual minimums</span>
+                        <span className="font-mono tabular-nums">{chosenSite.designLowC} °C</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Record low — coldest day in 30 years</span>
+                        <span className="font-mono tabular-nums">{chosenSite.recordLowC} °C</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {recordMargin(chosenSite) !== null && lowC !== chosenSite.recordLowC && (
+                        <button
+                          onClick={() => setLowC(chosenSite.recordLowC)}
+                          className="rounded-full border border-zon-gold-light bg-zon-paper px-3 py-1 text-xs text-zon-gold-deep"
+                        >
+                          Size against the record instead ({chosenSite.recordLowC} °C,{' '}
+                          {recordMargin(chosenSite)}° colder) →
+                        </button>
+                      )}
+                      {lowC !== chosenSite.designLowC && (
+                        <button
+                          onClick={() => setLowC(chosenSite.designLowC)}
+                          className="rounded-full border border-zon-rule bg-zon-paper px-3 py-1 text-xs text-zon-body"
+                        >
+                          Back to the design low ({chosenSite.designLowC} °C)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!placeQuery.trim() && (
+                  <div className="mt-2 max-h-44 space-y-2 overflow-y-auto">
+                    {sitesByRegion().map(group => (
+                      <div key={group.region}>
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-zon-muted">
+                          {group.region}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {group.sites.map(place => (
+                            <button
+                              key={place.id}
+                              onClick={() => applySite(place.id)}
+                              title={`${place.place} · design ${place.designLowC}°C, record ${place.recordLowC}°C`}
+                              className="rounded border border-zon-rule bg-zon-paper px-1.5 py-0.5 text-[11px] text-zon-body hover:border-zon-gold-light"
+                            >
+                              {place.place.split(',')[0]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
@@ -533,6 +646,42 @@ export default function ArrayWiringPage() {
                   hint="Panels run 25–30° above the air."
                 />
               </div>
+
+              <details className="rounded-lg border border-zon-rule px-3 py-2">
+                <summary className="cursor-pointer text-xs font-medium text-zon-ink">
+                  None of these is your site — how to get your own figure
+                </summary>
+                <div className="mt-2 space-y-2 text-xs text-zon-muted">
+                  <p>
+                    Every row is a named place, so it describes that spot and nothing around it.
+                    Cold air pools in valleys, and a site a few miles from one of these can be
+                    several degrees colder. Three ways to do better:
+                  </p>
+                  <ul className="ml-4 list-disc space-y-1">
+                    <li>
+                      <strong className="text-zon-body">Your nearest weather station&apos;s record
+                      low.</strong> National met services publish these free. It is the number
+                      most builders end up using, and it is conservative.
+                    </li>
+                    <li>
+                      <strong className="text-zon-body">ASHRAE&apos;s extreme annual mean minimum
+                      design dry-bulb temperature</strong> for your location — the figure NEC
+                      690.7 actually points at, and what an installer would use. It is in the
+                      ASHRAE Handbook and in most professional PV design tools.
+                    </li>
+                    <li>
+                      <strong className="text-zon-body">Ask a local installer what they design
+                      to.</strong> They will know the number for your area without looking it up.
+                    </li>
+                  </ul>
+                  <p>
+                    When you are unsure, go colder. A colder figure means a higher string voltage,
+                    which means fewer panels in series — it costs you a little harvest and buys
+                    you the inverter.
+                  </p>
+                  <p className="border-t border-zon-rule pt-2">{SITE_CLIMATE_SOURCE}</p>
+                </div>
+              </details>
 
               {panel && (
                 <div className="space-y-2 border-t border-zon-rule pt-3 text-xs text-zon-body">
@@ -563,6 +712,51 @@ export default function ArrayWiringPage() {
               <CardTitle className="text-sm font-medium text-zon-body">Your panel</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-1">
+              {PANEL_PRESETS.length > 0 && (
+                <div className="rounded-lg bg-zon-rule-soft p-3">
+                  <p className="mb-2 text-xs font-medium text-zon-muted">
+                    Panels we have already read the datasheet for
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {PANEL_PRESETS.map(preset => {
+                      const active = activePanel?.id === preset.id
+                      return (
+                        <button
+                          key={preset.id}
+                          onClick={() => applyPanelPreset(preset)}
+                          aria-pressed={active}
+                          className={`rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
+                            active
+                              ? 'border-zon-gold bg-zon-gold text-zon-ink'
+                              : 'border-zon-rule hover:border-zon-gold-light'
+                          }`}
+                        >
+                          <span className="font-medium">{preset.model}</span>
+                          <span className="ml-1.5 text-xs text-zon-muted">
+                            {preset.brand} · {preset.wattsStc}W
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {activePanel && (
+                    <p className="mt-2 text-xs text-zon-muted">
+                      From{' '}
+                      <a
+                        href={activePanel.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-zon-gold-deep hover:underline"
+                      >
+                        {activePanel.brand}&apos;s own datasheet
+                      </a>
+                      . Check it against your copy — panel revisions change these numbers, and the
+                      Voc coefficient in particular decides how many you may put in a string.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <p className="text-xs text-zon-muted">
                 All of these are on the label on the back of the panel, and on its datasheet.
                 Voc and the temperature coefficient are the two that decide whether your inverter

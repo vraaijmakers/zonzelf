@@ -10,6 +10,8 @@ import {
   type PanelSpec, type TrackerSpec, type SiteConditions,
 } from '../pv-string'
 import { assertProtectionView } from '../calc-register'
+import { reviewPanelSpec } from '../panel-review'
+import { worstSeverity } from '../battery-review'
 
 // The panel from the guide's worked example, and the one in the plan's
 // regression case: 450W, Voc 49.5, betaVoc -0.28.
@@ -20,7 +22,7 @@ const PANEL: PanelSpec = {
 const TRACKER: TrackerSpec = {
   pvMaxInputV: 500, mpptMinV: 120, mpptMaxV: 450, pvMaxCurrentA: 25, pvMaxPowerW: 8000,
 }
-const COLD: SiteConditions = { recordLowC: -20, designHighC: 35 }
+const COLD: SiteConditions = { lowestExpectedC: -20, designHighC: 35 }
 
 test('Voc rises as it gets colder — the sign trap', () => {
   // 49.5 x [1 + (-0.28/100)(-45)] = 49.5 x 1.126 = 55.74
@@ -74,16 +76,16 @@ test('THE REGRESSION CASE: 12 panels in series looks fine at STC and is not', ()
 test('the series limit floors and never rounds up', () => {
   // Contrived so the division is almost exactly a whole number.
   const panel = { ...PANEL, vocStc: 50, betaVoc: 0 }
-  assert.equal(maxSeries(panel, { ...COLD, recordLowC: 25 }, 500), 10)
+  assert.equal(maxSeries(panel, { ...COLD, lowestExpectedC: 25 }, 500), 10)
   // One volt less of headroom must cost a whole panel.
-  assert.equal(maxSeries(panel, { ...COLD, recordLowC: 25 }, 499), 9)
+  assert.equal(maxSeries(panel, { ...COLD, lowestExpectedC: 25 }, 499), 9)
 })
 
 test('a colder site allows fewer panels in series, never more', () => {
   let previous = Number.POSITIVE_INFINITY
-  for (const recordLowC of [10, 0, -10, -20, -30, -40]) {
-    const n = maxSeries(PANEL, { ...COLD, recordLowC }, TRACKER.pvMaxInputV)
-    assert.ok(n <= previous, `${recordLowC} degC allowed more than the warmer case`)
+  for (const lowestExpectedC of [10, 0, -10, -20, -30, -40]) {
+    const n = maxSeries(PANEL, { ...COLD, lowestExpectedC }, TRACKER.pvMaxInputV)
+    assert.ok(n <= previous, `${lowestExpectedC} degC allowed more than the warmer case`)
     previous = n
   }
 })
@@ -315,13 +317,57 @@ test('the worked example is coherent and is nobody’s product', () => {
   assert.ok(EXAMPLE_TRACKER.mpptMinV < EXAMPLE_TRACKER.mpptMaxV)
 })
 
-test('every admitted panel preset satisfies the gate', () => {
+test('every admitted panel preset satisfies the gate and passes review', () => {
+  assert.ok(PANEL_PRESETS.length > 0, 'the panel library should not be empty any more')
+  const ids = PANEL_PRESETS.map(p => p.id)
+  assert.equal(new Set(ids).size, ids.length, 'duplicate panel preset id')
   for (const p of PANEL_PRESETS) {
     assert.ok(/^https:\/\//.test(p.sourceUrl), `${p.model}: needs a datasheet`)
-    assert.ok(p.betaVoc < 0 && p.betaVoc > -1, `${p.model}: betaVoc looks wrong`)
-    assert.ok(p.vmpStc < p.vocStc, `${p.model}: Vmp must be under Voc`)
-    assert.ok(p.impStc < p.iscStc, `${p.model}: Imp must be under Isc`)
+    const flags = reviewPanelSpec(p)
+    assert.notEqual(
+      worstSeverity(flags), 'fail',
+      `${p.model}: ${flags.filter(f => f.severity === 'fail').map(f => f.message).join('; ')}`,
+    )
   }
+})
+
+test('the SG550WM matches its datasheet', () => {
+  const p = PANEL_PRESETS.find(x => x.model === 'SG550WM')
+  assert.ok(p, 'the Sun Gold SG550WM should be in the library')
+  assert.equal(p.wattsStc, 550)
+  assert.equal(p.vocStc, 49.7)
+  assert.equal(p.vmpStc, 41.0)
+  assert.equal(p.iscStc, 14.03)
+  assert.equal(p.impStc, 13.45)
+  assert.equal(p.betaVoc, -0.35)
+  assert.equal(p.betaPmax, -0.38)
+  assert.equal(p.maxSeriesFuseA, 25)
+  // Vmp x Imp must land on the nameplate, or a row was read across.
+  assert.ok(Math.abs(p.vmpStc * p.impStc - p.wattsStc) / p.wattsStc < 0.01)
+})
+
+test('a steep Voc coefficient costs real panels in a string', () => {
+  // The SG550WM is at the steep end (-0.35%/degC), so it gains more voltage in
+  // cold than most. Against a 500V input at a -25.9 degC design low it takes
+  // eight in series where the STC label suggests ten — which is the entire
+  // reason this correction exists.
+  const p = PANEL_PRESETS.find(x => x.model === 'SG550WM')!
+  const site: SiteConditions = { lowestExpectedC: -25.9, designHighC: 32 }
+  assert.equal(Math.floor(500 / p.vocStc), 10, 'the naive STC answer')
+  assert.equal(maxSeries(p, site, 500), 8, 'the corrected answer')
+  const cold = vocAtTemperature(p.vocStc, p.betaVoc, -25.9)
+  assert.ok(cold > 58 && cold < 59, `got ${cold}`)
+})
+
+test('panel review catches a dropped minus sign and a swapped pair', () => {
+  const p = PANEL_PRESETS[0]
+  assert.ok(reviewPanelSpec({ ...p, betaVoc: 0.35 }).some(f => f.code === 'beta-voc-sign'))
+  assert.ok(reviewPanelSpec({ ...p, vmpStc: p.vocStc, vocStc: p.vmpStc }).some(f => f.code === 'vmp-above-voc'))
+  assert.ok(reviewPanelSpec({ ...p, impStc: p.iscStc + 1 }).some(f => f.code === 'imp-above-isc'))
+  // Nameplate read off another row.
+  assert.ok(reviewPanelSpec({ ...p, wattsStc: 400 }).some(f => f.code === 'power-math'))
+  // A fuse that would blow in normal sun.
+  assert.ok(reviewPanelSpec({ ...p, maxSeriesFuseA: 10 }).some(f => f.code === 'fuse-below-isc'))
 })
 
 test('the irradiance factor is the code value, not a rounded one', () => {
@@ -334,7 +380,7 @@ test('the irradiance factor is the code value, not a rounded one', () => {
 // figure it states is locked here. If one of these fails, fix BOTH.
 // ---------------------------------------------------------------------------
 
-const GUIDE_SITE: SiteConditions = { recordLowC: -12, designHighC: 35 }
+const GUIDE_SITE: SiteConditions = { lowestExpectedC: -12, designHighC: 35 }
 
 test('guide: one example panel reaches 49.7V at -12 degC, 10.4% over label', () => {
   const cold = vocAtTemperature(EXAMPLE_PANEL.vocStc, EXAMPLE_PANEL.betaVoc, -12)

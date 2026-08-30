@@ -339,15 +339,23 @@ export default function StringsAndMpptGuide() {
       <Note>
         <p>
           Two figures are in circulation and they are far apart. <strong>NEC 690.7</strong> points
-          at ASHRAE&apos;s <em>extreme annual mean minimum design dry-bulb temperature</em> — a
-          statistical figure for your location. The other is simply the coldest reading ever taken
-          nearby, which is colder and more conservative.
+          at ASHRAE&apos;s <em>extreme annual mean minimum design dry-bulb temperature</em> — the
+          average of each year&apos;s coldest day, a statistical figure for your location. The
+          other is simply the coldest reading ever taken nearby, which is colder and more
+          conservative. Either is defensible; the colder one costs you a panel in the string and
+          buys certainty.
         </p>
         <p>
-          Either is defensible; the colder one costs you a panel in the string and buys certainty.
-          What is <em>not</em> defensible is using a regional record from a mountain or a frost
-          hollow for a coastal site — that will cut your string in half for weather you will never
-          get. A local weather station&apos;s record low is the number worth finding.
+          What is <em>not</em> defensible is using a figure for a whole region. Phoenix and
+          Flagstaff are both in Arizona and about fifteen degrees apart; a single &ldquo;Arizona&rdquo;
+          number is badly wrong for at least one of them, and being wrong on the warm side is what
+          destroys inverters. The{' '}
+          <Link href="/calculators/strings" className="text-zon-gold-deep hover:underline">
+            array wiring calculator
+          </Link>{' '}
+          carries both figures for around ninety named places, each derived from thirty years of
+          daily reanalysis data rather than typed from memory — and it still asks you to replace
+          them with a local number, because a place a few miles away in a valley is colder again.
         </p>
       </Note>
 

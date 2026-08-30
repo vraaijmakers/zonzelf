@@ -165,7 +165,44 @@ export interface PanelSpec {
  * Empty is the honest state until that work is done. It is not the same thing
  * as the worked example below, which claims to be nobody's product.
  */
-export const PANEL_PRESETS: (PanelSpec & { brand: string; model: string; sourceUrl: string })[] = []
+export const PANEL_PRESETS: (PanelSpec & {
+  id: string
+  brand: string
+  model: string
+  sourceUrl: string
+})[] = [
+  // Sun Gold Power SG550WM. Every figure from the manufacturer's own datasheet
+  // (182Mono550W-SG550WM-20260720.pdf, served from their Shopify CDN — that is
+  // their own store, so it is the manufacturer's document, not a reseller's
+  // transcription). Verified reachable.
+  //
+  // A good sheet to have first, because it publishes all three of the fields
+  // this module needs and many do not: the Voc coefficient, the Pmax
+  // coefficient, and the maximum series fuse rating.
+  //
+  // Worth noting for anyone reading the maths: -0.35%/degC is at the steep end
+  // of the -0.25 to -0.35 range for a modern module, so this panel gains MORE
+  // voltage in cold than most. At a -25.9 degC design low it reaches 58.5V
+  // against a 49.7V label — 17.8% over — which is why it takes only eight in
+  // series on a 500V input where the STC figure suggests ten.
+  //
+  // Checks: Vmp x Imp = 41.00 x 13.45 = 551.5W against a 550W nameplate
+  // (0.3% out, within tolerance), fill factor 0.79.
+  {
+    id: 'sungold-sg550wm',
+    brand: 'Sun Gold Power',
+    model: 'SG550WM',
+    wattsStc: 550,
+    vocStc: 49.7,
+    vmpStc: 41.0,
+    iscStc: 14.03,
+    impStc: 13.45,
+    betaVoc: -0.35,
+    betaPmax: -0.38,
+    maxSeriesFuseA: 25,
+    sourceUrl: 'https://cdn.shopify.com/s/files/1/0323/4090/2025/files/182Mono550W-SG550WM-20260720.pdf?v=1784537348',
+  },
+]
 
 /**
  * A made-up panel, for learning the mechanism without a datasheet to hand.
@@ -223,8 +260,16 @@ export interface TrackerSpec {
 }
 
 export interface SiteConditions {
-  /** Lowest ambient temperature ever expected. Sets the cold Voc. */
-  recordLowC: number
+  /**
+   * The lowest ambient temperature the design is being held to, in degC.
+   *
+   * Named for what it IS rather than where it came from. It may be ASHRAE's
+   * extreme annual mean minimum (what NEC 690.7 points at, and the default) or
+   * an all-time record, whichever the user chose — calling the field
+   * `recordLowC` while it usually held the design figure was the kind of
+   * same-word-different-meaning drift that has bitten this codebase before.
+   */
+  lowestExpectedC: number
   /** Hottest ambient temperature expected. Sets the sagging Vmp with the rise. */
   designHighC: number
   /** Cell temperature above ambient in full sun. */
@@ -276,7 +321,7 @@ export function vmpCoefficient(panel: PanelSpec): { beta: number; from: VmpCoeff
  * ceiling. Floor, never round up: one panel over is the whole failure.
  */
 export function maxSeries(panel: PanelSpec, site: SiteConditions, pvMaxInputV: number): number {
-  const cold = vocAtTemperature(panel.vocStc, panel.betaVoc, site.recordLowC)
+  const cold = vocAtTemperature(panel.vocStc, panel.betaVoc, site.lowestExpectedC)
   if (!(cold > 0) || !(pvMaxInputV > 0)) return 0
   return Math.floor(pvMaxInputV / cold)
 }
@@ -385,7 +430,7 @@ export function checkArrangement(
   headroom = DEFAULT_MPPT_HEADROOM,
 ): ArrangementCheck {
   const { beta, from } = vmpCoefficient(panel)
-  const vocColdV = vocAtTemperature(panel.vocStc, panel.betaVoc, site.recordLowC) * series
+  const vocColdV = vocAtTemperature(panel.vocStc, panel.betaVoc, site.lowestExpectedC) * series
   const vocStcV = panel.vocStc * series
   const vmpHotV =
     vmpAtTemperature(panel.vmpStc, beta, cellTempHot(site.designHighC, site.cellRiseC)) * series
@@ -483,7 +528,7 @@ export function stringVocProtectionView(
   tracker: TrackerSpec,
   site: SiteConditions,
 ): ProtectionView {
-  const perPanelCold = vocAtTemperature(panel.vocStc, panel.betaVoc, site.recordLowC)
+  const perPanelCold = vocAtTemperature(panel.vocStc, panel.betaVoc, site.lowestExpectedC)
   const limit = maxSeries(panel, site, tracker.pvMaxInputV)
   const risePct = perPanelCold > 0 ? ((perPanelCold / panel.vocStc - 1) * 100) : 0
   const sources = [PV_SOURCES.voltage]
@@ -494,7 +539,7 @@ export function stringVocProtectionView(
       title: 'Panels in series before the inverter is over its limit',
       options: [],
       empty:
-        `One panel on its own reaches ${perPanelCold.toFixed(1)}V at ${site.recordLowC} degC, ` +
+        `One panel on its own reaches ${perPanelCold.toFixed(1)}V at ${site.lowestExpectedC} degC, ` +
         `which is already past this unit's ${tracker.pvMaxInputV}V maximum. This panel and ` +
         'this inverter cannot be used together at this site.',
       steps: [],
@@ -511,7 +556,7 @@ export function stringVocProtectionView(
       {
         title: 'Cold makes the voltage rise',
         body:
-          `Voc(T) = Voc x [1 + beta/100 x (T - 25)]. At ${site.recordLowC} degC with a ` +
+          `Voc(T) = Voc x [1 + beta/100 x (T - 25)]. At ${site.lowestExpectedC} degC with a ` +
           `${panel.betaVoc}%/degC coefficient, a ${panel.vocStc}V panel reaches ` +
           `${perPanelCold.toFixed(1)}V — ${risePct.toFixed(1)}% over its label. The coefficient ` +
           'is negative and the temperature is below 25 degC, so the two negatives multiply to ' +
