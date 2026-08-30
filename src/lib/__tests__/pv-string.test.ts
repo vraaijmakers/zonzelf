@@ -19,8 +19,11 @@ const PANEL: PanelSpec = {
   wattsStc: 450, vocStc: 49.5, vmpStc: 41.5, iscStc: 11.5, impStc: 10.9,
   betaVoc: -0.28, betaPmax: -0.35, maxSeriesFuseA: 20,
 }
+// One tracker on purpose: it keeps every existing assertion meaning what it
+// meant before mpptCount existed. The multi-tracker cases are tested below.
 const TRACKER: TrackerSpec = {
   pvMaxInputV: 500, mpptMinV: 120, mpptMaxV: 450, pvMaxCurrentA: 25, pvMaxPowerW: 8000,
+  mpptCount: 1,
 }
 const COLD: SiteConditions = { lowestExpectedC: -20, designHighC: 35 }
 
@@ -181,6 +184,79 @@ test('the current protection view is sized against the short-circuit rating', ()
   const body = view.steps.map(x => x.body).join(' ')
   assert.match(body, /SHORT-CIRCUIT/)
   assert.match(body, /17A/, 'the usable figure must appear as the harvest limit')
+})
+
+test('THE BUG: trackers are separate inputs, so their currents do not add', () => {
+  // Reported from real use: 7 in series on each of 2 trackers. The old model
+  // summed both strings onto one input and called a working design impossible.
+  const p = { ...PANEL, iscStc: 14.03, vocStc: 49.7, vmpStc: 41, impStc: 13.45, wattsStc: 550, betaVoc: -0.35, betaPmax: -0.38 }
+  const twoTrackers: TrackerSpec = {
+    pvMaxInputV: 500, mpptMinV: 125, mpptMaxV: 425,
+    pvMaxCurrentA: 22, pvMaxPowerW: 11000, mpptCount: 2,
+  }
+  const site: SiteConditions = { lowestExpectedC: -25.9, designHighC: 32 }
+
+  const a = checkArrangement(p, twoTrackers, site, 7, 2)
+  assert.equal(a.stringsPerTracker, 1, 'two strings over two trackers is one each')
+  assert.equal(a.trackersUsed, 2)
+  // One string's current per input, not two.
+  assert.ok(Math.abs(a.designIscA - 14.03 * 1.25) < 0.01, `got ${a.designIscA}`)
+  assert.equal(a.exceedsCurrent, false, 'this is the false rejection that was reported')
+  // And the voltage is one string's, never both stacked.
+  assert.ok(a.vocColdV > 409 && a.vocColdV < 411, `got ${a.vocColdV}`)
+  assert.ok(a.vocColdV < twoTrackers.pvMaxInputV)
+  assert.equal(a.safe, true)
+})
+
+test('voltage never adds across trackers, however many strings there are', () => {
+  const p = { ...PANEL, iscStc: 5 }
+  const four: TrackerSpec = { ...TRACKER, mpptCount: 4, pvMaxCurrentA: 25 }
+  // The string voltage is identical whether it is alone or one of four.
+  const alone = checkArrangement(p, four, COLD, 6, 1)
+  const among = checkArrangement(p, four, COLD, 6, 4)
+  assert.equal(alone.vocColdV, among.vocColdV)
+  assert.equal(among.stringsPerTracker, 1)
+  assert.equal(among.designIscA, alone.designIscA)
+})
+
+test('uneven spreads are judged on the worst-loaded tracker', () => {
+  const p = { ...PANEL, iscStc: 6 }
+  const two: TrackerSpec = { ...TRACKER, mpptCount: 2, pvMaxCurrentA: 20 }
+  // Three strings over two trackers: 2 on one, 1 on the other. Judge the 2.
+  const three = checkArrangement(p, two, COLD, 4, 3)
+  assert.equal(three.stringsPerTracker, 2)
+  assert.equal(three.trackersUsed, 2)
+  assert.equal(three.designIscA, 6 * 2 * 1.25)
+  assert.equal(three.exceedsCurrent, false, '15A is inside 20A')
+  // Total array current is still reported, and is larger than any one input's.
+  assert.equal(three.arrayIscA, 18)
+  assert.ok(three.arrayIscA > three.designIscA / 1.25)
+})
+
+test('a per-tracker power limit binds before the total does', () => {
+  // EG4 publishes "8000W (4000W per MPPT)": 8kW all on one input is over.
+  const p = { ...PANEL, wattsStc: 500, iscStc: 5 }
+  const t: TrackerSpec = {
+    ...TRACKER, mpptCount: 2, pvMaxPowerW: 8000, pvMaxPowerPerMpptW: 4000, pvMaxCurrentA: 25,
+  }
+  const lopsided = checkArrangement(p, t, COLD, 8, 1)
+  assert.equal(lopsided.arrayW, 4000)
+  assert.equal(lopsided.trackerWattsW, 4000)
+  assert.equal(lopsided.exceedsPower, false, 'exactly at the per-tracker limit')
+  const over = checkArrangement(p, t, COLD, 9, 1)
+  assert.equal(over.trackerWattsW, 4500)
+  assert.equal(over.exceedsPower, true, 'one input over its own limit, total still under')
+  assert.ok(over.arrayW < t.pvMaxPowerW, 'and the total is nowhere near the ceiling')
+})
+
+test('the current view names the per-tracker count and the total', () => {
+  const p = { ...PANEL, iscStc: 6 }
+  const two: TrackerSpec = { ...TRACKER, mpptCount: 2, pvMaxCurrentA: 20, pvMaxIscA: undefined }
+  const view = stringCurrentProtectionView(p, two)
+  assertProtectionView(view)
+  // 20 / 7.5 = 2.67 -> 2 per tracker, 4 in total.
+  assert.deepEqual(view.options, ['1 per tracker (2 total)', '2 per tracker (4 total)'])
+  assert.match(view.steps.map(x => x.body).join(' '), /do not add up/)
 })
 
 test('string fusing flips at exactly three parallel strings', () => {

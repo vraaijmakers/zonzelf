@@ -170,6 +170,7 @@ export default function ArrayWiringPage() {
           pvMaxCurrentA: inverter.pvMaxCurrentA,
           pvMaxIscA: inverter.pvMaxIscA,
           pvMaxPowerW: inverter.pvMaxPowerW,
+          mpptCount: inverter.mpptCount,
         }
       : null
 
@@ -364,8 +365,16 @@ export default function ArrayWiringPage() {
                         {anySafe ? (
                           <>
                             {best.series} in series, {best.parallel} string
-                            {best.parallel === 1 ? '' : 's'} in parallel ·{' '}
-                            {(best.arrayW / 1000).toFixed(1)} kW
+                            {best.parallel === 1 ? '' : 's'}
+                            {tracker.mpptCount > 1 && (
+                              <>
+                                {' '}across {best.trackersUsed} of {tracker.mpptCount} trackers
+                                {best.stringsPerTracker > 1
+                                  ? ` (${best.stringsPerTracker} each)`
+                                  : ' (one each)'}
+                              </>
+                            )}{' '}
+                            · {(best.arrayW / 1000).toFixed(1)} kW
                           </>
                         ) : (
                           <>
@@ -449,7 +458,7 @@ export default function ArrayWiringPage() {
                         <th scope="col" className="px-4 py-2 text-left">Wiring</th>
                         <th scope="col" className="px-3 py-2 text-right">Cold Voc</th>
                         <th scope="col" className="px-3 py-2 text-right">Hot Vmp</th>
-                        <th scope="col" className="px-3 py-2 text-right">Current</th>
+                        <th scope="col" className="px-3 py-2 text-right">A / tracker</th>
                         <th scope="col" className="px-4 py-2 text-left">Verdict</th>
                       </tr>
                     </thead>
@@ -499,6 +508,17 @@ export default function ArrayWiringPage() {
                     voltage. That is the whole of it — everything above is those two sentences
                     against your inverter&apos;s two limits.
                   </p>
+                  {tracker.mpptCount > 1 && (
+                    <p>
+                      <strong className="text-zon-body">Your unit has {tracker.mpptCount}{' '}
+                      independent trackers, and that changes how the limits apply.</strong> They
+                      are separate inputs, not one input with double the capacity. Voltage never
+                      adds across them — {seriesMax} panels in series on each tracker is{' '}
+                      {seriesMax} panels&apos; worth of volts at <em>each</em> input, not twice
+                      it. Currents do not add either, so the amps column above is what one
+                      tracker carries, not the whole array.
+                    </p>
+                  )}
                   <p>
                     Between {seriesMin} and {seriesMax} panels in series works for this pairing:
                     fewer than {seriesMin} and the string sags under the tracking floor on a hot

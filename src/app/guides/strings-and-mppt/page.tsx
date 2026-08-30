@@ -487,6 +487,40 @@ export default function StringsAndMpptGuide() {
         strings in parallel = floor( tracker max input current ÷ ( Isc × 1.25 ) )
       </Formula>
 
+      <H3>Two trackers is two inputs, not one bigger input</H3>
+      <P>
+        Most hybrid inverters have two MPPTs, and this is where a lot of otherwise-careful
+        designs go wrong in <em>both</em> directions. Each tracker is a completely separate
+        input with its own voltage window and its own current rating. Nothing adds across them.
+      </P>
+      <Warn>
+        <p>
+          <strong>Seven panels in series on each of two trackers is not fourteen in series.</strong>{' '}
+          Each input sees seven panels&apos; worth of voltage. With a 49.7 V panel at −25.9 °C
+          that is about 410 V at each input — comfortably inside a 500 V limit. Wire the same
+          fourteen panels as one string and you get 820 V, and the inverter is scrap.
+        </p>
+      </Warn>
+      <P>
+        The same logic runs the other way for current, and it is the half people
+        <em> over</em>-correct for: two strings on a two-tracker unit is one string per input,
+        so each input carries one string&apos;s current, not both. A 22 A per-tracker rating is
+        not something two 17.5 A strings breach — unless you put them both on the same tracker.
+      </P>
+      <P>
+        Power is the exception that does add, because the array as a whole has to fit the
+        unit&apos;s total. Watch for datasheets that give both: EG4&apos;s 6000XP says
+        &ldquo;8000 W (4000 W per MPPT)&rdquo;, so eight kilowatts all on one input is over the
+        per-tracker limit even though it exactly matches the total.
+      </P>
+      <Note>
+        <p>
+          Rule of thumb: <strong>voltage and current are per input; power is usually both.</strong>{' '}
+          When an arrangement is checked, every per-tracker limit is judged on the
+          worst-loaded tracker — three strings across two trackers means one of them carries two.
+        </p>
+      </Note>
+
       <H3>Current has two limits too, for the same reason voltage does</H3>
       <P>
         Look carefully at which input current your datasheet gives, because good ones give two.

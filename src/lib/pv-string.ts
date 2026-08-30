@@ -87,6 +87,28 @@
  * number is given it is the damage ceiling. Conflating them is why this module
  * carries both and never rounds up.
  *
+ * TRACKERS ARE SEPARATE INPUTS, AND THIS IS EASY TO GET WRONG
+ * -----------------------------------------------------------
+ * A unit with two MPPTs has two independent inputs, not one input with twice
+ * the capacity. That single fact decides how every limit is applied:
+ *
+ *   - VOLTAGE NEVER ADDS ACROSS TRACKERS. Seven panels in series on each of
+ *     two trackers is 7 x Voc at each input, not 14 x Voc. Fourteen panels,
+ *     and neither input is near its ceiling.
+ *   - CURRENT LIMITS ARE PER TRACKER. Two strings on a two-tracker unit is one
+ *     string per input, so each sees one string's current — not both.
+ *   - POWER is usually quoted as a total AND sometimes per tracker, and the
+ *     per-tracker figure binds first if an array is lopsided.
+ *
+ * This module previously ignored mpptCount entirely and compared the TOTAL
+ * parallel current against the PER-TRACKER rating, which falsely rejected
+ * ordinary layouts: 7S2P on a two-tracker unit came back as 35A against a 22A
+ * input when each input actually carries 17.5A. Over-conservative is the safe
+ * direction to be wrong in, but it told people a working design was impossible.
+ *
+ * Strings are assumed spread as evenly as the trackers allow, and every
+ * per-tracker check uses the WORST-loaded one — ceil(strings / trackers).
+ *
  * PARALLEL, AND WHY THREE IS THE MAGIC NUMBER
  * -------------------------------------------
  * Each string is a source AND a fault path. If one string faults, every OTHER
@@ -231,6 +253,7 @@ export const EXAMPLE_TRACKER: TrackerSpec = {
   mpptMaxV: 450,
   pvMaxCurrentA: 25,
   pvMaxPowerW: 8000,
+  mpptCount: 2,
 }
 
 export interface TrackerSpec {
@@ -255,8 +278,21 @@ export interface TrackerSpec {
    * use.
    */
   pvMaxIscA?: number
-  /** Maximum PV array power the unit accepts, total. */
+  /** Maximum PV array power the unit accepts, total across all trackers. */
   pvMaxPowerW: number
+  /**
+   * Independent MPPT trackers. Decisive, not decorative — see the header. Each
+   * is a SEPARATE input with its own voltage window and its own current
+   * rating, so strings spread across trackers do not add up against either.
+   */
+  mpptCount: number
+  /**
+   * Maximum PV power on ONE tracker, where the datasheet states it separately
+   * from the total. The EG4 6000XP gives "8000W (4000W per MPPT)", so an 8kW
+   * array all on one input is over the per-tracker limit even though it is
+   * exactly the total.
+   */
+  pvMaxPowerPerMpptW?: number
 }
 
 export interface SiteConditions {
@@ -387,10 +423,20 @@ export interface ArrangementCheck {
   vmpHotV: number
   vmpCoefficientFrom: VmpCoefficientSource
 
-  /** Array current before the irradiance factor. */
+  /** Total array current across every string, before the irradiance factor. */
   arrayIscA: number
-  /** After NEC 690.8(A)(1). What the tracker's limit is compared against. */
+  /**
+   * Design current into the WORST-LOADED tracker, after NEC 690.8(A)(1).
+   * This is what a per-tracker input rating is compared against — not the
+   * whole array's current, which no single input ever sees.
+   */
   designIscA: number
+  /** Strings on the worst-loaded tracker: ceil(parallel / mpptCount). */
+  stringsPerTracker: number
+  /** How many of the unit's trackers this arrangement actually uses. */
+  trackersUsed: number
+  /** Array watts on the worst-loaded tracker. */
+  trackerWattsW: number
 
   /** vocCold exceeds the absolute maximum. PROTECTION — destroys the unit. */
   exceedsDamageCeiling: boolean
@@ -435,9 +481,16 @@ export function checkArrangement(
   const vmpHotV =
     vmpAtTemperature(panel.vmpStc, beta, cellTempHot(site.designHighC, site.cellRiseC)) * series
 
+  // Trackers are separate inputs, so per-tracker limits see only the strings
+  // on that input. Spread as evenly as possible, and judge the worst one.
+  const trackers = Math.max(1, Math.floor(tracker.mpptCount) || 1)
+  const trackersUsed = Math.min(parallel, trackers)
+  const stringsPerTracker = Math.ceil(parallel / trackers)
+
   const arrayIscA = panel.iscStc * parallel
-  const designIscA = arrayIscA * PV_IRRADIANCE_FACTOR
+  const designIscA = panel.iscStc * stringsPerTracker * PV_IRRADIANCE_FACTOR
   const arrayW = panel.wattsStc * series * parallel
+  const trackerWattsW = panel.wattsStc * series * stringsPerTracker
 
   const exceedsDamageCeiling = vocColdV > tracker.pvMaxInputV
   const exceedsTrackingCeiling = !exceedsDamageCeiling && vocColdV > tracker.mpptMaxV
@@ -450,7 +503,9 @@ export function checkArrangement(
   const currentDamageLimit = tracker.pvMaxIscA ?? tracker.pvMaxCurrentA
   const exceedsCurrent = designIscA > currentDamageLimit
   const exceedsUsableCurrent = !exceedsCurrent && designIscA > tracker.pvMaxCurrentA
-  const exceedsPower = arrayW > tracker.pvMaxPowerW
+  const exceedsPower =
+    arrayW > tracker.pvMaxPowerW ||
+    (tracker.pvMaxPowerPerMpptW !== undefined && trackerWattsW > tracker.pvMaxPowerPerMpptW)
 
   const safe = !exceedsDamageCeiling && !exceedsCurrent && !belowWindow
 
@@ -460,7 +515,7 @@ export function checkArrangement(
     arrayW,
     vocColdV, vocStcV, vmpHotV,
     vmpCoefficientFrom: from,
-    arrayIscA, designIscA,
+    arrayIscA, designIscA, stringsPerTracker, trackersUsed, trackerWattsW,
     exceedsDamageCeiling, exceedsTrackingCeiling, belowWindow, thinHeadroom,
     exceedsCurrent, exceedsUsableCurrent, exceedsPower,
     stringFuseRequired: stringFuseRequired(parallel, panel.iscStc, panel.maxSeriesFuseA),
@@ -616,10 +671,15 @@ export function stringCurrentProtectionView(
     }
   }
 
+  const trackers = Math.max(1, Math.floor(tracker.mpptCount) || 1)
   return {
     id: 'string-current',
-    title: 'Strings in parallel before the tracker is over its current limit',
-    options: Array.from({ length: limit }, (_, i) => `${i + 1} in parallel`),
+    title: `Strings per tracker before ${trackers > 1 ? 'an input is' : 'the input is'} over its current limit`,
+    options: Array.from({ length: limit }, (_, i) =>
+      trackers > 1
+        ? `${i + 1} per tracker (${(i + 1) * trackers} total)`
+        : `${i + 1} in parallel`,
+    ),
     empty: null,
     steps: [
       {
@@ -641,8 +701,13 @@ export function stringCurrentProtectionView(
         body:
           `${damageLimit}A / ${perString.toFixed(1)}A = ` +
           `${(damageLimit / perString).toFixed(2)}, so ${limit} string` +
-          `${limit === 1 ? '' : 's'} in parallel per tracker. A unit with more than one ` +
-          'tracker gets this many on each, not this many in total.' +
+          `${limit === 1 ? '' : 's'} per tracker. ` +
+          (trackers > 1
+            ? `This unit has ${trackers} independent trackers, so that is ${limit} on EACH — ` +
+              `${limit * trackers} strings in total. Their currents do not add up, because ` +
+              'they are separate inputs. Neither do their voltages: the same panel count in ' +
+              'series on each tracker is that voltage at each input, not twice it.'
+            : 'This unit has a single tracker, so every parallel string lands on it.') +
           (tracker.pvMaxIscA !== undefined && tracker.pvMaxIscA > tracker.pvMaxCurrentA
             ? ` This is the SHORT-CIRCUIT rating. The same datasheet also gives a usable ` +
               `input current of ${tracker.pvMaxCurrentA}A, which is what the tracker can ` +
