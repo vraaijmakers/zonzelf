@@ -20,6 +20,10 @@ import {
   DEFAULT_DESIGN_LOW_C, DEFAULT_DESIGN_HIGH_C, SITE_CLIMATE_SOURCE, SITE_CLIMATES,
 } from '@/lib/site-climate'
 import { fieldHelp } from '@/lib/datasheet-vocabulary'
+import {
+  DEFAULT_TEMP_UNIT, unitLabel, toDisplay, fromDisplay, deltaToDisplay, deltaFromDisplay,
+  formatTemp, formatDelta, formatBoth, COEFFICIENT_UNIT_NOTE, type TempUnit,
+} from '@/lib/temperature'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import MpptWindowBar, { type WindowMarker } from '@/components/calculators/MpptWindowBar'
@@ -124,6 +128,8 @@ export default function ArrayWiringPage() {
   const [highC, setHighC] = usePersistentState<number>('zonzelf:array:highC', DEFAULT_DESIGN_HIGH_C)
   const [riseC, setRiseC] = usePersistentState<number>('zonzelf:array:riseC', DEFAULT_CELL_RISE_C)
   const [siteId, setSiteId] = usePersistentState<string>('zonzelf:array:siteId', '')
+  // Stored in Celsius always; this is a display preference only.
+  const [unit, setUnit] = usePersistentState<TempUnit>('zonzelf:tempUnit', DEFAULT_TEMP_UNIT)
   const [placeQuery, setPlaceQuery] = usePersistentState<string>('zonzelf:array:placeQuery', '')
   const [count, setCount, countMeta] = usePersistentState<number>('zonzelf:array:panelCount', 8)
 
@@ -244,13 +250,13 @@ export default function ArrayWiringPage() {
         {
           volts: best.vmpHotV,
           label: 'Working, hot',
-          detail: `what the string sits at on a ${highC} degree day, with the cells ${riseC} degrees hotter still`,
+          detail: `what the string sits at on a ${formatTemp(highC, unit)} day, with the cells ${formatDelta(riseC, unit)} hotter still`,
           tone: best.belowWindow ? 'bad' : best.thinHeadroom ? 'warn' : 'ok',
         },
         {
           volts: best.vocColdV,
           label: 'Open circuit, cold',
-          detail: `what it reaches at dawn at ${lowC} degrees, before the inverter wakes`,
+          detail: `what it reaches at dawn at ${formatTemp(lowC, unit)}, before the inverter wakes`,
           tone: best.exceedsDamageCeiling ? 'bad' : best.exceedsTrackingCeiling ? 'warn' : 'ok',
         },
       ]
@@ -548,7 +554,7 @@ export default function ArrayWiringPage() {
                 The coldest figure decides how many panels may go in a string, so it is worth
                 getting right. Each place below is a real thirty-year record for that spot — not a
                 region — and the spread inside one state is the reason: Phoenix and Flagstaff are
-                about fifteen degrees apart.
+                about {deltaToDisplay(15, unit)} {unit === 'F' ? 'Fahrenheit degrees' : 'degrees'} apart.
               </p>
 
               <div className="rounded-lg bg-zon-rule-soft p-3">
@@ -577,7 +583,7 @@ export default function ArrayWiringPage() {
                             <span className="ml-1.5 text-zon-muted">{match.region}</span>
                           </span>
                           <span className="shrink-0 font-mono tabular-nums text-zon-body">
-                            {match.designLowC}° / {match.recordLowC}°
+                            {toDisplay(match.designLowC, unit)}° / {toDisplay(match.recordLowC, unit)}°
                           </span>
                         </button>
                       </li>
@@ -599,11 +605,11 @@ export default function ArrayWiringPage() {
                     <div className="mt-1 space-y-0.5 text-xs text-zon-body">
                       <div className="flex justify-between gap-3">
                         <span>Design low — mean of 30 annual minimums</span>
-                        <span className="font-mono tabular-nums">{chosenSite.designLowC} °C</span>
+                        <span className="font-mono tabular-nums">{formatTemp(chosenSite.designLowC, unit)}</span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span>Record low — coldest day in 30 years</span>
-                        <span className="font-mono tabular-nums">{chosenSite.recordLowC} °C</span>
+                        <span className="font-mono tabular-nums">{formatTemp(chosenSite.recordLowC, unit)}</span>
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -612,8 +618,8 @@ export default function ArrayWiringPage() {
                           onClick={() => setLowC(chosenSite.recordLowC)}
                           className="rounded-full border border-zon-gold-light bg-zon-paper px-3 py-1 text-xs text-zon-gold-deep"
                         >
-                          Size against the record instead ({chosenSite.recordLowC} °C,{' '}
-                          {recordMargin(chosenSite)}° colder) →
+                          Size against the record instead ({formatTemp(chosenSite.recordLowC, unit)},{' '}
+                          {deltaToDisplay(recordMargin(chosenSite)!, unit)}° colder) →
                         </button>
                       )}
                       {lowC !== chosenSite.designLowC && (
@@ -621,7 +627,7 @@ export default function ArrayWiringPage() {
                           onClick={() => setLowC(chosenSite.designLowC)}
                           className="rounded-full border border-zon-rule bg-zon-paper px-3 py-1 text-xs text-zon-body"
                         >
-                          Back to the design low ({chosenSite.designLowC} °C)
+                          Back to the design low ({formatTemp(chosenSite.designLowC, unit)})
                         </button>
                       )}
                     </div>
@@ -640,7 +646,7 @@ export default function ArrayWiringPage() {
                             <button
                               key={place.id}
                               onClick={() => applySite(place.id)}
-                              title={`${place.place} · design ${place.designLowC}°C, record ${place.recordLowC}°C`}
+                              title={`${place.place} · design ${formatTemp(place.designLowC, unit)}, record ${formatTemp(place.recordLowC, unit)}`}
                               className="rounded border border-zon-rule bg-zon-paper px-1.5 py-0.5 text-[11px] text-zon-body hover:border-zon-gold-light"
                             >
                               {place.place.split(',')[0]}
@@ -653,21 +659,46 @@ export default function ArrayWiringPage() {
                 )}
               </div>
 
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-zon-muted">Show temperatures in</span>
+                <div className="flex gap-1" role="group" aria-label="Temperature unit">
+                  {(['F', 'C'] as TempUnit[]).map(u => (
+                    <button
+                      key={u}
+                      onClick={() => setUnit(u)}
+                      aria-pressed={unit === u}
+                      className={`rounded-lg border px-3 py-1 text-sm transition-colors ${
+                        unit === u
+                          ? 'border-zon-gold bg-zon-gold text-zon-ink'
+                          : 'border-zon-rule hover:border-zon-gold-light'
+                      }`}
+                    >
+                      {unitLabel(u)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <NumField
-                  id="site-low" label="Coldest expected" unit="°C" step="1"
-                  value={lowC} onChange={v => setLowC(v ?? DEFAULT_DESIGN_LOW_C)}
+                  id="site-low" label="Coldest expected" unit={unitLabel(unit)} step="1"
+                  value={toDisplay(lowC, unit)}
+                  onChange={v => setLowC(v === null ? DEFAULT_DESIGN_LOW_C : fromDisplay(v, unit))}
                   hint="Sets the highest voltage your array ever produces."
                 />
                 <NumField
-                  id="site-high" label="Hottest expected" unit="°C" step="1"
-                  value={highC} onChange={v => setHighC(v ?? DEFAULT_DESIGN_HIGH_C)}
+                  id="site-high" label="Hottest expected" unit={unitLabel(unit)} step="1"
+                  value={toDisplay(highC, unit)}
+                  onChange={v => setHighC(v === null ? DEFAULT_DESIGN_HIGH_C : fromDisplay(v, unit))}
                   hint="Air temperature, not the panel's."
                 />
+                {/* A DIFFERENCE, not a point on the scale — a 30° rise is 54
+                    Fahrenheit degrees, not 86. Different conversion. */}
                 <NumField
-                  id="site-rise" label="Cell rise in sun" unit="°C" step="5"
-                  value={riseC} onChange={v => setRiseC(v ?? DEFAULT_CELL_RISE_C)}
-                  hint="Panels run 25–30° above the air."
+                  id="site-rise" label="Cell rise in sun" unit={unitLabel(unit)} step="5"
+                  value={deltaToDisplay(riseC, unit)}
+                  onChange={v => setRiseC(v === null ? DEFAULT_CELL_RISE_C : deltaFromDisplay(v, unit))}
+                  hint={`Panels run ${formatDelta(25, unit)}–${formatDelta(30, unit)} above the air. This is a difference, not a temperature.`}
                 />
               </div>
 
@@ -711,20 +742,25 @@ export default function ArrayWiringPage() {
                 <div className="space-y-2 border-t border-zon-rule pt-3 text-xs text-zon-body">
                   <p>
                     <strong className="text-zon-ink">Cold, per panel.</strong>{' '}
-                    Voc({lowC}°) = {panel.vocStc}V × [1 + ({panel.betaVoc}/100) × ({lowC} − 25)] ={' '}
+                    At {formatBoth(lowC, unit)}: Voc = {panel.vocStc}V × [1 + ({panel.betaVoc}/100)
+                    × ({lowC.toFixed(1)} − 25)] ={' '}
                     <span className="font-mono tabular-nums">{perPanelCold.toFixed(1)}V</span> —{' '}
                     {((perPanelCold / panel.vocStc - 1) * 100).toFixed(1)}% over the label. The
-                    coefficient is negative and the temperature is below 25°, so two negatives
+                    coefficient is negative and the temperature is below 25 °C, so two negatives
                     multiply to a voltage <em>above</em> nameplate.
                   </p>
                   <p>
                     <strong className="text-zon-ink">Hot, per panel.</strong>{' '}
-                    Cells reach {cellTempHot(highC, riseC)}° on a {highC}° day, so Vmp ={' '}
-                    {panel.vmpStc}V × [1 + ({coeff!.beta}/100) × ({cellTempHot(highC, riseC)} − 25)] ={' '}
+                    Cells reach {formatBoth(cellTempHot(highC, riseC), unit)} on a{' '}
+                    {formatTemp(highC, unit)} day, so Vmp = {panel.vmpStc}V × [1 +{' '}
+                    ({coeff!.beta}/100) × ({cellTempHot(highC, riseC).toFixed(0)} − 25)] ={' '}
                     <span className="font-mono tabular-nums">{perPanelHot.toFixed(1)}V</span>.
                     {coeff!.from === 'pmax' && ' Using the Pmax coefficient, the usual stand-in when Vmp has none of its own.'}
                     {coeff!.from === 'voc' && ' Using the Voc coefficient as a last resort — it understates the sag, so treat this as the optimistic case.'}
                   </p>
+                  {unit === 'F' && (
+                    <p className="text-zon-muted">{COEFFICIENT_UNIT_NOTE}</p>
+                  )}
                 </div>
               )}
             </CardContent>

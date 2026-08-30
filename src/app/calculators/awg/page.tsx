@@ -7,6 +7,7 @@ import {
   resolveRuns, combinerAdvice, mpptArrival, looksLikeBatteryVoltage, type RunId,
 } from '@/lib/circuit-runs'
 import { COPPER_ONLY_HEADLINE, CCA_WARNING } from '@/lib/conductor-material'
+import { TERMINAL_RATING_NOTE } from '@/lib/temperature'
 import Link from 'next/link'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { Info, AlertTriangle } from 'lucide-react'
@@ -500,6 +501,7 @@ export default function AwgCalculatorPage() {
                   the <em>lowest-rated</em> connection in it — usually a breaker or a lug, not the
                   wire. Buying 90 °C cable does not move you to the 90 °C column on its own.
                 </p>
+                <p className="text-xs text-zon-muted mt-1">{TERMINAL_RATING_NOTE}</p>
               </div>
 
               <div role="group" aria-labelledby="awg-kind-label">
