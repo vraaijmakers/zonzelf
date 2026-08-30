@@ -93,12 +93,24 @@ export function reviewInverterSpec(spec: InverterSpec): ReviewFlag[] {
 
   // The array cannot deliver more current than the trackers accept, so a PV
   // power rating far beyond what the window and current allow is suspicious.
+  // Usable current, not short-circuit: this asks what the unit can convert.
   const ceilingW = spec.mpptMaxV * spec.pvMaxCurrentA * spec.mpptCount
   if (ceilingW > 0 && spec.pvMaxPowerW > ceilingW * 1.6) {
     flags.push({
       code: 'pv-power-unreachable',
       severity: 'warn',
       message: `${name}: ${spec.pvMaxPowerW}W of PV cannot be reached through ${spec.mpptCount} tracker(s) at ${spec.mpptMaxV}V and ${spec.pvMaxCurrentA}A (about ${Math.round(ceilingW)}W). One of those three is probably misread.`,
+    })
+  }
+
+  // The current pair has the same invariant as the voltage pair, and the same
+  // failure: the EG4 6000XP's 17 A usable and 25 A short-circuit were once
+  // read the wrong way round from a search summary.
+  if (spec.pvMaxIscA !== undefined && spec.pvMaxIscA < spec.pvMaxCurrentA) {
+    flags.push({
+      code: 'isc-below-usable',
+      severity: 'fail',
+      message: `${name}: the short-circuit input rating (${spec.pvMaxIscA}A) is below the usable input current (${spec.pvMaxCurrentA}A). A tracker cannot convert more than it can survive — these are probably swapped.`,
     })
   }
 

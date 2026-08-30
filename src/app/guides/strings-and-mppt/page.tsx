@@ -479,6 +479,51 @@ export default function StringsAndMpptGuide() {
         strings in parallel = floor( tracker max input current ÷ ( Isc × 1.25 ) )
       </Formula>
 
+      <H3>Current has two limits too, for the same reason voltage does</H3>
+      <P>
+        Look carefully at which input current your datasheet gives, because good ones give two.
+        The EG4 6000XP, for instance, publishes both:
+      </P>
+      <div className="my-5 overflow-x-auto rounded-xl border border-zon-rule">
+        <table className="w-full text-sm">
+          <caption className="sr-only">The two PV input current ratings and what each means</caption>
+          <thead>
+            <tr className="border-b border-zon-rule bg-zon-cream text-left text-zon-muted">
+              <th scope="col" className="px-4 py-2 font-medium">On the datasheet</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">Value</th>
+              <th scope="col" className="px-4 py-2 font-medium">Above it</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-zon-rule-soft">
+              <td className="px-4 py-2 font-mono text-zon-ink">Max. Usable Input Current</td>
+              <td className="px-4 py-2 text-right font-mono tabular-nums text-zon-body">17 A</td>
+              <td className="px-4 py-2 text-zon-body">Clipped, not harvested. Nothing breaks.</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-2 font-mono text-zon-ink">Max. Short Circuit Input Current</td>
+              <td className="px-4 py-2 text-right font-mono tabular-nums text-zon-body">25 A</td>
+              <td className="px-4 py-2 text-zon-body">The input stage is damaged.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <P>
+        It is the same shape as the voltage pair, and the same trap: one is a harvest limit and
+        one is a damage limit. Size your parallel strings against the <strong>short-circuit</strong>{' '}
+        figure to know what is safe, and against the <strong>usable</strong> figure to know what
+        you will actually collect. Taking the higher number as the usable one would let you wire
+        about half again as many strings as the tracker can convert &mdash; and you would never
+        see an error, only a quieter array than you paid for.
+      </P>
+      <Note>
+        <p>
+          If your datasheet gives only one input current figure, treat it as the damage limit and
+          design under it. That is the conservative reading, and it is the same rule as for a
+          datasheet that gives only one voltage.
+        </p>
+      </Note>
+
       <H2 id="datasheet">8. Reading your own datasheet</H2>
       <P>
         Everything above assumes you can find these numbers on the sheet in front of you. That is

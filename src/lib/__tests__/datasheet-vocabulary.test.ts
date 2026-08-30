@@ -157,6 +157,30 @@ test('review catches the swap this list exists to prevent', () => {
   assert.ok(flags.some(f => f.code === 'window-above-ceiling'))
 })
 
+test('the EG4 row carries the corrected current pair', () => {
+  const eg4 = INVERTER_PRESETS.find(p => p.model === '6000XP')
+  assert.ok(eg4, 'the EG4 6000XP should be admitted now the datasheet is readable')
+  // The correction this row exists to record: 17A usable, 25A short-circuit.
+  // An earlier search summary gave 25A as the usable figure.
+  assert.equal(eg4.pvMaxCurrentA, 17)
+  assert.equal(eg4.pvMaxIscA, 25)
+  assert.ok(eg4.pvMaxIscA > eg4.pvMaxCurrentA)
+  assert.equal(eg4.pvMaxInputV, 480)
+  assert.equal(eg4.mpptMinV, 120)
+  assert.equal(eg4.mpptMaxV, 385)
+  assert.equal(eg4.acSurgeW, 12000)
+  assert.equal(eg4.pvMaxPowerW, 8000)
+  assert.equal(eg4.maxChargeCurrentA, 125)
+})
+
+test('review catches a short-circuit rating below the usable current', () => {
+  const eg4 = INVERTER_PRESETS.find(p => p.model === '6000XP')!
+  const swapped = { ...eg4, pvMaxCurrentA: 25, pvMaxIscA: 17 }
+  const flags = reviewInverterSpec(swapped)
+  assert.equal(worstSeverity(flags), 'fail')
+  assert.ok(flags.some(f => f.code === 'isc-below-usable'))
+})
+
 test('review catches an inverted window, a low surge, and a total-not-per-tracker current', () => {
   const good = INVERTER_PRESETS[0]
   assert.ok(reviewInverterSpec({ ...good, mpptMinV: 450, mpptMaxV: 120 })

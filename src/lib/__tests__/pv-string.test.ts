@@ -139,6 +139,48 @@ test('parallel is limited by current, with the irradiance factor applied', () =>
   assert.equal(one.exceedsCurrent, false)
 })
 
+test('current has a damage limit and a harvest limit, like voltage', () => {
+  // The EG4 6000XP's real pair: 17A usable, 25A short-circuit. A 6A panel at
+  // 1.25 is 7.5A a string, so three strings is 22.5A — past what the tracker
+  // converts, inside what it survives.
+  const small = { ...PANEL, iscStc: 6 }
+  const pair: TrackerSpec = { ...TRACKER, pvMaxCurrentA: 17, pvMaxIscA: 25 }
+
+  const three = checkArrangement(small, pair, COLD, 4, 3)
+  assert.equal(three.designIscA, 22.5)
+  assert.equal(three.exceedsCurrent, false, '22.5A is inside the 25A short-circuit rating')
+  assert.equal(three.exceedsUsableCurrent, true, '22.5A is past the 17A it can convert')
+  assert.equal(three.safe, true, 'clipping current is not a safety failure')
+  assert.equal(three.ideal, false, 'but it is not the arrangement to reach for')
+
+  const four = checkArrangement(small, pair, COLD, 3, 4)
+  assert.equal(four.designIscA, 30)
+  assert.equal(four.exceedsCurrent, true, '30A is past the 25A rating')
+  assert.equal(four.safe, false)
+})
+
+test('a single stated current figure is treated as the damage limit', () => {
+  // The conservative reading, matching the single-voltage rule.
+  const only: TrackerSpec = { ...TRACKER, pvMaxCurrentA: 17, pvMaxIscA: undefined }
+  const small = { ...PANEL, iscStc: 6 }
+  const three = checkArrangement(small, only, COLD, 4, 3)
+  assert.equal(three.designIscA, 22.5)
+  assert.equal(three.exceedsCurrent, true, 'with one figure, 22.5A must be refused')
+  assert.equal(three.exceedsUsableCurrent, false, 'never both at once')
+})
+
+test('the current protection view is sized against the short-circuit rating', () => {
+  const small = { ...PANEL, iscStc: 6 }
+  const pair: TrackerSpec = { ...TRACKER, pvMaxCurrentA: 17, pvMaxIscA: 25 }
+  const view = stringCurrentProtectionView(small, pair)
+  assertProtectionView(view)
+  // 25 / 7.5 = 3.33 -> 3 strings safe; 17 / 7.5 = 2.27 -> 2 without clipping.
+  assert.equal(view.options.length, 3)
+  const body = view.steps.map(x => x.body).join(' ')
+  assert.match(body, /SHORT-CIRCUIT/)
+  assert.match(body, /17A/, 'the usable figure must appear as the harvest limit')
+})
+
 test('string fusing flips at exactly three parallel strings', () => {
   // (n-1) x 11.5 x 1.25 against a 20A module fuse:
   //   n=2 -> 14.375A, under.  n=3 -> 28.75A, over.

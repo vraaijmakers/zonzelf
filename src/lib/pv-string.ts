@@ -203,8 +203,21 @@ export interface TrackerSpec {
   mpptMinV: number
   /** Top of the MPPT tracking window. At or below pvMaxInputV. */
   mpptMaxV: number
-  /** Maximum PV input current per tracker. */
+  /**
+   * Maximum USABLE PV input current per tracker. Above this the tracker
+   * cannot convert the extra, so it is clipped — a harvest limit, not a
+   * damage one.
+   */
   pvMaxCurrentA: number
+  /**
+   * Maximum SHORT-CIRCUIT input current per tracker, where the datasheet
+   * states it separately. This is the damage limit, and it is materially
+   * higher: the EG4 6000XP publishes 17 A usable against 25 A short-circuit.
+   * Absent means the usable figure is all we have, and it is then treated as
+   * the damage limit — the same conservative rule the two voltage ceilings
+   * use.
+   */
+  pvMaxIscA?: number
   /** Maximum PV array power the unit accepts, total. */
   pvMaxPowerW: number
 }
@@ -342,8 +355,14 @@ export interface ArrangementCheck {
   belowWindow: boolean
   /** Above the floor, but with less than the headroom target. Capacity. */
   thinHeadroom: boolean
-  /** designIsc exceeds the tracker's input current rating. PROTECTION. */
+  /** designIsc exceeds the tracker's short-circuit rating. PROTECTION. */
   exceedsCurrent: boolean
+  /**
+   * Inside the short-circuit rating but past what the tracker can convert.
+   * The current-side twin of exceedsTrackingCeiling: harvest is clipped, the
+   * hardware is fine. CAPACITY.
+   */
+  exceedsUsableCurrent: boolean
   /** Array watts exceed what the unit accepts. Capacity — clipping. */
   exceedsPower: boolean
 
@@ -379,7 +398,13 @@ export function checkArrangement(
   const exceedsTrackingCeiling = !exceedsDamageCeiling && vocColdV > tracker.mpptMaxV
   const belowWindow = vmpHotV < tracker.mpptMinV
   const thinHeadroom = !belowWindow && vmpHotV < tracker.mpptMinV * (1 + headroom)
-  const exceedsCurrent = designIscA > tracker.pvMaxCurrentA
+  // Mirrors the voltage pair exactly: the short-circuit rating is what breaks,
+  // the usable rating is what clips. When only one is published it is the
+  // damage limit, because assuming otherwise is the direction that destroys
+  // hardware.
+  const currentDamageLimit = tracker.pvMaxIscA ?? tracker.pvMaxCurrentA
+  const exceedsCurrent = designIscA > currentDamageLimit
+  const exceedsUsableCurrent = !exceedsCurrent && designIscA > tracker.pvMaxCurrentA
   const exceedsPower = arrayW > tracker.pvMaxPowerW
 
   const safe = !exceedsDamageCeiling && !exceedsCurrent && !belowWindow
@@ -392,11 +417,11 @@ export function checkArrangement(
     vmpCoefficientFrom: from,
     arrayIscA, designIscA,
     exceedsDamageCeiling, exceedsTrackingCeiling, belowWindow, thinHeadroom,
-    exceedsCurrent, exceedsPower,
+    exceedsCurrent, exceedsUsableCurrent, exceedsPower,
     stringFuseRequired: stringFuseRequired(parallel, panel.iscStc, panel.maxSeriesFuseA),
     stringFuseOptions: stringFuseOptions(panel.iscStc, panel.maxSeriesFuseA),
     safe,
-    ideal: safe && !thinHeadroom && !exceedsTrackingCeiling && !exceedsPower,
+    ideal: safe && !thinHeadroom && !exceedsTrackingCeiling && !exceedsUsableCurrent && !exceedsPower,
   }
 }
 
@@ -525,7 +550,11 @@ export function stringCurrentProtectionView(
   tracker: TrackerSpec,
 ): ProtectionView {
   const perString = panel.iscStc * PV_IRRADIANCE_FACTOR
-  const limit = perString > 0 ? Math.floor(tracker.pvMaxCurrentA / perString) : 0
+  // Against the SHORT-CIRCUIT rating, because that is what fails. The usable
+  // rating is a harvest limit and belongs in the capacity output.
+  const damageLimit = tracker.pvMaxIscA ?? tracker.pvMaxCurrentA
+  const limit = perString > 0 ? Math.floor(damageLimit / perString) : 0
+  const usableLimit = perString > 0 ? Math.floor(tracker.pvMaxCurrentA / perString) : 0
   const sources = [PV_SOURCES.irradiance]
 
   if (limit < 1) {
@@ -535,8 +564,8 @@ export function stringCurrentProtectionView(
       options: [],
       empty:
         `A single string already presents ${perString.toFixed(1)}A of design current, past ` +
-        `this tracker's ${tracker.pvMaxCurrentA}A input rating. This panel needs a tracker ` +
-        'rated for more current, or a panel with a lower Isc.',
+        `this tracker's ${damageLimit}A rating. This panel needs a tracker rated for more ` +
+        'current, or a panel with a lower Isc.',
       steps: [],
       sources,
     }
@@ -563,12 +592,20 @@ export function stringCurrentProtectionView(
           'irradiance it was rated at, and the code requires designing for it.',
       },
       {
-        title: 'Divide against the input rating',
+        title: 'Divide against the rating that breaks',
         body:
-          `${tracker.pvMaxCurrentA}A / ${perString.toFixed(1)}A = ` +
-          `${(tracker.pvMaxCurrentA / perString).toFixed(2)}, so ${limit} string` +
+          `${damageLimit}A / ${perString.toFixed(1)}A = ` +
+          `${(damageLimit / perString).toFixed(2)}, so ${limit} string` +
           `${limit === 1 ? '' : 's'} in parallel per tracker. A unit with more than one ` +
-          'tracker gets this many on each, not this many in total.',
+          'tracker gets this many on each, not this many in total.' +
+          (tracker.pvMaxIscA !== undefined && tracker.pvMaxIscA > tracker.pvMaxCurrentA
+            ? ` This is the SHORT-CIRCUIT rating. The same datasheet also gives a usable ` +
+              `input current of ${tracker.pvMaxCurrentA}A, which is what the tracker can ` +
+              `actually convert — ${usableLimit} string${usableLimit === 1 ? '' : 's'} worth. ` +
+              'Between the two the extra current is clipped rather than harvested, which ' +
+              'costs you output but breaks nothing.'
+            : ' If your datasheet gives a separate short-circuit input rating, that is the ' +
+              'one to use here — a usable-current figure is a harvest limit, not a damage one.'),
       },
     ],
     sources,

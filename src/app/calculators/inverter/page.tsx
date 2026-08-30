@@ -49,6 +49,7 @@ interface UnitDraft {
   mpptCount: number
   pvMaxPowerW: number | null
   pvMaxCurrentA: number | null
+  pvMaxIscA: number | null
   maxChargeCurrentA: number | null
 }
 
@@ -56,7 +57,7 @@ const EMPTY_UNIT: UnitDraft = {
   brand: '', model: '',
   acContinuousW: null, acSurgeW: null, dcSystemVoltage: 48,
   pvMaxInputV: null, mpptMinV: null, mpptMaxV: null, mpptStartV: null,
-  mpptCount: 1, pvMaxPowerW: null, pvMaxCurrentA: null, maxChargeCurrentA: null,
+  mpptCount: 1, pvMaxPowerW: null, pvMaxCurrentA: null, pvMaxIscA: null, maxChargeCurrentA: null,
 }
 
 /** Everything the array step cannot proceed without. */
@@ -167,6 +168,7 @@ export default function InverterSizingPage() {
       mpptCount: unit.mpptCount,
       pvMaxPowerW: unit.pvMaxPowerW!,
       pvMaxCurrentA: unit.pvMaxCurrentA!,
+      pvMaxIscA: unit.pvMaxIscA ?? undefined,
       maxChargeCurrentA: unit.maxChargeCurrentA ?? undefined,
     })
   }, [unit, pvComplete])
@@ -188,6 +190,7 @@ export default function InverterSizingPage() {
       mpptCount: preset.mpptCount,
       pvMaxPowerW: preset.pvMaxPowerW,
       pvMaxCurrentA: preset.pvMaxCurrentA,
+      pvMaxIscA: preset.pvMaxIscA ?? null,
       maxChargeCurrentA: preset.maxChargeCurrentA ?? null,
     })
 
@@ -719,6 +722,11 @@ export default function InverterSizingPage() {
                     id="unit-pv-current" label="Max PV current per tracker" unit="A"
                     value={unit.pvMaxCurrentA} onChange={v => set('pvMaxCurrentA', v)}
                     hint="What limits how many strings go in parallel."
+                  />
+                  <NumField
+                    id="unit-pv-isc" label="Max PV short-circuit current" unit="A"
+                    value={unit.pvMaxIscA} onChange={v => set('pvMaxIscA', v)}
+                    hint="Optional. The rating that breaks, not the one that clips."
                   />
                   <NumField
                     id="unit-charge" label="Max battery charge current" unit="A"

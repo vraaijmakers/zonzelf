@@ -138,6 +138,17 @@ export const DATASHEET_FIELDS: DatasheetField[] = [
       'tracker, not 22 divided by anything and not 44 A in total. Enter 22.',
   },
   {
+    id: 'unit-pv-isc',
+    label: 'Max PV short-circuit current per tracker',
+    alsoCalled: ['Max. Short Circuit Input Current', 'Max PV Isc', 'Max Input Short Circuit Current', 'Isc PV max'],
+    section: 'PV Input',
+    step: 'inverter',
+    gotcha:
+      'Different from, and higher than, the usable input current — the EG4 6000XP publishes ' +
+      '17 A usable against 25 A short-circuit. The usable figure is what the tracker can ' +
+      'convert; this one is what it can survive. If your sheet gives only one, put it here.',
+  },
+  {
     id: 'unit-charge',
     label: 'Max battery charge current',
     alsoCalled: ['Max. PV Charge Current', 'Max Charge Current', 'Max Battery Charging Current', 'Max Solar Charge Current'],

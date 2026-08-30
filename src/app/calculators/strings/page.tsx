@@ -154,6 +154,7 @@ export default function ArrayWiringPage() {
           mpptMinV: inverter.mpptMinV,
           mpptMaxV: inverter.mpptMaxV,
           pvMaxCurrentA: inverter.pvMaxCurrentA,
+          pvMaxIscA: inverter.pvMaxIscA,
           pvMaxPowerW: inverter.pvMaxPowerW,
         }
       : null
@@ -228,7 +229,7 @@ export default function ArrayWiringPage() {
           sub: a.exceedsDamageCeiling
             ? `${a.vocColdV.toFixed(0)}V cold — over the ${tracker!.pvMaxInputV}V limit`
             : a.exceedsCurrent
-              ? `${a.designIscA.toFixed(1)}A — over the ${tracker!.pvMaxCurrentA}A input`
+              ? `${a.designIscA.toFixed(1)}A — over the ${tracker!.pvMaxIscA ?? tracker!.pvMaxCurrentA}A rating`
               : a.belowWindow
                 ? `${a.vmpHotV.toFixed(0)}V hot — under the ${tracker!.mpptMinV}V floor`
                 : `${a.vmpHotV.toFixed(0)}V hot · ${(a.arrayW / 1000).toFixed(1)} kW`,
@@ -429,14 +430,17 @@ export default function ArrayWiringPage() {
                           <td className={`px-3 py-2 text-right tabular-nums ${a.belowWindow ? 'text-zon-amber' : 'text-zon-body'}`}>
                             {a.vmpHotV.toFixed(0)}V
                           </td>
-                          <td className={`px-3 py-2 text-right tabular-nums ${a.exceedsCurrent ? 'text-zon-red' : 'text-zon-body'}`}>
+                          <td className={`px-3 py-2 text-right tabular-nums ${
+                            a.exceedsCurrent ? 'text-zon-red'
+                              : a.exceedsUsableCurrent ? 'text-zon-amber' : 'text-zon-body'
+                          }`}>
                             {a.designIscA.toFixed(1)}A
                           </td>
                           <td className="px-4 py-2 text-zon-body">
                             {a.exceedsDamageCeiling
                               ? `over the ${tracker.pvMaxInputV}V input — destroys it`
                               : a.exceedsCurrent
-                                ? `over the ${tracker.pvMaxCurrentA}A input`
+                                ? `over the ${tracker.pvMaxIscA ?? tracker.pvMaxCurrentA}A rating`
                                 : a.belowWindow
                                   ? `under the ${tracker.mpptMinV}V floor when hot`
                                   : a.thinHeadroom

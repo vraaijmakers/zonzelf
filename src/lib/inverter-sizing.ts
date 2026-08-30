@@ -268,14 +268,54 @@ export const INVERTER_PRESETS: InverterSpec[] = [
     maxChargeCurrentA: 200,
     sourceUrl: SUNGOLD_SPH_MANUAL,
   },
-  // NOT admitted: the EG4 6000XP. Its AC continuous, battery voltage, max PV
-  // input, MPPT count, max PV power and charge current are all on EG4's own
-  // product page, but the 120-385 VDC window and the 25 A per tracker came
-  // from a search index of the spec-sheet PDF rather than the PDF itself,
-  // which no tool on this machine can extract. Those two are exactly the
-  // fields the gate exists to protect. Finish it by reading
-  // eg4electronics.com/wp-content/uploads/2024/04/EG4-6000XP-Inverter-Spec-Sheet.pdf
-  // directly, confirming both plus the surge column.
+  // EG4 6000XP. Read directly from EG4's own spec sheet, VER 1.4.4, after a
+  // PDF text extractor became available — and the reading corrected a number
+  // this row was previously refused over, in the dangerous direction.
+  //
+  // An earlier attempt sourced "25 A per tracker" from a search index of this
+  // same document. The document itself distinguishes two figures:
+  //
+  //     MAX. USABLE INPUT CURRENT          17/17 A
+  //     MAX. SHORT CIRCUIT INPUT CURRENT   25/25 A
+  //
+  // The 25 A is the short-circuit rating; 17 A is what the tracker can convert.
+  // Recording 25 A as the usable figure would have permitted about half again
+  // as many strings in parallel as the unit can actually harvest, silently.
+  // This is the whole argument for the gate, and it came within one commit of
+  // being wrong on the first row.
+  //
+  // Surge is published as two pairs — 12,000 W for about 3.5 s and 11,000 W for
+  // about 5 s. The larger, shorter figure is recorded, because a motor start is
+  // a sub-second event and that is the number a start-up has to fit inside.
+  //
+  // MAX. CHARGE CURRENT is 125 A, footnoted "115A @ 48 VDC (AC), 125A @48 VDC
+  // (PV)". The PV figure is the one the solar side is limited by.
+  {
+    id: 'eg4-6000xp',
+    brand: 'EG4 Electronics',
+    model: '6000XP',
+    kind: 'hybrid',
+    acContinuousW: 6000,
+    acSurgeW: 12000,
+    acSurgeSeconds: 3.5,
+    dcSystemVoltage: 48,
+    // "DC INPUT VOLTAGE RANGE 100 - 480 VDC" — the top of that range is the
+    // absolute input maximum; the MPP operating range below is narrower.
+    pvMaxInputV: 480,
+    mpptMinV: 120,
+    mpptMaxV: 385,
+    mpptStartV: 100,
+    mpptCount: 2,
+    // "MAXIMUM UTILIZED SOLAR POWER 8000W (4000W per MPPT)". The sheet also
+    // gives a "RECOMMENDED MAXIMUM SOLAR INPUT 10000W", which is deliberate
+    // over-paneling guidance rather than what the unit converts — 8000 is the
+    // figure an array should be checked against.
+    pvMaxPowerW: 8000,
+    pvMaxCurrentA: 17,
+    pvMaxIscA: 25,
+    maxChargeCurrentA: 125,
+    sourceUrl: 'https://eg4electronics.com/wp-content/uploads/2024/04/EG4-6000XP-Inverter-Spec-Sheet.pdf',
+  },
 ]
 
 // ---------------------------------------------------------------------------
