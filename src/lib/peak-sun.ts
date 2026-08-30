@@ -24,6 +24,16 @@
  * of GHI at mid-latitudes (NL/UK/DE December ~0.8–1.2h against ~2.5–3.0h
  * annual) and the milder winter of the US southwest and Mediterranean.
  * They are not NASA SSE lookups for a specific lat/long.
+ *
+ * TEMPERATURES ARE NOT HERE
+ * --------------------------
+ * They were, briefly: designLowC/recordLowC/designHighC were bolted onto these
+ * regions when the array-wiring step needed a coldest-expected figure. That was
+ * wrong at this granularity — a single low for "Texas / Arizona" is out by
+ * twenty degrees depending on where in Texas you stand — and it now lives in
+ * site-climate.ts as ninety named places derived from thirty years of ERA5.
+ * Sun hours stay regional because irradiance genuinely does vary more smoothly
+ * than a cold snap does.
  */
 
 export interface PeakSunRegion {

@@ -8,6 +8,7 @@ import {
 } from '@/lib/calc-steps'
 import {
   usePersistentState, LOAD_SUMMARY_KEY, BATTERY_SUMMARY_KEY, PANEL_SUMMARY_KEY,
+  INVERTER_SUMMARY_KEY, ARRAY_SUMMARY_KEY,
 } from '@/lib/calc-storage'
 import { cn } from '@/lib/utils'
 
@@ -46,12 +47,16 @@ export interface AnswerSummary {
 function useCompletedSteps(): Set<StepId> {
   const [load] = usePersistentState<unknown>(LOAD_SUMMARY_KEY, null)
   const [battery] = usePersistentState<unknown>(BATTERY_SUMMARY_KEY, null)
+  const [inverter] = usePersistentState<unknown>(INVERTER_SUMMARY_KEY, null)
   const [panels] = usePersistentState<unknown>(PANEL_SUMMARY_KEY, null)
+  const [array] = usePersistentState<unknown>(ARRAY_SUMMARY_KEY, null)
 
   const done = new Set<StepId>()
   if (load) done.add('load')
   if (battery) done.add('battery')
+  if (inverter) done.add('inverter')
   if (panels) done.add('panels')
+  if (array) done.add('array')
   return done
 }
 

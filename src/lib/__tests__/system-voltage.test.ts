@@ -2,6 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   recommendedSystemVoltage,
+  recommendedSystemVoltageForPower,
+  dcCurrentFor,
+  DC_CURRENT_CEILING_A,
   systemVoltageAdvice,
   SYSTEM_VOLTAGES,
   VOLTAGE_STEP_KWH,
@@ -75,4 +78,64 @@ test('the source names the quantity, and says it is not a code requirement', () 
   assert.match(SYSTEM_VOLTAGE_SOURCE, /bank size, not to daily consumption/i)
   assert.match(SYSTEM_VOLTAGE_SOURCE, /not a code requirement/i)
   assert.match(SYSTEM_VOLTAGE_SOURCE, /continuous power/i)
+})
+
+test('DC current is what the voltage decision is actually about', () => {
+  // Same power, three voltages: doubling the voltage halves the current.
+  const at12 = dcCurrentFor(1200, 12, 1)
+  const at24 = dcCurrentFor(1200, 24, 1)
+  const at48 = dcCurrentFor(1200, 48, 1)
+  assert.equal(at12, 100)
+  assert.equal(at24, 50)
+  assert.equal(at48, 25)
+})
+
+test('inverter efficiency raises the DC current, it does not lower it', () => {
+  // The battery has to supply the losses too, so the DC side carries MORE.
+  assert.ok(dcCurrentFor(1000, 24, 0.85) > dcCurrentFor(1000, 24, 1))
+})
+
+test('the power-keyed recommendation is derived from the current ceiling', () => {
+  // Whatever it returns, the current at that voltage must be under the ceiling
+  // and the voltage below it must not be — that is the whole rule.
+  for (const w of [200, 800, 1500, 3000, 6000, 12000]) {
+    const v = recommendedSystemVoltageForPower(w)
+    assert.ok(
+      dcCurrentFor(w, v) <= DC_CURRENT_CEILING_A || v === 48,
+      `${w}W at ${v}V exceeds the ceiling`,
+    )
+  }
+})
+
+test('the power-keyed recommendation never steps down as load grows', () => {
+  let previous = 0
+  for (let w = 0; w <= 20000; w += 250) {
+    const v = recommendedSystemVoltageForPower(w)
+    assert.ok(v >= previous, `${w}W recommended ${v}V after ${previous}V`)
+    previous = v
+  }
+})
+
+test('a load past every voltage still lands on 48V rather than falling through', () => {
+  assert.equal(recommendedSystemVoltageForPower(100000), 48)
+  assert.equal(recommendedSystemVoltageForPower(Number.POSITIVE_INFINITY), 48)
+  assert.equal(recommendedSystemVoltageForPower(0), 12)
+  assert.equal(recommendedSystemVoltageForPower(NaN), 12)
+})
+
+test('real continuous power overrides the bank-size proxy when it is known', () => {
+  // A small bank paired with a big continuous draw: the proxy says 12V, the
+  // real figure says otherwise, and the real figure has to win.
+  const proxy = systemVoltageAdvice(1, 12)
+  assert.equal(proxy.recommended, 12)
+  const real = systemVoltageAdvice(1, 12, 6000)
+  assert.equal(real.recommended, 48)
+  assert.match(real.why, /6000W continuous/)
+  assert.match(real.why, /A from a 12V bank/)
+})
+
+test('the proxy is still used when the inverter step has not been done', () => {
+  const advice = systemVoltageAdvice(8, 48)
+  assert.equal(advice.recommended, 48)
+  assert.match(advice.why, /8 kWh/)
 })

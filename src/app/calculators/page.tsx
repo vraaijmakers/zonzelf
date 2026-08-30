@@ -27,9 +27,9 @@ const DETAIL: Record<StepId, { icon: LucideIcon; description: string }> = {
     icon: Plug,
     description: 'Continuous watts is the easy half. The half that catches people out is surge: a fridge or a pump can pull two to three times its running watts for a second at start-up.',
   },
-  controller: {
+  array: {
     icon: PanelsTopLeft,
-    description: 'How many panels you can wire in series before the string exceeds your controller’s maximum input — including the cold-temperature correction that catches out an array sized in July.',
+    description: 'How many panels you can wire in series before the string exceeds your inverter’s maximum input — including the cold-temperature correction that catches out an array sized in July — and when parallel strings need fuses.',
   },
   protection: {
     icon: Cable,

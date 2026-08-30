@@ -43,6 +43,36 @@
  * mistake this file exists to fix. A/C presets stay at 100% — an overestimate,
  * which oversizes rather than undersizes — and are flagged as cycling loads so
  * the user can set a figure they trust.
+ *
+ * SURGE — A THIRD NUMBER, FOR A DIFFERENT QUESTION
+ * -----------------------------------------------
+ * `watts` is the RUNNING figure and `duty` turns it into energy. Neither says
+ * what happens in the first half-second. A motor starting against a stopped
+ * load draws locked-rotor current — several times its running draw — and it is
+ * that spike, not the daily kWh, that decides whether an inverter carries the
+ * appliance or trips off. It is the most common "why did my inverter shut
+ * down" failure and, until now, this file had no field for it.
+ *
+ *   surge watts = runningWatts × surgeFactor
+ *
+ * The factors are the standard off-grid sizing bands, and the split between
+ * them is the useful part:
+ *
+ *   - 3× — induction motors starting under load: compressors in fridges,
+ *     freezers, window and central air conditioning, and well pumps.
+ *   - 2× — smaller or lightly loaded motors: fans, a washing-machine drum, a
+ *     dishwasher pump, a universal-motor power tool.
+ *   - 1.5× — inverter-driven compressors with a soft start. Modern mini-splits
+ *     and mini-split heat pumps ramp rather than slam, which is exactly why
+ *     they suit off-grid systems and why tagging them 3× would oversize an
+ *     inverter by thousands of watts for a spike that never happens.
+ *   - absent (1×) — anything resistive or electronic. A kettle, a heater and a
+ *     laptop draw what they draw.
+ *
+ * Unlike duty cycle, guessing HIGH here is the safe direction: it oversizes an
+ * inverter, which costs money, where guessing low means the appliance never
+ * starts. That is why the bands are applied confidently and the A/C caution
+ * above does not carry over.
  */
 
 /** Fraction of the in-service hours during which the appliance actually draws power. */
@@ -145,12 +175,29 @@ export interface ApplianceRow {
   duty?: DutyCycle
   /** Optional: rows saved before profiles existed have none and count as 'always'. */
   profile?: LoadProfile
+  /**
+   * Multiple of `watts` drawn at start-up. Optional: rows saved before surge
+   * existed have none and count as 1×, so nobody's stored inverter size moves
+   * underneath them. `suggestedSurge` offers the correction instead.
+   */
+  surge?: number
 }
 
 /** Clamp to a sane fraction. Absent means 100% — never silently reduce a saved row. */
 export function normalizeDuty(duty: number | undefined): DutyCycle {
   if (duty === undefined || Number.isNaN(duty)) return 1
   return Math.min(1, Math.max(0, duty))
+}
+
+/**
+ * Clamp the start-up multiple. Absent means 1× — a row that never declared a
+ * surge is not silently given one. Capped at 10× because nothing in a domestic
+ * off-grid system starts harder than that, and a typo should not size a 60 kW
+ * inverter.
+ */
+export function normalizeSurge(surge: number | undefined): number {
+  if (surge === undefined || Number.isNaN(surge)) return 1
+  return Math.min(10, Math.max(1, surge))
 }
 
 /** Watt-hours per day for one row, duty cycle applied. */
@@ -178,6 +225,8 @@ export interface Preset {
   watts: number
   hours: number
   duty?: DutyCycle
+  /** Multiple of `watts` drawn at start-up. Absent means no meaningful surge. */
+  surgeFactor?: number
   /** Thermostatic or otherwise intermittent — the UI explains the duty figure. */
   cycles?: boolean
   /** Shown when the preset carries a duty cycle the user did not choose. */
@@ -194,8 +243,8 @@ export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] 
     items: [
       { name: 'LED light bulb', profile: 'evening',   watts: 10, hours: 5 },
       { name: 'LED tube light', profile: 'evening',   watts: 20, hours: 6 },
-      { name: 'Ceiling fan',      watts: 60, hours: 8 },
-      { name: 'Bathroom exhaust', watts: 30, hours: 2 },
+      { name: 'Ceiling fan',      watts: 60, hours: 8, surgeFactor: 2 },
+      { name: 'Bathroom exhaust', watts: 30, hours: 2, surgeFactor: 2 },
     ],
   },
   {
@@ -203,20 +252,20 @@ export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] 
     icon: 'ac',
     items: [
       // Left at 100% deliberately — see the file header. Overestimates.
-      { name: 'Window AC (5,000 BTU)', profile: 'cooling',    watts: 450,  hours: 8,  cycles: true },
-      { name: 'Window AC (8,000 BTU)', profile: 'cooling',    watts: 700,  hours: 8,  cycles: true },
-      { name: 'Window AC (12,000 BTU)', profile: 'cooling',   watts: 1100, hours: 8,  cycles: true },
-      { name: 'Portable AC (10,000 BTU)', profile: 'cooling', watts: 1000, hours: 8,  cycles: true },
-      { name: 'Mini-split (9,000 BTU)', profile: 'cooling',   watts: 860,  hours: 10, cycles: true },
-      { name: 'Mini-split (12,000 BTU)', profile: 'cooling',  watts: 1100, hours: 10, cycles: true },
-      { name: 'Mini-split (18,000 BTU)', profile: 'cooling',  watts: 1600, hours: 10, cycles: true },
-      { name: 'Mini-split (24,000 BTU)', profile: 'cooling',  watts: 2100, hours: 10, cycles: true },
-      { name: 'Central AC (2 ton)', profile: 'cooling',       watts: 2500, hours: 8,  cycles: true },
-      { name: 'Central AC (3 ton)', profile: 'cooling',       watts: 3500, hours: 8,  cycles: true },
-      { name: 'Central AC (4 ton)', profile: 'cooling',       watts: 4700, hours: 8,  cycles: true },
-      { name: 'Central AC (5 ton)', profile: 'cooling',       watts: 6000, hours: 8,  cycles: true },
-      { name: 'Central AC (6 ton)', profile: 'cooling',       watts: 7200, hours: 8,  cycles: true },
-      { name: 'Central AC (7.5 ton)', profile: 'cooling',     watts: 9000, hours: 8,  cycles: true },
+      { name: 'Window AC (5,000 BTU)', profile: 'cooling',    watts: 450,  hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Window AC (8,000 BTU)', profile: 'cooling',    watts: 700,  hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Window AC (12,000 BTU)', profile: 'cooling',   watts: 1100, hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Portable AC (10,000 BTU)', profile: 'cooling', watts: 1000, hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Mini-split (9,000 BTU)', profile: 'cooling',   watts: 860,  hours: 10, surgeFactor: 1.5, cycles: true },
+      { name: 'Mini-split (12,000 BTU)', profile: 'cooling',  watts: 1100, hours: 10, surgeFactor: 1.5, cycles: true },
+      { name: 'Mini-split (18,000 BTU)', profile: 'cooling',  watts: 1600, hours: 10, surgeFactor: 1.5, cycles: true },
+      { name: 'Mini-split (24,000 BTU)', profile: 'cooling',  watts: 2100, hours: 10, surgeFactor: 1.5, cycles: true },
+      { name: 'Central AC (2 ton)', profile: 'cooling',       watts: 2500, hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Central AC (3 ton)', profile: 'cooling',       watts: 3500, hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Central AC (4 ton)', profile: 'cooling',       watts: 4700, hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Central AC (5 ton)', profile: 'cooling',       watts: 6000, hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Central AC (6 ton)', profile: 'cooling',       watts: 7200, hours: 8,  surgeFactor: 3, cycles: true },
+      { name: 'Central AC (7.5 ton)', profile: 'cooling',     watts: 9000, hours: 8,  surgeFactor: 3, cycles: true },
     ],
   },
   {
@@ -224,9 +273,9 @@ export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] 
     items: [
       // Nothing here before: the preset list had fourteen ways to cool a house
       // and no way to heat one, which quietly assumed a warm climate.
-      { name: 'Heat pump (9,000 BTU)',  watts: 900,  hours: 12, profile: 'heating' },
-      { name: 'Heat pump (12,000 BTU)', watts: 1200, hours: 12, profile: 'heating' },
-      { name: 'Heat pump (18,000 BTU)', watts: 1700, hours: 12, profile: 'heating' },
+      { name: 'Heat pump (9,000 BTU)',  watts: 900,  hours: 12, profile: 'heating', surgeFactor: 1.5 },
+      { name: 'Heat pump (12,000 BTU)', watts: 1200, hours: 12, profile: 'heating', surgeFactor: 1.5 },
+      { name: 'Heat pump (18,000 BTU)', watts: 1700, hours: 12, profile: 'heating', surgeFactor: 1.5 },
       { name: 'Electric heater (1.5kW)', watts: 1500, hours: 8, profile: 'heating' },
       { name: 'Oil-filled radiator',    watts: 1500, hours: 8,  profile: 'heating' },
       { name: 'Underfloor heating zone', watts: 800, hours: 10, profile: 'heating' },
@@ -236,9 +285,9 @@ export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] 
   {
     label: 'Kitchen',
     items: [
-      { name: 'Mini fridge',       watts: 80,   hours: 24,   duty: 0.30, cycles: true, note: FRIDGE_NOTE },
-      { name: 'Full-size fridge',  watts: 150,  hours: 24,   duty: 0.35, cycles: true, note: FRIDGE_NOTE },
-      { name: 'Chest freezer',     watts: 120,  hours: 24,   duty: 0.35, cycles: true, note: FRIDGE_NOTE },
+      { name: 'Mini fridge',       watts: 80,   hours: 24,   duty: 0.30, surgeFactor: 3, cycles: true, note: FRIDGE_NOTE },
+      { name: 'Full-size fridge',  watts: 150,  hours: 24,   duty: 0.35, surgeFactor: 3, cycles: true, note: FRIDGE_NOTE },
+      { name: 'Chest freezer',     watts: 120,  hours: 24,   duty: 0.35, surgeFactor: 3, cycles: true, note: FRIDGE_NOTE },
       { name: 'Microwave', profile: 'evening',         watts: 1000, hours: 0.5 },
       { name: 'Coffee maker', profile: 'evening',      watts: 900,  hours: 0.25 },
       { name: 'Toaster', profile: 'evening',           watts: 850,  hours: 0.1 },
@@ -259,18 +308,18 @@ export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] 
   {
     label: 'Water & utility',
     items: [
-      { name: 'Water pump (small)', profile: 'daytime',  watts: 300,  hours: 1 },
-      { name: 'Water pump (1 HP)', profile: 'daytime',   watts: 750,  hours: 2 },
-      { name: 'Washing machine', profile: 'evening',     watts: 500,  hours: 1 },
-      { name: 'Clothes dryer', profile: 'evening',       watts: 5000, hours: 0.75 },
-      { name: 'Dishwasher', profile: 'evening',          watts: 1200, hours: 1 },
+      { name: 'Water pump (small)', profile: 'daytime',  watts: 300,  hours: 1, surgeFactor: 3 },
+      { name: 'Water pump (1 HP)', profile: 'daytime',   watts: 750,  hours: 2, surgeFactor: 3 },
+      { name: 'Washing machine', profile: 'evening',     watts: 500,  hours: 1, surgeFactor: 2 },
+      { name: 'Clothes dryer', profile: 'evening',       watts: 5000, hours: 0.75, surgeFactor: 2 },
+      { name: 'Dishwasher', profile: 'evening',          watts: 1200, hours: 1, surgeFactor: 2 },
     ],
   },
   {
     label: 'Other',
     items: [
       { name: 'CPAP machine',       watts: 30,   hours: 8 },
-      { name: 'Power tool (drill)', profile: 'daytime', watts: 600,  hours: 0.5 },
+      { name: 'Power tool (drill)', profile: 'daytime', watts: 600,  hours: 0.5, surgeFactor: 2 },
       { name: 'EV charger (L1)',    watts: 1400, hours: 6 },
       { name: 'EV charger (L2)',    watts: 7200, hours: 2 },
     ],
@@ -278,6 +327,32 @@ export const PRESET_GROUPS: { label: string; icon?: string; items: Preset[] }[] 
 ]
 
 export const ALL_PRESETS: Preset[] = PRESET_GROUPS.flatMap(g => g.items)
+
+/** Running watts for one row, all units of it, at the same moment. */
+export function rowRunningWatts(row: ApplianceRow): number {
+  return Math.max(0, row.watts || 0) * Math.max(0, row.qty || 0)
+}
+
+/**
+ * Extra watts ONE unit of this appliance asks for while it starts, over and
+ * above what it already draws running.
+ *
+ * Deliberately per-unit rather than per-row: two fridges both run, so both
+ * count continuously, but they do not start in the same half-second. Charging
+ * an inverter for two simultaneous compressor starts is sizing for a
+ * coincidence.
+ */
+export function rowSurgeHeadroomWatts(row: ApplianceRow): number {
+  return Math.max(0, row.watts || 0) * (normalizeSurge(row.surge) - 1)
+}
+
+export const SURGE_SOURCE =
+  'Start-up multiples are the standard off-grid bands: about 3x for an induction motor ' +
+  'starting under load (fridge, freezer, window or central air conditioning, well pump), ' +
+  '2x for smaller or lightly loaded motors, and about 1.5x for an inverter-driven ' +
+  'compressor with a soft start, which is what a modern mini-split has. Resistive and ' +
+  'electronic loads have no meaningful surge. Your own appliance label may give a ' +
+  'locked-rotor amps (LRA) figure, which is better than any of these.'
 
 export const DUTY_CYCLE_SOURCE =
   'Refrigeration duty cycles describe a temperate indoor kitchen (~21 °C): compressor running ' +
@@ -390,4 +465,19 @@ export function suggestedProfile(name: string, current: LoadProfile | undefined)
   if (!preset) return undefined
   const want = preset.profile ?? DEFAULT_PROFILE
   return want === (current ?? DEFAULT_PROFILE) ? undefined : want
+}
+
+/**
+ * The start-up multiple a preset of this name carries, when a saved row does
+ * not have it.
+ *
+ * Third instance of the same migration problem — see suggestedDuty and
+ * suggestedProfile. A row saved before surge existed counts as 1x, which is
+ * right (it does not move anyone's numbers) and useless on its own (their
+ * inverter stays undersized forever). Offered inline, never imposed.
+ */
+export function suggestedSurge(name: string, current: number | undefined): number | undefined {
+  const preset = ALL_PRESETS.find(p => p.name.toLowerCase() === name.trim().toLowerCase())
+  if (!preset || preset.surgeFactor === undefined) return undefined
+  return normalizeSurge(current) === preset.surgeFactor ? undefined : preset.surgeFactor
 }
