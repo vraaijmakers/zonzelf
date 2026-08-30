@@ -143,3 +143,38 @@ test('identifying CCA leads with the test anyone can actually do', () => {
   assert.match(CCA_WARNING, /not listed|impermissible/i, 'say it is not merely worse')
   assert.match(COPPER_ONLY_HEADLINE, /copper/i)
 })
+
+test('each run says what its voltage MEANS, because the label was wrong', () => {
+  // "System voltage" is a term of art meaning the battery bank nominal. The
+  // field was labelled that and offered 12/24/48/120/240 for every run,
+  // including PV strings — where the real figure is the series total, often
+  // ten times higher. It is used to express drop as a percentage, so getting
+  // it wrong changes the gauge, not just the wording.
+  for (const run of CIRCUIT_RUNS) {
+    assert.ok(run.voltageMeans.length > 40, `${run.id} must say what its voltage is`)
+  }
+  // The PV runs cannot offer fixed buttons: a string is whatever its panels
+  // add up to, and 12/24/48 is never the answer.
+  assert.deepEqual(runById('pv-string').voltageOptions, [])
+  assert.deepEqual(runById('pv-combined').voltageOptions, [])
+  assert.match(runById('pv-string').voltageMeans, /NOT your battery/i)
+  // The DC and AC runs do have standard values.
+  assert.deepEqual(runById('battery-inverter').voltageOptions, [12, 24, 48])
+  assert.deepEqual(runById('inverter-ac').voltageOptions, [120, 240])
+})
+
+test('no run offers a battery voltage for a PV circuit', () => {
+  for (const run of CIRCUIT_RUNS.filter(r => r.kind === 'pv-source')) {
+    for (const v of run.voltageOptions) {
+      assert.ok(v > 60, `${run.id} offers ${v}V, which is a battery voltage on a PV run`)
+    }
+  }
+})
+
+test('the PV string voltage comes from the array, not from a preset', () => {
+  const runs = resolveRuns({ array: ARRAY, inverter: INVERTER })
+  const pv = runs.find(r => r.id === 'pv-string')!
+  // Seven panels in series, working hot — nowhere near any battery voltage.
+  assert.equal(pv.volts, Math.round(ARRAY.vmpHotV))
+  assert.ok(pv.volts! > 200, `got ${pv.volts}V, which cannot be a string`)
+})

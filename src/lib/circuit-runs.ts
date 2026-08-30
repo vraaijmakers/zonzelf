@@ -67,6 +67,24 @@ export interface CircuitRun {
   suggestedDropPercent: number
   /** Why this run is the one that catches people out. */
   note: string
+  /**
+   * Plausible fixed voltages for this run, offered as buttons. EMPTY for the
+   * PV runs, because a string's voltage is whatever its panels add up to and
+   * there is no standard value to offer.
+   */
+  voltageOptions: readonly number[]
+  /**
+   * What the voltage on this run actually is.
+   *
+   * This field was labelled "System voltage" and offered 12/24/48/120/240 for
+   * every run, which is wrong twice over. "System voltage" is a term of art in
+   * solar meaning the BATTERY BANK nominal, and a PV string is nothing like
+   * it: seven panels at 41V is a 287V circuit. The number is used only to turn
+   * the voltage drop into a percentage, so it has to be the operating voltage
+   * of the run being sized — and saying which one that is, per run, is the
+   * only way to stop the confusion.
+   */
+  voltageMeans: string
 }
 
 export const CIRCUIT_RUNS: readonly CircuitRun[] = [
@@ -81,6 +99,9 @@ export const CIRCUIT_RUNS: readonly CircuitRun[] = [
       'Usually the longest run in the system and the lowest current, because a string is ' +
       'high voltage. High voltage is what makes that distance affordable — the same power ' +
       'at battery voltage would need cable you could not bend.',
+    voltageOptions: [],
+    voltageMeans:
+      'The string\'s own working voltage — the panels in series, added together. NOT your battery voltage: seven 41V panels in series is a 287V circuit, and the drop percentage is measured against that.',
   },
   {
     id: 'pv-combined',
@@ -92,6 +113,9 @@ export const CIRCUIT_RUNS: readonly CircuitRun[] = [
     note:
       'Carries every parallel string on that tracker at once. Only exists if you have more ' +
       'than one string per tracker — with a single string, the run above goes straight in.',
+    voltageOptions: [],
+    voltageMeans:
+      'Still the string voltage. Parallel strings add current, not volts, so combining them does not change this number.',
   },
   {
     id: 'battery-inverter',
@@ -104,6 +128,9 @@ export const CIRCUIT_RUNS: readonly CircuitRun[] = [
       'The highest current in the whole system, by a long way, and the run people most often ' +
       'undersize. Keep it SHORT — every foot costs voltage the inverter needs. A long, thin ' +
       'battery cable is why an inverter cuts out on motor start with a full bank.',
+    voltageOptions: [12, 24, 48],
+    voltageMeans:
+      'The battery bank nominal — this is the run where "system voltage" means what people usually mean by it.',
   },
   {
     id: 'inverter-ac',
@@ -116,6 +143,9 @@ export const CIRCUIT_RUNS: readonly CircuitRun[] = [
       'Ordinary AC branch-circuit wiring, and the least surprising run — high voltage means ' +
       'modest current. Split-phase 120/240V systems carry half the current of a 120V-only ' +
       'system for the same power.',
+    voltageOptions: [120, 240],
+    voltageMeans:
+      'The AC output voltage. Split-phase systems measure drop against 240V across both legs; a 120V-only circuit uses 120.',
   },
 ] as const
 

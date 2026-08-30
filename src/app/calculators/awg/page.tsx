@@ -244,6 +244,29 @@ export default function AwgCalculatorPage() {
 
               {activeRun ? (
                 <div className="space-y-2 border-t border-zon-rule pt-3 text-xs text-zon-body">
+                  {/* Selecting a run whose figures are unknown used to set the
+                      circuit type and length and silently leave the current
+                      and voltage at whatever was there before — which for a PV
+                      string meant sizing a 287V circuit against 24V, and that
+                      is six gauge sizes of difference, not a rounding error. */}
+                  {activeRun.amps === null && (
+                    <p className="rounded-lg border border-zon-amber-tint bg-zon-amber-tint px-3 py-2">
+                      <strong className="text-zon-ink">
+                        The numbers below are not from your system.
+                      </strong>{' '}
+                      {activeRun.kind === 'pv-source'
+                        ? 'This run needs your panel and array, which come from the '
+                        : 'This run needs your inverter, which comes from the '}
+                      <Link
+                        href={activeRun.kind === 'pv-source' ? '/calculators/strings' : '/calculators/inverter'}
+                        className="text-zon-gold-deep hover:underline"
+                      >
+                        {activeRun.kind === 'pv-source' ? 'array wiring step' : 'inverter step'}
+                      </Link>
+                      . Until then the current and voltage are whatever was last typed here —
+                      check both against your own figures before trusting the answer.
+                    </p>
+                  )}
                   {activeRun.derivation && (
                     <p>
                       <strong className="text-zon-ink">Where that current comes from.</strong>{' '}
@@ -333,10 +356,10 @@ export default function AwgCalculatorPage() {
 
               <div role="group" aria-labelledby="awg-voltage-label">
                 <span id="awg-voltage-label" className="block text-sm font-medium mb-1 text-zon-ink">
-                  System voltage
+                  Voltage on this run
                 </span>
-                <div className="flex gap-2 flex-wrap">
-                  {[12, 24, 48, 120, 240].map(v => (
+                <div className="flex flex-wrap items-center gap-2">
+                  {(activeRun ? activeRun.voltageOptions : [12, 24, 48, 120, 240]).map(v => (
                     <button key={v} onClick={() => setVoltage(v)} aria-pressed={voltage === v}
                       className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                         voltage === v
@@ -347,7 +370,30 @@ export default function AwgCalculatorPage() {
                       {v}V
                     </button>
                   ))}
+                  {activeRun && activeRun.volts !== null && voltage !== activeRun.volts && (
+                    <button
+                      onClick={() => setVoltage(activeRun.volts!)}
+                      className="rounded-full border border-zon-gold-light bg-zon-gold-tint px-3 py-1 text-xs text-zon-gold-deep"
+                    >
+                      Use {activeRun.volts}V from your system →
+                    </button>
+                  )}
+                  <label className="sr-only" htmlFor="awg-voltage-custom">Circuit voltage</label>
+                  <input
+                    id="awg-voltage-custom"
+                    type="number"
+                    value={voltage}
+                    onChange={e => setVoltage(Math.max(1, parseFloat(e.target.value) || 1))}
+                    min="1" max="1500"
+                    className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-24 rounded-lg border border-zon-rule px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
+                  />
+                  <span className="text-sm text-zon-muted">V</span>
                 </div>
+                <p className="text-xs text-zon-muted mt-1">
+                  {activeRun
+                    ? activeRun.voltageMeans
+                    : 'The operating voltage of the cable you are sizing — a battery bank nominal for a DC run, a string\u2019s series total for a PV run, the AC output for an AC run. It is what the voltage drop below is measured against.'}
+                </p>
               </div>
 
               <div role="group" aria-labelledby="awg-temp-label">
