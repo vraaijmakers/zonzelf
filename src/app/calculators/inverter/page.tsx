@@ -10,8 +10,10 @@ import {
 } from '@/lib/calc-storage'
 import {
   peakDemand, inverterFit, suggestedContinuousW, CONTINUOUS_HEADROOM,
-  INVERTER_SIZING_SOURCE, COMMON_INVERTER_SIZES,
+  INVERTER_SIZING_SOURCE, COMMON_INVERTER_SIZES, INVERTER_PRESETS,
+  type InverterSpec,
 } from '@/lib/inverter-sizing'
+import { fieldHelp } from '@/lib/datasheet-vocabulary'
 import { normalizeSurge, suggestedSurge, SURGE_SOURCE } from '@/lib/appliance-load'
 import { recommendedSystemVoltageForPower, dcCurrentFor, DC_CURRENT_CEILING_A } from '@/lib/system-voltage'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
@@ -66,6 +68,34 @@ const num = (v: string): number | null => {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
+/**
+ * What the same number is called on a real datasheet.
+ *
+ * This is not decoration. A session on a Sun Gold SPH10048P left five of nine
+ * fields blank while the datasheet stated every one of them, purely because
+ * our names and theirs did not match. Reading is the hard part of this step,
+ * so the translation belongs next to the box, not in a guide two clicks away.
+ */
+function FieldHelp({ id }: { id: string }) {
+  const help = fieldHelp(id)
+  if (!help) return null
+  return (
+    <>
+      <p className="mt-1 text-xs text-zon-muted">
+        <span className="text-zon-body">Your datasheet may call it</span>{' '}
+        {help.alsoCalled.slice(0, 3).map((name, i) => (
+          <span key={name}>
+            {i > 0 && ' · '}
+            <span className="font-medium text-zon-ink">{name}</span>
+          </span>
+        ))}
+        <span className="text-zon-muted"> · look under &ldquo;{help.section}&rdquo;</span>
+      </p>
+      {help.gotcha && <p className="mt-1 text-xs text-zon-body">{help.gotcha}</p>}
+    </>
+  )
+}
+
 function NumField({
   id, label, unit, value, onChange, hint, placeholder,
 }: {
@@ -94,6 +124,7 @@ function NumField({
         <span className="text-sm text-zon-muted">{unit}</span>
       </div>
       {hint && <p className="mt-1 text-xs text-zon-muted">{hint}</p>}
+      <FieldHelp id={id} />
     </div>
   )
 }
@@ -142,6 +173,27 @@ export default function InverterSizingPage() {
 
   const set = <K extends keyof UnitDraft>(key: K, value: UnitDraft[K]) =>
     setUnit(u => ({ ...u, [key]: value }))
+
+  const applyPreset = (preset: InverterSpec) =>
+    setUnit({
+      brand: preset.brand,
+      model: preset.model,
+      acContinuousW: preset.acContinuousW,
+      acSurgeW: preset.acSurgeW ?? null,
+      dcSystemVoltage: preset.dcSystemVoltage,
+      pvMaxInputV: preset.pvMaxInputV,
+      mpptMinV: preset.mpptMinV,
+      mpptMaxV: preset.mpptMaxV,
+      mpptStartV: preset.mpptStartV ?? null,
+      mpptCount: preset.mpptCount,
+      pvMaxPowerW: preset.pvMaxPowerW,
+      pvMaxCurrentA: preset.pvMaxCurrentA,
+      maxChargeCurrentA: preset.maxChargeCurrentA ?? null,
+    })
+
+  const activePreset = INVERTER_PRESETS.find(
+    p => p.brand === unit.brand && p.model === unit.model,
+  )
 
   const setSurge = (id: number, surge: number) =>
     setAppliances(rows => rows.map(r => (r.id === id ? { ...r, surge } : r)))
@@ -455,12 +507,52 @@ export default function InverterSizingPage() {
               <CardTitle className="text-sm font-medium text-zon-body">Your unit</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 pt-1">
+              {INVERTER_PRESETS.length > 0 && (
+                <div className="rounded-lg bg-zon-rule-soft p-3">
+                  <p className="mb-2 text-xs font-medium text-zon-muted">
+                    Units we have already read the datasheet for
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {INVERTER_PRESETS.map(preset => {
+                      const active = unit.brand === preset.brand && unit.model === preset.model
+                      return (
+                        <button
+                          key={preset.id}
+                          onClick={() => applyPreset(preset)}
+                          aria-pressed={active}
+                          className={`rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
+                            active
+                              ? 'border-zon-gold bg-zon-gold text-zon-ink'
+                              : 'border-zon-rule hover:border-zon-gold-light'
+                          }`}
+                        >
+                          <span className="font-medium">{preset.model}</span>
+                          <span className="ml-1.5 text-xs text-zon-muted">
+                            {preset.brand} · {(preset.acContinuousW / 1000).toFixed(0)} kW
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-zon-muted">
+                    Picking one fills every field below from the manufacturer&apos;s own manual,
+                    so you can see what a completed set looks like — then check it against your
+                    own copy. It is a short list; typing your own datasheet in is the normal path,
+                    not the fallback.
+                  </p>
+                </div>
+              )}
+
               <p className="text-xs text-zon-muted">
-                Copy these off the datasheet for the unit you have or are considering — the
-                manufacturer&apos;s own, not a shop listing. Every one of them is used to work
-                out how your panels may be wired, and a transcription error here is how an
-                inverter gets destroyed. Nothing is filled in for you, because a solar input
-                window you did not choose is not a safe default.
+                Otherwise, copy them off the datasheet for the unit you have or are considering —
+                the manufacturer&apos;s own, not a shop listing. Every one of them decides how
+                your panels may be wired, and a transcription error here is how an inverter gets
+                destroyed. Nothing is filled in by default, because a solar input window nobody
+                chose is not a safe starting point. Each box lists the wording your datasheet is
+                likely to use instead of ours; there is a full{' '}
+                <Link href="/guides/strings-and-mppt#datasheet" className="text-zon-gold-deep hover:underline">
+                  translation table in the guide
+                </Link>.
               </p>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -514,6 +606,7 @@ export default function InverterSizingPage() {
                     </button>
                   ))}
                 </div>
+                <FieldHelp id="unit-dc-label" />
                 {demand.continuousW > 0 && (
                   <p className="mt-1 text-xs text-zon-body">
                     At {Math.round(demand.continuousW).toLocaleString()} W continuous, a{' '}
@@ -547,25 +640,71 @@ export default function InverterSizingPage() {
                   These decide how your panels may be wired. Two of them are easy to confuse
                   and they are not the same thing: the <strong>maximum PV input voltage</strong>{' '}
                   is a damage limit, and the top of the <strong>MPPT window</strong> is where it
-                  stops tracking well. If your datasheet gives only one number, put it in both.
+                  stops tracking well. If your datasheet truly gives only one number, put it in
+                  both — but check first, because most print both, a row apart.
                 </p>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="mb-4">
                   <NumField
                     id="unit-pv-max-v" label="Max PV input voltage" unit="V"
                     value={unit.pvMaxInputV} onChange={v => set('pvMaxInputV', v)}
                     hint="Absolute ceiling. Above it the unit is destroyed."
                   />
-                  <NumField
-                    id="unit-mppt-max" label="MPPT window, top" unit="V"
-                    value={unit.mpptMaxV} onChange={v => set('mpptMaxV', v)}
-                    hint="Above this it clips or drops out, but survives."
-                  />
-                  <NumField
-                    id="unit-mppt-min" label="MPPT window, bottom" unit="V"
-                    value={unit.mpptMinV} onChange={v => set('mpptMinV', v)}
-                    hint="Below this it cannot track at all."
-                  />
+                </div>
+
+                {/* One row on the datasheet, two boxes here — which is exactly
+                    how the top number ends up unfilled. Presented as the range
+                    it is printed as, with the two limits kept visibly apart
+                    from the damage ceiling above. */}
+                <fieldset className="mb-4 rounded-lg border border-zon-rule p-3">
+                  <legend className="px-1 text-sm font-medium text-zon-ink">
+                    MPPT operating voltage range
+                  </legend>
+                  <p className="mb-3 text-xs text-zon-muted">
+                    Your datasheet prints this as a single range — &ldquo;125 Vdc–425 Vdc&rdquo;,
+                    say. The first number goes in <em>from</em>, the second in <em>to</em>. Both
+                    are lower than the maximum PV input voltage above, and that is normal.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label htmlFor="unit-mppt-min" className="mb-1 block text-xs font-medium text-zon-body">
+                        From
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="unit-mppt-min" type="number" inputMode="decimal"
+                          value={unit.mpptMinV ?? ''}
+                          onChange={e => set('mpptMinV', num(e.target.value))}
+                          min="0"
+                          className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-24 rounded-lg border border-zon-rule px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
+                        />
+                        <span className="text-sm text-zon-muted">V</span>
+                      </div>
+                    </div>
+                    <span aria-hidden="true" className="pb-2 text-zon-muted">–</span>
+                    <div>
+                      <label htmlFor="unit-mppt-max" className="mb-1 block text-xs font-medium text-zon-body">
+                        To
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="unit-mppt-max" type="number" inputMode="decimal"
+                          value={unit.mpptMaxV ?? ''}
+                          onChange={e => set('mpptMaxV', num(e.target.value))}
+                          min="0"
+                          className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-24 rounded-lg border border-zon-rule px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
+                        />
+                        <span className="text-sm text-zon-muted">V</span>
+                      </div>
+                    </div>
+                    <p className="min-w-[12rem] flex-1 text-xs text-zon-muted">
+                      Below the first it cannot track at all; above the second it clips or drops
+                      out, but survives.
+                    </p>
+                  </div>
+                </fieldset>
+
+                <div className="grid gap-4 sm:grid-cols-2">
                   <NumField
                     id="unit-mppt-start" label="Start-up voltage" unit="V"
                     value={unit.mpptStartV} onChange={v => set('mpptStartV', v)}
@@ -612,6 +751,22 @@ export default function InverterSizingPage() {
                   <p className="mt-3 rounded-lg border border-zon-amber-tint bg-zon-amber-tint px-3 py-2 text-xs text-zon-body">
                     The maximum PV input voltage is below the top of the MPPT window, which no
                     datasheet should say. The absolute maximum is always the higher of the two.
+                  </p>
+                )}
+
+                {activePreset && (
+                  <p className="mt-4 text-xs text-zon-muted">
+                    These figures are from{' '}
+                    <a
+                      href={activePreset.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-zon-gold-deep hover:underline"
+                    >
+                      {activePreset.brand}&apos;s own manual
+                    </a>
+                    . Check them against your copy before you buy anything — we can transcribe a
+                    datasheet, but we cannot know which revision of the unit you have.
                   </p>
                 )}
 

@@ -214,20 +214,68 @@ export interface InverterSpec {
  * Typing the specs in by hand is a first-class path on the page, not a
  * fallback, precisely so this list never has to be padded out to be useful.
  */
+const SUNGOLD_SPH_MANUAL =
+  'https://cdn.shopify.com/s/files/1/0323/4090/2025/files/SPH8-10KW_User_Manual_V1.3_20250909.pdf?v=1773649595'
+
 export const INVERTER_PRESETS: InverterSpec[] = [
-  // Empty on purpose. The EG4 6000XP was worked up as the first candidate and
-  // is NOT admitted: its AC continuous (6,000W), battery voltage (48V), max PV
-  // input (480VDC), MPPT count (2), max PV power (8,000W) and max charge
-  // current (125A) were read off EG4's own product page, but the two fields
-  // that matter most here — the 120-385VDC optimal MPPT window and the 25A per
-  // tracker — came from a search index of the spec-sheet PDF rather than from
-  // the PDF itself, which no tool on the build machine could extract. Gate
-  // condition 1 says opened and read, not summarised, and the first row is a
-  // bad place to start making exceptions.
+  // Sun Gold Power SPH-P series. Every figure below is from the manufacturer's
+  // own SPH8-10KW User Manual V1.3, the specification tables on pages 58-59,
+  // linked from sungoldpower.com/pages/user-manual and verified reachable.
   //
-  // To finish it: install a PDF text extractor, read
-  // eg4electronics.com/wp-content/uploads/2024/04/EG4-6000XP-Inverter-Spec-Sheet.pdf,
-  // confirm those two numbers and the surge column, then add the row.
+  // Admitted because the PV block distinguishes the two ceilings explicitly,
+  // which is the thing this list exists to get right: "Max. Open Circuit
+  // Voltage 500 Vdc" is the damage limit, and "MPPT Operating Voltage Range
+  // 125 Vdc-425 Vdc" is the tracking window. A reader who put 500 in both
+  // would lose harvest between 425 and 500 and never know why.
+  //
+  // "Max. Input Current 22/22 A" is per tracker on a two-tracker unit — 22 A
+  // on each, not 44 A in total, and not a fraction. Recorded as 22.
+  //
+  // maxChargeCurrentA is the PV figure. The manual also lists a lower
+  // grid/generator charge current (100 A / 120 A) and an equal hybrid figure;
+  // the PV one is what the solar side of the design is limited by.
+  {
+    id: 'sungold-sph8048p',
+    brand: 'Sun Gold Power',
+    model: 'SPH8048P',
+    kind: 'hybrid',
+    acContinuousW: 8000,
+    acSurgeW: 16000,
+    dcSystemVoltage: 48,
+    pvMaxInputV: 500,
+    mpptMinV: 125,
+    mpptMaxV: 425,
+    mpptCount: 2,
+    pvMaxPowerW: 11000,
+    pvMaxCurrentA: 22,
+    maxChargeCurrentA: 180,
+    sourceUrl: SUNGOLD_SPH_MANUAL,
+  },
+  {
+    id: 'sungold-sph10048p',
+    brand: 'Sun Gold Power',
+    model: 'SPH10048P',
+    kind: 'hybrid',
+    acContinuousW: 10000,
+    acSurgeW: 20000,
+    dcSystemVoltage: 48,
+    pvMaxInputV: 500,
+    mpptMinV: 125,
+    mpptMaxV: 425,
+    mpptCount: 2,
+    pvMaxPowerW: 11000,
+    pvMaxCurrentA: 22,
+    maxChargeCurrentA: 200,
+    sourceUrl: SUNGOLD_SPH_MANUAL,
+  },
+  // NOT admitted: the EG4 6000XP. Its AC continuous, battery voltage, max PV
+  // input, MPPT count, max PV power and charge current are all on EG4's own
+  // product page, but the 120-385 VDC window and the 25 A per tracker came
+  // from a search index of the spec-sheet PDF rather than the PDF itself,
+  // which no tool on this machine can extract. Those two are exactly the
+  // fields the gate exists to protect. Finish it by reading
+  // eg4electronics.com/wp-content/uploads/2024/04/EG4-6000XP-Inverter-Spec-Sheet.pdf
+  // directly, confirming both plus the surge column.
 ]
 
 // ---------------------------------------------------------------------------

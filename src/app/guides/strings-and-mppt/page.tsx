@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Calculator, Sun, Cable, Snowflake, Zap } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { fieldsFor, type DatasheetField } from '@/lib/datasheet-vocabulary'
 import {
   GuideBreadcrumb, GuideHeader, Tldr, Note, Warn, GuideDisclaimer, NextSteps,
 } from '@/components/guides/GuideChrome'
@@ -24,6 +25,45 @@ export const metadata = {
  * The example panel is the same one the calculator offers.
  */
 
+
+/**
+ * The translation table, built from src/lib/datasheet-vocabulary.ts — the same
+ * source the calculator's field hints read. A guide that listed these
+ * separately would drift from the form within a release.
+ */
+function VocabularyTable({ step, caption }: { step: 'inverter' | 'panel'; caption: string }) {
+  const fields: DatasheetField[] = fieldsFor(step)
+  return (
+    <div className="my-5 overflow-x-auto rounded-xl border border-zon-rule">
+      <table className="w-full text-sm">
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr className="border-b border-zon-rule bg-zon-cream text-left text-zon-muted">
+            <th scope="col" className="px-4 py-2 font-medium">We ask for</th>
+            <th scope="col" className="px-4 py-2 font-medium">Your datasheet probably says</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fields.map(f => (
+            <tr key={f.id} className="border-b border-zon-rule-soft last:border-0 align-top">
+              <td className="px-4 py-3 font-medium text-zon-ink">
+                {f.label}
+                <span className="block text-xs font-normal text-zon-muted">{f.section}</span>
+              </td>
+              <td className="px-4 py-3 text-zon-body">
+                {f.alsoCalled.join(' · ')}
+                {f.gotcha && (
+                  <span className="mt-1 block text-xs text-zon-muted">{f.gotcha}</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function Formula({ children, note }: { children: React.ReactNode; note?: string }) {
   return (
     <div className="my-4">
@@ -35,8 +75,12 @@ function Formula({ children, note }: { children: React.ReactNode; note?: string 
   )
 }
 
-function H2({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-3 mt-10 text-2xl font-bold text-zon-ink">{children}</h2>
+function H2({ children, id }: { children: React.ReactNode; id?: string }) {
+  return (
+    <h2 id={id} className="mb-3 mt-10 text-2xl font-bold text-zon-ink scroll-mt-24">
+      {children}
+    </h2>
+  )
 }
 
 function H3({ children }: { children: React.ReactNode }) {
@@ -435,7 +479,62 @@ export default function StringsAndMpptGuide() {
         strings in parallel = floor( tracker max input current ÷ ( Isc × 1.25 ) )
       </Formula>
 
-      <H2>8. Putting it together</H2>
+      <H2 id="datasheet">8. Reading your own datasheet</H2>
+      <P>
+        Everything above assumes you can find these numbers on the sheet in front of you. That is
+        harder than it sounds, and it is not your fault: there is no standard vocabulary. The same
+        number is &ldquo;Max Open Circuit Voltage&rdquo; on one manual and &ldquo;Max PV Input
+        Voltage&rdquo; on the next.
+      </P>
+      <Note>
+        <p>
+          This section exists because of a real attempt. Someone with the Sun Gold SPH10048P
+          manual open — a competent reader, following along — filled in four of nine fields and
+          left five blank. The datasheet stated <em>every one</em> of them. Only the names
+          differed. If that can happen to someone who is paying attention, it will happen to a
+          beginner, so the translation is part of the product rather than something to look up.
+        </p>
+      </Note>
+
+      <H3>Two that trip almost everyone</H3>
+      <P>
+        <strong>The MPPT range is one row and two numbers.</strong> A datasheet prints
+        &ldquo;MPPT Operating Voltage Range 125 Vdc–425 Vdc&rdquo; on a single line. Those are two
+        separate limits: below 125 V the tracker cannot work, above 425 V it stops tracking
+        properly. Both are different from &mdash; and lower than &mdash; the &ldquo;Max Open
+        Circuit Voltage 500 Vdc&rdquo; sitting a row above, which is the one that destroys the
+        unit. Three numbers, three meanings, two adjacent rows.
+      </P>
+      <P>
+        <strong>&ldquo;22/22 A&rdquo; is not a fraction.</strong> On a unit with two MPPT
+        trackers, a max input current written like that means 22 A on each tracker. Not 22 A in
+        total, not 44 A, and not 11. Enter 22 — the per-tracker figure is what limits how many
+        strings go in parallel on each input.
+      </P>
+
+      <H3>The inverter fields</H3>
+      <VocabularyTable
+        step="inverter"
+        caption="What ZonZelf asks for, and what inverter datasheets call the same number"
+      />
+
+      <H3>The panel fields</H3>
+      <VocabularyTable
+        step="panel"
+        caption="What ZonZelf asks for, and what panel datasheets call the same number"
+      />
+
+      <Note>
+        <p>
+          <strong>Always take the manufacturer&apos;s own document</strong> — their manual or spec
+          sheet, not a retailer&apos;s product page. Shop listings re-type these numbers, and a
+          re-typed maximum PV input voltage is exactly the kind of error that destroys an
+          inverter. Most manufacturers publish a &ldquo;user manuals&rdquo; or
+          &ldquo;downloads&rdquo; page; the specification tables are usually near the back.
+        </p>
+      </Note>
+
+      <H2>9. Putting it together</H2>
       <P>
         A worked design, end to end, using the example panel and inverter from the calculator.
       </P>

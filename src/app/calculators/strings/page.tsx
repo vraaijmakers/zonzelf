@@ -18,6 +18,7 @@ import {
 import {
   PEAK_SUN_REGIONS, DEFAULT_DESIGN_LOW_C, DEFAULT_DESIGN_HIGH_C,
 } from '@/lib/peak-sun'
+import { fieldHelp } from '@/lib/datasheet-vocabulary'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import MpptWindowBar, { type WindowMarker } from '@/components/calculators/MpptWindowBar'
@@ -66,6 +67,26 @@ const NOSPIN =
   '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none ' +
   '[&::-webkit-outer-spin-button]:appearance-none '
 
+/** Same job as on the inverter step: the datasheet's words, next to our box. */
+function FieldHelp({ id }: { id: string }) {
+  const help = fieldHelp(id)
+  if (!help) return null
+  return (
+    <>
+      <p className="mt-1 text-xs text-zon-muted">
+        <span className="text-zon-body">Your datasheet may call it</span>{' '}
+        {help.alsoCalled.slice(0, 3).map((name, i) => (
+          <span key={name}>
+            {i > 0 && ' · '}
+            <span className="font-medium text-zon-ink">{name}</span>
+          </span>
+        ))}
+      </p>
+      {help.gotcha && <p className="mt-1 text-xs text-zon-body">{help.gotcha}</p>}
+    </>
+  )
+}
+
 function NumField({
   id, label, unit, value, onChange, hint, step,
 }: {
@@ -90,6 +111,7 @@ function NumField({
         <span className="text-sm text-zon-muted">{unit}</span>
       </div>
       {hint && <p className="mt-1 text-xs text-zon-muted">{hint}</p>}
+      <FieldHelp id={id} />
     </div>
   )
 }
@@ -540,7 +562,11 @@ export default function ArrayWiringPage() {
               <p className="text-xs text-zon-muted">
                 All of these are on the label on the back of the panel, and on its datasheet.
                 Voc and the temperature coefficient are the two that decide whether your inverter
-                survives — copy them exactly.
+                survives — copy them exactly. Every manufacturer names them slightly differently,
+                so each box lists the wording you are likely to see; there is a full{' '}
+                <Link href="/guides/strings-and-mppt#datasheet" className="text-zon-gold-deep hover:underline">
+                  translation table in the guide
+                </Link>.
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <NumField
