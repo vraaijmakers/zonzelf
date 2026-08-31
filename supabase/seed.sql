@@ -183,8 +183,8 @@ values
    'in_development', 25, true, 70),
 
   (1, 'onboarding', 'Remaining guide pages',
-   'wiring, depth-of-discharge, grounding, inverter-settings, glossary. how-it-works and battery-types have shipped. Do not re-link from the index or footer until each page exists (see "Fix /guides index dead links").',
-   'planned', 0, true, 62),
+   'Shipped in 766cedf (PR #40, "feat: write the remaining guide pages"): depth-of-discharge, wiring, grounding, inverter-settings, and glossary all exist and share the GuideChrome component with how-it-works and batteries. This item sat at planned for over a week after the work that closed it had shipped, because writing the guides dissolved it rather than anyone completing it as scoped -- the same drift "Fix /guides index dead links" had, and that item''s fix (20260829000001) is the more careful record: verified by enumerating every internal /guides/* link across src/, not just curling the seven routes.',
+   'in_test', 100, true, 62),
 
   (1, 'onboarding', 'Guides: expertise-level profile field + filtering',
    'Add a skill_level column to profiles (beginner/intermediate/advanced), a place in account settings to set it, and use it to filter or reorder the /guides index — the "beginner" tags already exist on every guide card, this just closes the loop so a returning user sees their level first. Needs its own migration + RLS policy, same pattern as the existing role column.',
@@ -258,12 +258,12 @@ values
    'in_test', 90, false, 75),
 
   (2, 'calculators', 'battery_models: track charge-temperature range and self-heating so vendor listings can flag cold-climate risk',
-   'The battery calculator lists real vendor models (brand/model/capacity/price) but nothing about charge-temperature range or self-heating. Add those columns, have the scraper capture them where the source datasheet states it, and show an explicit "cold-charge protection: confirmed / not stated" badge per model instead of leaving users to go find the datasheet themselves. Sequence after the in-flight Epoch/SOK/Enjoybot scraper branch merges, not concurrently with it.',
+   'The battery calculator lists real vendor models (brand/model/capacity/price) but nothing about charge-temperature range or self-heating. Add those columns, have the scraper capture them where the source datasheet states it, and show an explicit "cold-charge protection: confirmed / not stated" badge per model instead of leaving users to go find the datasheet themselves. feature/battery-scraper-epoch-sok-enjoybot does not exist on origin — checked 2026-08-22 and again 2026-08-30, eight days apart, with the same result both times. It was never "in-flight"; stop citing it as a branch to sequence after. No blocker to picking this up now.',
    'planned', 0, true, 92),
 
   (2, 'calculators', 'Battery spec data pipeline (scraper)',
-   'battery_models table + scripts/scrape-*.ts. Collects real battery model specs (brand, capacity, voltage, DoD) from manufacturer sites so the battery calculator can eventually recommend "4x EG4 LL-S 100Ah" instead of just a kWh number. Rows land unpublished; an admin review step (part of the admin scrapers item) gates anything reaching a visitor. Started with EG4 only — robots.txt ruled out Renogy (explicitly disallows AI crawlers); SOK and Battle Born are next.',
-   'in_development', 20, false, 76),
+   'battery_models table + scripts/scrape-*.ts. Collects real battery model specs (brand, capacity, voltage, DoD) from manufacturer sites so the battery calculator can eventually recommend "4x EG4 LL-S 100Ah" instead of just a kWh number. Rows land unpublished; an admin review step (part of the admin scrapers item) gates anything reaching a visitor. Five scrapers live and wired into package.json: EG4, Victron, SunGoldPower, Signature Solar and A1 SolarStore (scrape:eg4, scrape:victron, scrape:sungoldpower, scrape:signaturesolar, scrape:a1solarstore) — Renogy was ruled out by robots.txt, which explicitly disallows AI crawlers. Scraping stays manual-only: no scheduled re-run, and the upsert in scripts/lib/scrape-common.ts still overwrites an already-published row on conflict with no re-review step (see "Battery scraper: re-scrape scheduling + published-row review gate", which is what remains planned here). A weekly cloud routine to extend this same pipeline to inverters and panels is scheduled separately once repo access for it is connected.',
+   'in_development', 55, false, 76),
 
   (2, 'admin', 'Admin: 2FA and an audit log for role changes',
    'First admin is promoted by hand in the SQL editor. No 2FA, no audit log of who published a battery row or who flipped a profiles.role. Fine while it is one operator; not fine once anyone else has the admin role or the board is reachable on a public domain. Pair with the existing admin portal item.',
