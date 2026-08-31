@@ -18,8 +18,12 @@ export default async function LoginPage(props: PageProps<'/auth/login'>) {
   return (
     <div className="max-w-sm mx-auto px-4 py-20">
       <h1 className="text-2xl font-bold mb-2">Sign in</h1>
-      <p className="text-sm text-gray-600 mb-6">
+      <p className="text-sm text-zon-body mb-2">
         We&apos;ll email you a link — no password to remember.
+      </p>
+      <p className="text-sm text-zon-muted mb-6">
+        Sign-in only: ZonZelf is not opening accounts yet, so a link is sent only to an address
+        that already has one. The calculators and guides do not need an account.
       </p>
       <LoginForm next={next} />
     </div>

@@ -18,13 +18,24 @@ export default function LoginForm({ next }: { next: string }) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
+        // Sign-in only. Accounts are not open: a magic link must never create one,
+        // because there is no dashboard an account is for and no deletion flow to
+        // honour the promise the privacy policy makes. See the roadmap item
+        // "GDPR: account deletion path, or stop collecting emails".
+        shouldCreateUser: false,
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     })
 
     if (error) {
       setStatus('error')
-      setError(error.message)
+      // Supabase reports the closed-signup case as "Signups not allowed for otp",
+      // which reads as a server fault rather than a deliberate policy.
+      setError(
+        /signups? not allowed/i.test(error.message)
+          ? 'Accounts are not open yet, so there is no sign-in link to send. The calculators and guides all work without one.'
+          : error.message,
+      )
       return
     }
 

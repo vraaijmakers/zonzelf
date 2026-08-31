@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { Sun, Info } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  usePersistentState, useLoadSummary, useBatterySummary, publishPanelSummary, round2,
+  usePersistentState, useLoadSummary, useBatterySummary, useInverterSummary,
+  publishPanelSummary, round2,
 } from '@/lib/calc-storage'
 import { energyChain, arrayWatts, panelCount, panelCountBand, surplusPercent, DEFAULTS as EFF } from '@/lib/system-efficiency'
 import {
   PEAK_SUN_REGIONS, DEFAULT_ANNUAL, DEFAULT_WORST_MONTH,
-  normalizePeakSun, regionForAnnual, regionForHours, seasonalRatio, worstMonthIsSunnier,
+  highlightedRegion, normalizePeakSun, regionForAnnual, regionForHours, seasonalRatio,
+  worstMonthIsSunnier,
 } from '@/lib/peak-sun'
 import { rechargeCheck } from '@/lib/recharge'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
@@ -46,6 +48,10 @@ export default function PanelSizingPage() {
   // omitted round trip entirely and so undersized the array — by ~3% for
   // lithium, ~25% for flooded lead-acid.
   const batterySummary = useBatterySummary()
+  // The inverter is chosen at step 3 now, so this page can say whether the
+  // array it just sized will actually fit the unit's solar input. That is the
+  // half of "how many panels" the energy arithmetic cannot see.
+  const inverterSummary = useInverterSummary()
   const chain = energyChain({
     rawKwh: dailyKwh,
     inverter: loadSummary?.efficiency,
@@ -74,6 +80,7 @@ export default function PanelSizingPage() {
     * efficiency * chain.batteryRoundTrip * chain.inverter / 1000
   const surplus = surplusPercent(actualOutput, dailyKwh)
   const matchedRegion = regionForHours(sunHours, worstHours)
+  const selectedRegion = highlightedRegion(sunHours, worstHours)
   const ratio = seasonalRatio(sunHours, worstHours)
   const invertedSun = worstMonthIsSunnier(sunHours, worstHours)
   const worstMonthName = matchedRegion?.worstMonthName
@@ -245,6 +252,62 @@ export default function PanelSizingPage() {
               </CardContent>
             </Card>
 
+            {inverterSummary && installedWatts > 0 && (
+              <Card
+                className={
+                  installedWatts > inverterSummary.pvMaxPowerW
+                    ? 'border-zon-amber'
+                    : undefined
+                }
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between gap-2 text-base">
+                    <span>Against your inverter</span>
+                    <RegisterBadge register="capacity" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-zon-body">Its solar input takes</span>
+                    <span className="tabular-nums text-zon-ink">
+                      {(inverterSummary.pvMaxPowerW / 1000).toFixed(1)} kW
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-zon-body">This array is</span>
+                    <span className="tabular-nums text-zon-ink">
+                      {(installedWatts / 1000).toFixed(1)} kW
+                    </span>
+                  </div>
+                  <p className="text-xs text-zon-muted">
+                    {installedWatts > inverterSummary.pvMaxPowerW ? (
+                      <>
+                        {panelsNeeded} × {panelWatt}W is{' '}
+                        {Math.round((installedWatts / inverterSummary.pvMaxPowerW - 1) * 100)}% more
+                        panel than this unit accepts. Some over-paneling is deliberate — the extra
+                        fills in cloudy mornings and the peak is clipped — but past roughly 1.3×
+                        you are buying panels the inverter will never use. Fewer, larger panels
+                        change the count, not this ratio; a second unit or a bigger one does.
+                      </>
+                    ) : (
+                      <>
+                        Fits, with{' '}
+                        {Math.round((1 - installedWatts / inverterSummary.pvMaxPowerW) * 100)}% of
+                        the input still free. Wiring it into that input is the next step — the
+                        panel wattage you pick decides how many go in a string.
+                      </>
+                    )}
+                  </p>
+                  <p className="text-xs text-zon-muted">
+                    Fitting on power says nothing about fitting on voltage.{' '}
+                    <Link href="/calculators/strings" className="text-zon-gold-deep hover:underline">
+                      Check the string against the MPPT window →
+                    </Link>
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             <RechargeWarning
               annual={annualRecharge}
               worst={worstRecharge}
@@ -330,7 +393,7 @@ export default function PanelSizingPage() {
                           setWorstMonth(ex.worstMonth)
                         }}
                         className={`text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                          peakSun === ex.annual
+                          selectedRegion === ex
                             ? 'bg-zon-gold-tint text-zon-gold-deep font-medium'
                             : 'hover:bg-zon-rule-soft text-zon-body'
                         }`}
@@ -346,9 +409,11 @@ export default function PanelSizingPage() {
               <div>
                 <label htmlFor="panels-worst-month" className="block text-sm font-medium mb-1">
                   Worst-month peak sun hours
-                  <span className="ml-1 font-normal text-zon-muted text-xs">
-                    ({worstMonthName}{matchedRegion ? ` in ${matchedRegion.region}` : ''})
-                  </span>
+                  {matchedRegion && (
+                    <span className="ml-1 font-normal text-zon-muted text-xs">
+                      ({matchedRegion.worstMonthName} in {matchedRegion.region})
+                    </span>
+                  )}
                 </label>
                 <div className="flex items-center gap-3">
                   <input

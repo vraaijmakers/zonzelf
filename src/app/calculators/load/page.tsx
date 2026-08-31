@@ -1,9 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, Zap, Info, Wind, Camera, Loader2, Lock, RotateCcw, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { usePersistentState, publishLoadSummary, round2 } from '@/lib/calc-storage'
+import {
+  usePersistentState, publishLoadSummary, round2,
+  LOAD_APPLIANCES_KEY, DEFAULT_APPLIANCES, type StoredAppliance,
+} from '@/lib/calc-storage'
+import { peakDemand } from '@/lib/inverter-sizing'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { RegisterBadge } from '@/components/ProtectionOutput'
 import {
@@ -18,26 +22,8 @@ import {
   DEFAULT_OVERCAST_FACTOR, DEFAULT_COLD_FACTOR,
 } from '@/lib/battery-scenarios'
 
-interface Appliance {
-  id: number
-  name: string
-  /** Draw while actually running, not the daily average. */
-  watts: number
-  /** Hours per day the appliance is in service. */
-  hours: number
-  qty: number
-  /** Fraction of those hours it actually draws power. Absent means 100%. */
-  duty?: number
-  /** When it runs — drives the battery scenarios. Absent means all day. */
-  profile?: LoadProfile
-}
+type Appliance = StoredAppliance
 
-const DEFAULT_APPLIANCES: Appliance[] = [
-  { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4, profile: 'evening' },
-  { id: 2, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1 },
-  { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
-  { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1, duty: 0.30 },
-]
 
 // Ids only have to be unique within the current list, which may have been
 // restored from a previous session.
@@ -46,7 +32,7 @@ const nextIdFor = (rows: Appliance[]) =>
 
 export default function LoadCalculatorPage() {
   const [appliances, setAppliances, , clearAppliances] =
-    usePersistentState<Appliance[]>('zonzelf:load:appliances', DEFAULT_APPLIANCES)
+    usePersistentState<Appliance[]>(LOAD_APPLIANCES_KEY, DEFAULT_APPLIANCES)
   const [efficiency, setEfficiency, , clearEfficiency] =
     usePersistentState<number>('zonzelf:load:efficiency', EFF.inverter)
   const [scanningId, setScanningId] = useState<number | null>(null)
@@ -100,6 +86,7 @@ export default function LoadCalculatorPage() {
       hours: preset.hours,
       duty: preset.duty,
       profile: preset.profile,
+      surge: preset.surgeFactor,
       qty: 1,
     }])
 
@@ -136,6 +123,10 @@ export default function LoadCalculatorPage() {
   const deliverMin = Math.min(chain.fromBatteryKwh, greyChain.fromBatteryKwh)
   const deliverMax = Math.max(chain.fromBatteryKwh, greyChain.fromBatteryKwh)
   const loadSpreads = Math.abs(greyKwh - totalKwh) > 0.05 * Math.max(totalKwh, 0.01)
+  // Published for the inverter step. Computed here because this is where the
+  // appliance rows live; explained and adjusted there, because that is where a
+  // start-up spike decides something.
+  const peak = peakDemand(appliances)
 
   // Publish the result so the battery and panel calculators can pick it up.
   useEffect(() => {
@@ -151,10 +142,14 @@ export default function LoadCalculatorPage() {
         heating: round2(breakdown.heating),
         total: round2(breakdown.total),
       },
+      peakConcurrentW: Math.round(peak.continuousW),
+      surgeW: Math.round(peak.surgeW),
     })
-    // breakdown is derived from `appliances`, which totalKwh already tracks.
+    // breakdown and peak are derived from `appliances`, which totalKwh already
+    // tracks — except the surge figures, which move when a row's surge factor
+    // changes without changing a single watt-hour.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalKwh, efficiency, adjustedKwh])
+  }, [totalKwh, efficiency, adjustedKwh, peak.continuousW, peak.surgeW])
 
   // Drives the sticky readout once the consumption card scrolls away. Two rows
   // because this step produces two numbers people confuse: what the appliances
@@ -310,7 +305,7 @@ export default function LoadCalculatorPage() {
                       <th className="text-left px-2 py-3 font-medium text-zon-body whitespace-nowrap">Runs</th>
                       <th className="text-right px-2 py-3 font-medium text-zon-body whitespace-nowrap">Duty</th>
                       <th className="text-right px-2 py-3 font-medium text-zon-body">Qty</th>
-                      <th className="text-right px-3 py-3 font-medium text-zon-body whitespace-nowrap">Wh/day</th>
+                      <th className="text-right px-2 py-3 font-medium text-zon-body whitespace-nowrap">Wh/day</th>
                       <th className="px-2 py-3"></th>
                     </tr>
                   </thead>
@@ -329,7 +324,7 @@ export default function LoadCalculatorPage() {
                         : undefined
                       return (
                         <tr key={a.id} className={`border-b ${i % 2 === 0 ? '' : 'bg-zon-rule-soft/50'}`}>
-                          <td className="px-3 py-2 min-w-[8rem]">
+                          <td className="px-3 py-2 min-w-[7rem]">
                             <input
                               type="text"
                               value={a.name}
@@ -368,17 +363,23 @@ export default function LoadCalculatorPage() {
                                 use {LOAD_PROFILES[betterProfile].label}
                               </button>
                             )}
-                            <select
-                              value={a.profile ?? DEFAULT_PROFILE}
-                              onChange={e => update(a.id, 'profile', e.target.value)}
-                              aria-label={a.name ? `When ${a.name} runs` : 'When this runs'}
-                              title={LOAD_PROFILES[a.profile ?? DEFAULT_PROFILE].hint}
-                              className="text-xs bg-transparent border-0 outline-none focus:ring-1 focus:ring-zon-gold-light rounded px-0 -ml-1 max-w-[4.75rem]"
-                            >
-                              {(Object.keys(LOAD_PROFILES) as LoadProfile[]).map(k => (
-                                <option key={k} value={k}>{LOAD_PROFILES[k].label}</option>
-                              ))}
-                            </select>
+                            <span className="relative -ml-1 inline-flex items-center">
+                              <select
+                                value={a.profile ?? DEFAULT_PROFILE}
+                                onChange={e => update(a.id, 'profile', e.target.value)}
+                                aria-label={a.name ? `When ${a.name} runs` : 'When this runs'}
+                                title={LOAD_PROFILES[a.profile ?? DEFAULT_PROFILE].hint}
+                                className="max-w-[4.75rem] appearance-none rounded border-0 bg-transparent pl-0 pr-3.5 text-xs outline-none focus:ring-1 focus:ring-zon-gold-light"
+                              >
+                                {(Object.keys(LOAD_PROFILES) as LoadProfile[]).map(k => (
+                                  <option key={k} value={k}>{LOAD_PROFILES[k].label}</option>
+                                ))}
+                              </select>
+                              <ChevronDown
+                                aria-hidden="true"
+                                className="pointer-events-none absolute right-0.5 h-3 w-3 text-zon-muted"
+                              />
+                            </span>
                           </td>
                           <td className="px-2 py-2">
                             {stale !== undefined && (
@@ -411,7 +412,7 @@ export default function LoadCalculatorPage() {
                               min="1"
                             />
                           </td>
-                          <td className="px-3 py-2 text-right font-medium text-zon-body whitespace-nowrap">
+                          <td className="px-2 py-2 text-right font-medium text-zon-body whitespace-nowrap">
                             {wh >= 1000
                               ? `${(wh / 1000).toFixed(2)} kWh`
                               : `${Math.round(wh)} Wh`}
@@ -532,25 +533,19 @@ export default function LoadCalculatorPage() {
                 <div className="w-12 h-12 bg-zon-gold-tint rounded-full flex items-center justify-center mx-auto mb-4">
                   <Camera className="w-6 h-6 text-zon-gold-deep" />
                 </div>
-                <h3 className="text-lg font-bold text-center mb-2">Label Scan — Pro Feature</h3>
+                <h3 className="text-lg font-bold text-center mb-2">Label Scan — not available yet</h3>
                 <p className="text-sm text-zon-body text-center mb-4">
-                  Walk around your home, photograph each appliance nameplate, and let ZonZelf read the wattage automatically — no guessing.
+                  The plan is to let you photograph each appliance nameplate and have ZonZelf read
+                  the wattage off it. It is not finished, and accounts are not open, so there is
+                  nothing to sign up for yet.
                 </p>
-                <ul className="text-sm text-zon-body space-y-1.5 mb-5">
-                  <li className="flex items-center gap-2"><span className="text-zon-green">✓</span> Works on any appliance nameplate</li>
-                  <li className="flex items-center gap-2"><span className="text-zon-green">✓</span> Reads BTU, SEER, amps×volts automatically</li>
-                  <li className="flex items-center gap-2"><span className="text-zon-green">✓</span> Mobile camera or desktop upload</li>
-                  <li className="flex items-center gap-2"><span className="text-zon-green">✓</span> Saves your load list to your project</li>
-                </ul>
-                <a
-                  href="/auth/signup"
-                  className="block w-full text-center bg-zon-gold-tint0 hover:bg-zon-gold-deep text-white font-medium py-2.5 rounded-lg transition-colors"
-                >
-                  Create a free account
-                </a>
+                <p className="text-sm text-zon-body text-center mb-5">
+                  Enter the wattage by hand for now — the presets below cover most appliances, and
+                  the calculator does not need an account.
+                </p>
                 <button
                   onClick={() => setShowProPrompt(false)}
-                  className="block w-full text-center text-sm text-zon-muted hover:text-zon-body mt-3"
+                  className="block w-full text-center bg-zon-gold hover:bg-zon-gold-deep text-zon-ink font-medium py-2.5 rounded-lg transition-colors"
                 >
                   Continue without scanning
                 </button>

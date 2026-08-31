@@ -1,8 +1,16 @@
 'use client'
 
-import { usePersistentState } from '@/lib/calc-storage'
+import {
+  usePersistentState, useInverterSummary, useArraySummary, useLoadSummary,
+} from '@/lib/calc-storage'
+import {
+  resolveRuns, combinerAdvice, mpptArrival, looksLikeBatteryVoltage, type RunId,
+} from '@/lib/circuit-runs'
+import { COPPER_ONLY_HEADLINE, CCA_WARNING } from '@/lib/conductor-material'
+import { TERMINAL_RATING_NOTE } from '@/lib/temperature'
+import Link from 'next/link'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
-import { Info } from 'lucide-react'
+import { Info, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   evaluateGauges, passingGauges, thinnestByAmpacity,
@@ -13,7 +21,7 @@ import {
   sizeOvercurrent, thinnestProtectableAwg, ocpdProtectionView,
   DC_RATING_WARNING, type CircuitKind,
 } from '@/lib/overcurrent'
-import ProtectionOutput from '@/components/ProtectionOutput'
+import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 
 const TEMP_COLUMNS: { value: TempColumn; label: string; hint: string }[] = [
   { value: 60, label: '60 °C', hint: 'TW, UF — older or budget terminals' },
@@ -29,6 +37,27 @@ export default function AwgCalculatorPage() {
   const [maxDrop, setMaxDrop]     = usePersistentState('zonzelf:awg:maxDrop', 3)
   const [column, setColumn]       = usePersistentState<TempColumn>('zonzelf:awg:tempColumn', 75)
   const [kind, setKind]           = usePersistentState<CircuitKind>('zonzelf:awg:circuitKind', 'general')
+  const [runId, setRunId]         = usePersistentState<RunId | ''>('zonzelf:awg:runId', '')
+
+  // The page used to ask for a naked current with no indication of which cable
+  // it was sizing. The chain already knows most of these, so it offers them.
+  const inverter = useInverterSummary()
+  const array = useArraySummary()
+  const load = useLoadSummary()
+  const runs = resolveRuns({ inverter, array, load })
+  const activeRun = runs.find(r => r.id === runId) ?? null
+  const combiner = combinerAdvice(array)
+
+  const applyRun = (id: RunId) => {
+    const run = runs.find(r => r.id === id)
+    if (!run) return
+    setRunId(id)
+    setKind(run.kind)
+    setMaxDrop(run.suggestedDropPercent)
+    setLengthFt(run.typicalFeet)
+    if (run.amps !== null) setAmps(run.amps)
+    if (run.volts !== null) setVoltage(run.volts)
+  }
 
   // lengthFt is always stored in feet; the metric toggle is display-only.
   const input = { amps, oneWayFeet: lengthFt, volts: voltage, maxDropPercent: maxDrop, column, kind, continuous: true }
@@ -47,6 +76,16 @@ export default function AwgCalculatorPage() {
     ? thinnestProtectableAwg({ amps, continuous: true, kind, column })
     : undefined
   const conductorView = conductorProtectionView(input)
+
+  // The percentage budget is a proxy; this is the question it stands in for.
+  // Uses the thinnest gauge that passed, because that is the one most likely
+  // to be bought.
+  const arrival = kind === 'pv-source' && thinnest && array && inverter
+    ? mpptArrival(array.vmpHotV, thinnest.voltageDrop, inverter.mpptMinV)
+    : null
+  const batteryVoltageOnPv = activeRun
+    ? looksLikeBatteryVoltage(activeRun.kind, voltage)
+    : false
   const ocpdView = ocpd ? ocpdProtectionView(ocpd) : null
 
   // Protection register: the bar mirrors what ProtectionOutput already shows —
@@ -127,16 +166,210 @@ export default function AwgCalculatorPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Every figure on this page is NEC 310.16's copper column. That
+                was true and said nowhere the reader could see it. */}
+            <Card className="border-zon-amber">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base text-zon-ink">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-zon-amber" aria-hidden="true" />
+                  Copper only
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs text-zon-body">
+                <p>
+                  <strong className="text-zon-ink">{COPPER_ONLY_HEADLINE}</strong> Aluminium
+                  carries about 61% of the current for the same gauge, so every number here is
+                  wrong for it — in the undersizing direction.
+                </p>
+                <p>{CCA_WARNING}</p>
+                <p className="text-zon-muted">
+                  How to tell what you bought, and why the joint is what fails:{' '}
+                  <Link href="/guides/wiring#conductor-material" className="text-zon-gold-deep hover:underline">
+                    conductor material in the wiring guide
+                  </Link>
+                  .
+                </p>
+              </CardContent>
+            </Card>
+
+            {arrival && (
+              <Card className={arrival.clears ? undefined : 'border-zon-red'}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between gap-2 text-base text-zon-ink">
+                    What reaches the inverter
+                    <RegisterBadge register="capacity" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-xs text-zon-body">
+                  <p className="text-sm">
+                    <span className="font-mono tabular-nums text-zon-ink">
+                      {arrival.sourceV.toFixed(0)}V
+                    </span>{' '}
+                    at the array on the hottest day, minus{' '}
+                    <span className="font-mono tabular-nums">{arrival.dropV.toFixed(1)}V</span> in
+                    the cable, leaves{' '}
+                    <span className="font-mono tabular-nums font-semibold text-zon-ink">
+                      {arrival.arrivingV.toFixed(0)}V
+                    </span>{' '}
+                    at the input.
+                  </p>
+                  {arrival.clears ? (
+                    <p>
+                      That is {Math.round(arrival.marginV)}V above the {arrival.floorV}V tracking
+                      floor. The percentage budget is the binding constraint here, not the floor —
+                      which is the usual case on a tall string, and worth knowing so you tighten
+                      the right one.
+                    </p>
+                  ) : (
+                    <p className="flex gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-zon-red" aria-hidden="true" />
+                      <span>
+                        <strong className="text-zon-ink">That is under the {arrival.floorV}V
+                        floor.</strong> On the hottest afternoon this string stops tracking and
+                        harvests nothing. Thicker cable recovers some of it; more panels in
+                        series is the real fix, if the cold-morning limit allows it.
+                      </span>
+                    </p>
+                  )}
+                  <p className="text-zon-muted">
+                    Computed at your entered current, which for a PV run is Isc. Power actually
+                    flows at Imp, a few percent lower, so the real drop is slightly smaller than
+                    this — the pessimistic direction.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {combiner && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base text-zon-ink">
+                    {combiner.needed ? 'You need a combiner' : 'No combiner needed'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-xs text-zon-body">
+                  <p>{combiner.why}</p>
+                  {combiner.needed && combiner.fused === true && (
+                    <p className="text-zon-muted">
+                      Size those string fuses on the{' '}
+                      <Link href="/calculators/strings" className="text-zon-gold-deep hover:underline">
+                        array wiring step
+                      </Link>
+                      , which works them out from your panel&apos;s Isc and its maximum series
+                      fuse rating.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             </div>
           </AnswerAnchor>
         </div>
 
         <div className="min-w-0 space-y-5 lg:col-span-3">
+          {/* Which cable, before how many amps. A system has at least four
+              runs and they are not interchangeable. */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-zon-body">
+                Which run are you sizing?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-1">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {runs.filter(r => r.applies).map(run => {
+                  const active = runId === run.id
+                  return (
+                    <button
+                      key={run.id}
+                      onClick={() => applyRun(run.id)}
+                      aria-pressed={active}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                        active
+                          ? 'border-zon-gold bg-zon-gold-tint'
+                          : 'border-zon-rule hover:border-zon-gold-light'
+                      }`}
+                    >
+                      <span className="block text-sm font-medium text-zon-ink">{run.label}</span>
+                      <span className="mt-0.5 block text-xs text-zon-muted">{run.where}</span>
+                      {run.amps !== null && (
+                        <span className="mt-1 block text-xs font-medium text-zon-gold-deep">
+                          {run.amps}A at {run.volts}V — from your system
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {activeRun ? (
+                <div className="space-y-2 border-t border-zon-rule pt-3 text-xs text-zon-body">
+                  {/* Selecting a run whose figures are unknown used to set the
+                      circuit type and length and silently leave the current
+                      and voltage at whatever was there before — which for a PV
+                      string meant sizing a 287V circuit against 24V, and that
+                      is six gauge sizes of difference, not a rounding error. */}
+                  {activeRun.amps === null && (
+                    <p className="rounded-lg border border-zon-amber-tint bg-zon-amber-tint px-3 py-2">
+                      <strong className="text-zon-ink">
+                        The numbers below are not from your system.
+                      </strong>{' '}
+                      {activeRun.kind === 'pv-source'
+                        ? 'This run needs your panel and array, which come from the '
+                        : 'This run needs your inverter, which comes from the '}
+                      <Link
+                        href={activeRun.kind === 'pv-source' ? '/calculators/strings' : '/calculators/inverter'}
+                        className="text-zon-gold-deep hover:underline"
+                      >
+                        {activeRun.kind === 'pv-source' ? 'array wiring step' : 'inverter step'}
+                      </Link>
+                      . Until then the current and voltage are whatever was last typed here —
+                      check both against your own figures before trusting the answer.
+                    </p>
+                  )}
+                  {activeRun.derivation && (
+                    <p>
+                      <strong className="text-zon-ink">Where that current comes from.</strong>{' '}
+                      {activeRun.derivation}
+                    </p>
+                  )}
+                  <p>{activeRun.note}</p>
+                  <p className="text-zon-muted">
+                    The length below is a typical starting point, not your run — measure it.
+                  </p>
+                </div>
+              ) : (
+                <p className="border-t border-zon-rule pt-3 text-xs text-zon-muted">
+                  Pick a run and the current, voltage and circuit type fill in from the steps you
+                  have already done. Or size any cable by hand below — nothing here is locked.
+                  {!inverter && !array && (
+                    <>
+                      {' '}
+                      You have not been through the{' '}
+                      <Link href="/calculators/inverter" className="text-zon-gold-deep hover:underline">
+                        inverter
+                      </Link>{' '}
+                      or{' '}
+                      <Link href="/calculators/strings" className="text-zon-gold-deep hover:underline">
+                        array wiring
+                      </Link>{' '}
+                      steps, so there is nothing to fill in from yet.
+                    </>
+                  )}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardContent className="pt-5 space-y-5">
               <div>
                 <label htmlFor="awg-amps" className="block text-sm font-medium mb-1 text-zon-ink">
                   Current (amps)
+                  {activeRun && (
+                    <span className="ml-1 font-normal text-zon-muted">— {activeRun.label}</span>
+                  )}
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -184,10 +417,10 @@ export default function AwgCalculatorPage() {
 
               <div role="group" aria-labelledby="awg-voltage-label">
                 <span id="awg-voltage-label" className="block text-sm font-medium mb-1 text-zon-ink">
-                  System voltage
+                  Voltage on this run
                 </span>
-                <div className="flex gap-2 flex-wrap">
-                  {[12, 24, 48, 120, 240].map(v => (
+                <div className="flex flex-wrap items-center gap-2">
+                  {(activeRun ? activeRun.voltageOptions : [12, 24, 48, 120, 240]).map(v => (
                     <button key={v} onClick={() => setVoltage(v)} aria-pressed={voltage === v}
                       className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                         voltage === v
@@ -198,7 +431,52 @@ export default function AwgCalculatorPage() {
                       {v}V
                     </button>
                   ))}
+                  {activeRun && activeRun.volts !== null && voltage !== activeRun.volts && (
+                    <button
+                      onClick={() => setVoltage(activeRun.volts!)}
+                      className="rounded-full border border-zon-gold-light bg-zon-gold-tint px-3 py-1 text-xs text-zon-gold-deep"
+                    >
+                      Use {activeRun.volts}V from your system →
+                    </button>
+                  )}
+                  <label className="sr-only" htmlFor="awg-voltage-custom">Circuit voltage</label>
+                  <input
+                    id="awg-voltage-custom"
+                    type="number"
+                    value={voltage}
+                    onChange={e => setVoltage(Math.max(1, parseFloat(e.target.value) || 1))}
+                    min="1" max="1500"
+                    className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none w-24 rounded-lg border border-zon-rule px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
+                  />
+                  <span className="text-sm text-zon-muted">V</span>
                 </div>
+                {batteryVoltageOnPv && (
+                  <p className="mt-2 rounded-lg border border-zon-amber-tint bg-zon-amber-tint px-3 py-2 text-xs text-zon-body">
+                    <strong className="text-zon-ink">{voltage}V is a battery voltage.</strong> A
+                    panel string is hundreds of volts — {activeRun?.volts
+                      ? `yours is about ${activeRun.volts}V.`
+                      : 'seven 41V panels in series is 287V, for instance.'}{' '}
+                    Sizing a string against a battery figure overstates the drop percentage by
+                    roughly ten times and can cost you several gauge sizes of copper you do not
+                    need.
+                    {activeRun?.volts && (
+                      <>
+                        {' '}
+                        <button
+                          onClick={() => setVoltage(activeRun.volts!)}
+                          className="font-medium text-zon-gold-deep underline"
+                        >
+                          Use {activeRun.volts}V →
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
+                <p className="text-xs text-zon-muted mt-1">
+                  {activeRun
+                    ? activeRun.voltageMeans
+                    : 'The operating voltage of the cable you are sizing — a battery bank nominal for a DC run, a string\u2019s series total for a PV run, the AC output for an AC run. It is what the voltage drop below is measured against.'}
+                </p>
               </div>
 
               <div role="group" aria-labelledby="awg-temp-label">
@@ -223,6 +501,7 @@ export default function AwgCalculatorPage() {
                   the <em>lowest-rated</em> connection in it — usually a breaker or a lug, not the
                   wire. Buying 90 °C cable does not move you to the 90 °C column on its own.
                 </p>
+                <p className="text-xs text-zon-muted mt-1">{TERMINAL_RATING_NOTE}</p>
               </div>
 
               <div role="group" aria-labelledby="awg-kind-label">

@@ -8,6 +8,7 @@ import {
 } from '@/lib/calc-steps'
 import {
   usePersistentState, LOAD_SUMMARY_KEY, BATTERY_SUMMARY_KEY, PANEL_SUMMARY_KEY,
+  INVERTER_SUMMARY_KEY, ARRAY_SUMMARY_KEY,
 } from '@/lib/calc-storage'
 import { cn } from '@/lib/utils'
 
@@ -46,12 +47,16 @@ export interface AnswerSummary {
 function useCompletedSteps(): Set<StepId> {
   const [load] = usePersistentState<unknown>(LOAD_SUMMARY_KEY, null)
   const [battery] = usePersistentState<unknown>(BATTERY_SUMMARY_KEY, null)
+  const [inverter] = usePersistentState<unknown>(INVERTER_SUMMARY_KEY, null)
   const [panels] = usePersistentState<unknown>(PANEL_SUMMARY_KEY, null)
+  const [array] = usePersistentState<unknown>(ARRAY_SUMMARY_KEY, null)
 
   const done = new Set<StepId>()
   if (load) done.add('load')
   if (battery) done.add('battery')
+  if (inverter) done.add('inverter')
   if (panels) done.add('panels')
+  if (array) done.add('array')
   return done
 }
 
@@ -199,8 +204,13 @@ export default function StepSpine({
           </ol>
         </div>
 
-        {/* Wide — every step named. There is room here to say what the chain is. */}
-        <ol className="hidden items-center gap-2.5 overflow-x-auto py-3 lg:flex">
+        {/* Wide — every step named. There is room here to say what the chain is.
+            The gaps are tight on purpose: at lg the rail has 992px to fit seven
+            steps, and at gap-2.5 its intrinsic width was 992px exactly — no
+            slack, so a slightly wider font or a browser zoom tipped it into a
+            horizontal scrollbar. overflow-x-auto stays as a floor, not as the
+            normal case. */}
+        <ol className="hidden items-center gap-2 overflow-x-auto py-3 lg:flex">
           {CALC_STEPS.map((s, i) => {
             const state = stateOf(s, current, done)
             const body = (
@@ -221,8 +231,8 @@ export default function StepSpine({
               </span>
             )
             return (
-              <li key={s.id} className={cn('flex items-center', i > 0 && 'min-w-0 flex-1 gap-2.5')}>
-                {i > 0 && <span aria-hidden="true" className="h-px min-w-2 flex-1 bg-zon-rule" />}
+              <li key={s.id} className={cn('flex items-center', i > 0 && 'min-w-0 flex-1 gap-2')}>
+                {i > 0 && <span aria-hidden="true" className="h-px min-w-1 flex-1 bg-zon-rule" />}
                 {s.href && state !== 'current' ? (
                   <Link href={s.href} className="rounded transition-opacity hover:opacity-70">
                     {body}
