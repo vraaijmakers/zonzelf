@@ -77,7 +77,7 @@ export const CALC_STEPS: readonly CalcStep[] = [
   },
   {
     id: 'system', n: 7, label: 'Your system', short: 'System',
-    href: null,
+    href: '/calculators/system',
     blurb: 'Everything you have sized and picked, in one place',
   },
 ] as const

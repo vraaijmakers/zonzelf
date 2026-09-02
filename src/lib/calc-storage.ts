@@ -211,6 +211,25 @@ export interface BatterySummary {
   roundTrip: number
   /** Depth of discharge the bank was sized against. */
   dod: number
+  /**
+   * The bank the user actually settled on, kWh. Absent on summaries saved
+   * before the system page existed — it published only what the PANEL step
+   * needed (chemistry and round trip), which meant nothing downstream could
+   * say how big the battery was. The system page needs the answer, not just
+   * the inputs to it.
+   */
+  bankKwh?: number
+  /** Amp-hours at the chosen system voltage. */
+  bankAh?: number
+  /** Days of autonomy the bank was sized for. */
+  autonomyDays?: number
+  /** Nominal DC voltage the bank runs at. */
+  systemVoltage?: number
+  /** Which scenario the figure came from, e.g. 'overnight' or 'sunless days'. */
+  scenarioLabel?: string
+  /** Low and high end of the scenario band, kWh — the honest spread. */
+  bandMinKwh?: number
+  bandMaxKwh?: number
 }
 
 export const BATTERY_SUMMARY_KEY = 'zonzelf:battery:summary'
