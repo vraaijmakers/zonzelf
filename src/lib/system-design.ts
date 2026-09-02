@@ -58,6 +58,7 @@ import { recommendedSystemVoltage } from './system-voltage'
 import { formatTemp, formatDelta, DEFAULT_TEMP_UNIT, type TempUnit } from './temperature'
 import type {
   LoadSummary, BatterySummary, InverterSummary, PanelSummary, ArraySummary,
+  ProtectionSummary,
 } from './calc-storage'
 
 export interface ChainSummaries {
@@ -66,6 +67,7 @@ export interface ChainSummaries {
   inverter?: InverterSummary | null
   panels?: PanelSummary | null
   array?: ArraySummary | null
+  protection?: ProtectionSummary | null
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +112,14 @@ export function chainState(s: ChainSummaries): StepState[] {
       case 'array':
         if (s.array) headline = `${s.array.series}S${s.array.parallel}P — ${s.array.vocColdV.toFixed(0)}V cold`
         break
-      case 'protection':
+      case 'protection': {
+        const n = s.protection?.runs.length ?? 0
+        if (n > 0) {
+          headline = `${n} cable run${n === 1 ? '' : 's'} sized — ` +
+            s.protection!.runs.map(r => r.awgLabel).join(', ') + ' AWG'
+        }
+        break
+      }
       case 'system':
         break
     }
@@ -454,9 +463,9 @@ export function confidence(
   unit: TempUnit = DEFAULT_TEMP_UNIT,
 ): Confidence {
   const drivers: string[] = []
-  // 'protection' publishes no summary, so it cannot be detected as done and is
-  // not counted here. 'system' is the destination, not a task.
-  const missing = outstandingSteps(s).filter(st => st.id !== 'protection')
+  // 'system' is the destination, not a task — outstandingSteps already drops
+  // it. Protection now publishes a summary, so it is counted like the rest.
+  const missing = outstandingSteps(s)
 
   if (missing.length > 0) {
     drivers.push(

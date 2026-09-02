@@ -5,6 +5,7 @@ import { AlertTriangle, Info, ClipboardList, ArrowRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   useLoadSummary, useBatterySummary, useInverterSummary, usePanelSummary, useArraySummary,
+  useProtectionSummary,
 } from '@/lib/calc-storage'
 import {
   chainState, disagreements, assumptions, confidence, chainComplete,
@@ -49,6 +50,7 @@ export default function SystemPage() {
     inverter: useInverterSummary(),
     panels: usePanelSummary(),
     array: useArraySummary(),
+    protection: useProtectionSummary(),
   }
 
   // Same preference the array step writes, so temperatures read consistently
@@ -185,6 +187,63 @@ export default function SystemPage() {
               </CardContent>
             </Card>
           </section>
+
+          {/* The cable schedule — what to actually buy, per run. */}
+          {summaries.protection && summaries.protection.runs.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-lg font-semibold text-zon-ink">Cable schedule</h2>
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <caption className="sr-only">
+                        The cable gauge chosen for each run, with its protection
+                      </caption>
+                      <thead>
+                        <tr className="border-b border-zon-rule bg-zon-cream text-left text-zon-muted">
+                          <th scope="col" className="px-4 py-2 font-medium">Run</th>
+                          <th scope="col" className="px-3 py-2 text-right font-medium">Carries</th>
+                          <th scope="col" className="px-3 py-2 text-right font-medium">Length</th>
+                          <th scope="col" className="px-3 py-2 text-right font-medium">Gauge</th>
+                          <th scope="col" className="px-3 py-2 text-right font-medium">Drop</th>
+                          <th scope="col" className="px-4 py-2 font-medium">Protected by</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summaries.protection.runs.map(r => (
+                          <tr key={r.runId} className="border-b border-zon-rule-soft last:border-0">
+                            <td className="px-4 py-2 text-zon-ink">{r.label}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-zon-body">
+                              {r.amps}A at {r.volts}V
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-zon-body">
+                              {r.oneWayFeet}ft
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-zon-ink">
+                              {r.awgLabel} AWG
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-zon-body">
+                              {r.dropPercent}%
+                            </td>
+                            <td className="px-4 py-2 text-zon-body">
+                              {r.ocpdOptionsA.length > 0
+                                ? `${r.ocpdOptionsA[0]}A${r.ocpdOptionsA.length > 1 ? ` (up to ${r.ocpdOptionsA[r.ocpdOptionsA.length - 1]}A)` : ''}`
+                                : 'no standard device fits — see the step'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="border-t border-zon-rule px-4 py-3 text-xs text-zon-muted">
+                    Lengths are what you entered, not measured for you. Every gauge here is a
+                    choice you made from the set that passed both limits — copper only, and a
+                    DC run needs a DC-rated device.
+                  </p>
+                </CardContent>
+              </Card>
+            </section>
+          )}
 
           {/* Confidence — qualitative, on purpose. */}
           <section>

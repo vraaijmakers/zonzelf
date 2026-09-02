@@ -2,6 +2,7 @@
 
 import {
   usePersistentState, useInverterSummary, useArraySummary, useLoadSummary,
+  useProtectionSummary, publishProtectionSummary, type SizedRun,
 } from '@/lib/calc-storage'
 import {
   resolveRuns, combinerAdvice, mpptArrival, looksLikeBatteryVoltage, type RunId,
@@ -46,6 +47,16 @@ export default function AwgCalculatorPage() {
   const load = useLoadSummary()
   const runs = resolveRuns({ inverter, array, load })
   const activeRun = runs.find(r => r.id === runId) ?? null
+
+  // Which runs have been sized and saved. The cable step is the only one that
+  // is run repeatedly — once per cable — so "done" means every run that
+  // applies has a gauge recorded against it.
+  const saved = useProtectionSummary()
+  const savedRuns = saved?.runs ?? []
+  const applicable = runs.filter(r => r.applies)
+  const savedIds = new Set(savedRuns.map(r => r.runId))
+  const remaining = applicable.filter(r => !savedIds.has(r.id))
+  const savedHere = activeRun ? savedRuns.find(r => r.runId === activeRun.id) : undefined
   const combiner = combinerAdvice(array)
 
   const applyRun = (id: RunId) => {
@@ -76,6 +87,46 @@ export default function AwgCalculatorPage() {
     ? thinnestProtectableAwg({ amps, continuous: true, kind, column })
     : undefined
   const conductorView = conductorProtectionView(input)
+
+  // Which gauge the user is going with. The conductor output deliberately
+  // refuses to name one — it is a protection-register view showing the set
+  // that passes — so the choice is theirs and this only records it. Defaults
+  // to the thinnest that qualifies, which is what most people buy, but it is
+  // a pre-selection rather than a recommendation.
+  const [chosenAwg, setChosenAwg] = usePersistentState<number | null>('zonzelf:awg:chosen', null)
+  const passing = passingGauges(input)
+  const effectiveAwg = passing.some(g => g.spec.awg === chosenAwg)
+    ? chosenAwg
+    : (thinnest?.spec.awg ?? null)
+  const chosenGauge = passing.find(g => g.spec.awg === effectiveAwg) ?? null
+
+  const saveRun = () => {
+    if (!activeRun || !chosenGauge) return
+    const ocpdForChoice = sizeOvercurrent({
+      amps, continuous: true, kind, awg: chosenGauge.spec.awg, column,
+    })
+    const record: SizedRun = {
+      runId: activeRun.id,
+      label: activeRun.label,
+      amps,
+      volts: voltage,
+      oneWayFeet: lengthFt,
+      awg: chosenGauge.spec.awg,
+      awgLabel: chosenGauge.label,
+      ocpdOptionsA: ocpdForChoice?.allowed ?? [],
+      dropPercent: Math.round(chosenGauge.voltageDropPercent * 100) / 100,
+      kind,
+      column,
+    }
+    // Keyed by run, so re-sizing replaces rather than appending a second
+    // record for the same cable.
+    publishProtectionSummary({
+      runs: [...savedRuns.filter(r => r.runId !== activeRun.id), record],
+    })
+  }
+
+  const forgetRun = (id: string) =>
+    publishProtectionSummary({ runs: savedRuns.filter(r => r.runId !== id) })
 
   // The percentage budget is a proxy; this is the question it stands in for.
   // Uses the thinnest gauge that passed, because that is the one most likely
@@ -133,6 +184,61 @@ export default function AwgCalculatorPage() {
                   over your {maxDrop}% limit — so it is <strong>distance</strong>, not current,
                   that rules out the thinner sizes.
                 </p>
+              )}
+
+              {/* The output above refuses to name one gauge — that is the
+                  register. The DECISION is the user's, and recording which
+                  one they made is what lets the chain know this run is done. */}
+              {activeRun && passing.length > 0 && (
+                <div className="border-t border-zon-rule pt-3">
+                  <p className="mb-2 text-xs font-medium text-zon-ink">
+                    Which will you use for {activeRun.label.toLowerCase()}?
+                  </p>
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    {passing.slice(0, 6).map(g => (
+                      <button
+                        key={g.spec.awg}
+                        onClick={() => setChosenAwg(g.spec.awg)}
+                        aria-pressed={effectiveAwg === g.spec.awg}
+                        className={`rounded-lg border px-2.5 py-1 font-mono text-xs transition-colors ${
+                          effectiveAwg === g.spec.awg
+                            ? 'border-zon-gold bg-zon-gold text-zon-ink'
+                            : 'border-zon-rule hover:border-zon-gold-light'
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                  {chosenGauge && (
+                    <p className="mb-2 text-xs text-zon-muted">
+                      {chosenGauge.label} AWG drops{' '}
+                      <span className="tabular-nums">
+                        {chosenGauge.voltageDropPercent.toFixed(1)}%
+                      </span>{' '}
+                      on this run. Thicker is always electrically safer; thinner is cheaper and
+                      easier to terminate.
+                    </p>
+                  )}
+                  <button
+                    onClick={saveRun}
+                    disabled={!chosenGauge}
+                    className="rounded-lg border border-zon-gold-light bg-zon-gold-tint px-3 py-1.5 text-xs font-medium text-zon-gold-deep transition-colors hover:bg-zon-gold-tint disabled:opacity-50"
+                  >
+                    {savedHere
+                      ? savedHere.awg === effectiveAwg
+                        ? 'Saved — update this run'
+                        : `Replace saved ${savedHere.awgLabel} AWG`
+                      : 'Save this run'}
+                  </button>
+                  {savedHere && (
+                    <p className="mt-1.5 text-xs text-zon-muted">
+                      Currently saved as{' '}
+                      <span className="font-mono text-zon-body">{savedHere.awgLabel} AWG</span> at{' '}
+                      {savedHere.amps}A over {savedHere.oneWayFeet}ft.
+                    </p>
+                  )}
+                </div>
               )}
             </ProtectionOutput>
 
@@ -303,6 +409,49 @@ export default function AwgCalculatorPage() {
                 })}
               </div>
 
+              {applicable.length > 0 && (
+                <div className="rounded-lg border border-zon-rule bg-zon-rule-soft px-3 py-2">
+                  <p className="text-xs font-medium text-zon-ink">
+                    {savedRuns.length} of {applicable.length} run
+                    {applicable.length === 1 ? '' : 's'} sized
+                    {remaining.length === 0 && ' — this step is complete'}
+                  </p>
+                  {remaining.length > 0 ? (
+                    <p className="mt-1 text-xs text-zon-muted">
+                      Still to size: {remaining.map(r => r.label).join(', ')}. Pick each one
+                      above, choose a gauge, and save it.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-zon-body">
+                      Every run has a gauge recorded.{' '}
+                      <Link href="/calculators/system" className="text-zon-gold-deep hover:underline">
+                        See the whole system →
+                      </Link>
+                    </p>
+                  )}
+                  {savedRuns.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {savedRuns.map(r => (
+                        <li key={r.runId} className="flex items-baseline justify-between gap-2 text-xs">
+                          <span className="text-zon-body">
+                            {r.label} — <span className="font-mono text-zon-ink">{r.awgLabel} AWG</span>
+                            <span className="text-zon-muted">
+                              {' '}at {r.amps}A over {r.oneWayFeet}ft
+                            </span>
+                          </span>
+                          <button
+                            onClick={() => forgetRun(r.runId)}
+                            className="shrink-0 text-zon-muted hover:text-zon-body hover:underline"
+                          >
+                            clear
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
               {activeRun ? (
                 <div className="space-y-2 border-t border-zon-rule pt-3 text-xs text-zon-body">
                   {/* Selecting a run whose figures are unknown used to set the
@@ -332,6 +481,25 @@ export default function AwgCalculatorPage() {
                     <p>
                       <strong className="text-zon-ink">Where that current comes from.</strong>{' '}
                       {activeRun.derivation}
+                    </p>
+                  )}
+                  {/* The fields can drift from the chain — redo an upstream
+                      step and the figures here are yesterday's. Offered, never
+                      imposed, the same way the load calculator handles a
+                      preset whose duty cycle has since been corrected. */}
+                  {activeRun.amps !== null && activeRun.volts !== null &&
+                   (amps !== activeRun.amps || voltage !== activeRun.volts) && (
+                    <p className="rounded-lg border border-zon-gold-light bg-zon-gold-tint px-3 py-2">
+                      The fields below say{' '}
+                      <span className="tabular-nums">{amps}A at {voltage}V</span>, but your system
+                      now says{' '}
+                      <span className="tabular-nums">{activeRun.amps}A at {activeRun.volts}V</span>.{' '}
+                      <button
+                        onClick={() => { setAmps(activeRun.amps!); setVoltage(activeRun.volts!) }}
+                        className="font-medium text-zon-gold-deep underline"
+                      >
+                        Use the current figures →
+                      </button>
                     </p>
                   )}
                   <p>{activeRun.note}</p>

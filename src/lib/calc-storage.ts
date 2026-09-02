@@ -355,6 +355,66 @@ export function publishArraySummary(summary: ArraySummary) {
   writeStored(ARRAY_SUMMARY_KEY, summary)
 }
 
+/**
+ * One cable run the user has sized and settled on.
+ *
+ * The cable step is the only one in the chain that is a TOOL RUN REPEATEDLY
+ * rather than a step with a single answer — a system has four distinct runs
+ * and each needs its own gauge. That is why it published nothing for so long,
+ * and why the chain dead-ended there: every other step could be detected as
+ * done and this one never could.
+ *
+ * `awg` is the user's CHOICE among the gauges that passed, not a
+ * recommendation. The conductor output is a protection-register view: it shows
+ * the set that satisfies both limits and refuses to name one. Recording which
+ * one was picked is the honest way to remember a decision the calculator
+ * declined to make.
+ *
+ * `runId` is a plain string rather than the RunId union so this module does
+ * not have to import from circuit-runs.ts, which imports from here. `label`
+ * makes the record self-describing wherever it is read.
+ */
+export interface SizedRun {
+  runId: string
+  /** Human name of the run, e.g. "Battery → inverter". */
+  label: string
+  /** Operating current entered, before any code factor. */
+  amps: number
+  /** Circuit voltage the drop was measured against. */
+  volts: number
+  oneWayFeet: number
+  /** The gauge the user settled on, from the passing set. */
+  awg: number
+  awgLabel: string
+  /** Standard device ratings that may protect it, smallest first. */
+  ocpdOptionsA: number[]
+  /** Voltage drop at the chosen gauge, percent. */
+  dropPercent: number
+  /** 'general' or 'pv-source' — decides the 125% vs 156% factor. */
+  kind: string
+  /** Terminal temperature column used, degC. */
+  column: number
+}
+
+/**
+ * The runs sized so far. Keyed by run so re-sizing one replaces it rather
+ * than appending a second record for the same cable.
+ */
+export interface ProtectionSummary {
+  runs: SizedRun[]
+}
+
+export const PROTECTION_SUMMARY_KEY = 'zonzelf:protection:summary'
+
+export function useProtectionSummary(): ProtectionSummary | null {
+  const [summary] = usePersistentState<ProtectionSummary | null>(PROTECTION_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishProtectionSummary(summary: ProtectionSummary) {
+  writeStored(PROTECTION_SUMMARY_KEY, summary)
+}
+
 /** The inverter chosen at step 3, or null until that step has been used. */
 export function useInverterSummary(): InverterSummary | null {
   const [summary] = usePersistentState<InverterSummary | null>(INVERTER_SUMMARY_KEY, null)
