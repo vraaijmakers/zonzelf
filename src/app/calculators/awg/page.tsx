@@ -15,7 +15,8 @@ import { Info, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   evaluateGauges, passingGauges, thinnestByAmpacity,
-  conductorProtectionView, NEC_SOURCES, type TempColumn,
+  conductorProtectionView, parallelOptions, PARALLEL_SOURCES, KCMIL_NOTE,
+  NEC_SOURCES, type TempColumn,
 } from '@/lib/awg'
 import { awgLabel } from '@/lib/awg'
 import {
@@ -87,6 +88,9 @@ export default function AwgCalculatorPage() {
     ? thinnestProtectableAwg({ amps, continuous: true, kind, column })
     : undefined
   const conductorView = conductorProtectionView(input)
+  // Above 4/0 the AWG scale ends, and an ordinary 10kW/48V battery run lands
+  // there. Nothing single passing is a real answer, not a dead end.
+  const parallel = passingGauges(input).length === 0 ? parallelOptions(input) : []
 
   // Which gauge the user is going with. The conductor output deliberately
   // refuses to name one — it is a protection-register view showing the set
@@ -241,6 +245,75 @@ export default function AwgCalculatorPage() {
                 </div>
               )}
             </ProtectionOutput>
+
+            {parallel.length > 0 && (
+              <Card className="border-zon-gold-light">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base text-zon-ink">
+                    Nothing single fits — use parallel conductors
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs text-zon-body">
+                  <p>
+                    At {amps}A this run needs more than one 4/0 can carry, and{' '}
+                    <strong className="text-zon-ink">4/0 is where the AWG scale ends</strong>.
+                    Running two or more conductors per polarity is the normal answer, and is
+                    what most 48V inverter installs of this size actually use.
+                  </p>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <caption className="sr-only">
+                        Parallel conductor options that carry this run
+                      </caption>
+                      <thead>
+                        <tr className="border-b border-zon-rule text-left text-zon-muted">
+                          <th scope="col" className="py-1 pr-3 font-medium">Per polarity</th>
+                          <th scope="col" className="py-1 pr-3 text-right font-medium">Carries</th>
+                          <th scope="col" className="py-1 text-right font-medium">Drop</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parallel.map(o => (
+                          <tr key={`${o.count}x${o.spec.awg}`} className="border-b border-zon-rule-soft last:border-0">
+                            <td className="py-1.5 pr-3 font-mono text-zon-ink">
+                              {o.count} × {o.label} AWG
+                            </td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">
+                              {o.combinedAmpacity}A
+                            </td>
+                            <td className="py-1.5 text-right tabular-nums">
+                              {o.voltageDropPercent.toFixed(2)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <p className="rounded-lg border border-zon-amber-tint bg-zon-amber-tint px-3 py-2">
+                    <strong className="text-zon-ink">The conditions are not optional.</strong>{' '}
+                    Parallel conductors must be the same length, material, size, insulation and
+                    termination. Current divides between them in inverse proportion to
+                    resistance, so a pair where one is a foot longer shares unevenly — and the
+                    one carrying more overheats while the total still looks fine.
+                  </p>
+
+                  <p className="text-zon-muted">{KCMIL_NOTE}</p>
+
+                  <div className="border-t border-zon-rule pt-2 text-zon-muted">
+                    <p>{PARALLEL_SOURCES.permitted}</p>
+                    <p>{PARALLEL_SOURCES.identical}</p>
+                    <p className="mt-1">
+                      More than three current-carrying conductors in one raceway derates them
+                      (NEC 310.15(C)(1)), and paralleling is a quick way past three. That derate
+                      is not applied here, exactly as it is not applied to the single-conductor
+                      table.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {ocpdView && (
               <ProtectionOutput view={ocpdView}>
@@ -676,19 +749,37 @@ export default function AwgCalculatorPage() {
                 <span id="awg-kind-label" className="block text-sm font-medium mb-1 text-zon-ink">
                   Circuit type
                 </span>
-                <div className="flex gap-2 flex-wrap">
-                  {([['general', 'General load'], ['pv-source', 'Solar panel string']] as const).map(([k, lbl]) => (
-                    <button key={k} onClick={() => setKind(k)} aria-pressed={kind === k}
-                      className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                        kind === k
-                          ? 'bg-zon-gold text-zon-ink border-zon-gold'
-                          : 'border-zon-rule hover:border-zon-gold-light'
-                      }`}
-                    >
-                      {lbl}
-                    </button>
-                  ))}
-                </div>
+                {activeRun ? (
+                  // Determined by the run, not a choice. Offering both buttons
+                  // let the two drift — a battery run could sit there showing
+                  // "Solar panel string" as a live option, which is not a
+                  // thing that exists.
+                  <p className="text-sm text-zon-body">
+                    <span className="font-medium text-zon-ink">
+                      {activeRun.kind === 'pv-source' ? 'Solar panel string' : 'General load'}
+                    </span>
+                    <span className="text-zon-muted">
+                      {' '}— set by the run you picked, not a separate choice.{' '}
+                      {activeRun.kind === 'pv-source'
+                        ? 'A PV source circuit carries two 125% factors; a battery or AC run carries one.'
+                        : 'A battery or AC run carries one 125% factor; only a PV source circuit carries two.'}
+                    </span>
+                  </p>
+                ) : (
+                  <div className="flex gap-2 flex-wrap">
+                    {([['general', 'General load'], ['pv-source', 'Solar panel string']] as const).map(([k, lbl]) => (
+                      <button key={k} onClick={() => setKind(k)} aria-pressed={kind === k}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                          kind === k
+                            ? 'bg-zon-gold text-zon-ink border-zon-gold'
+                            : 'border-zon-rule hover:border-zon-gold-light'
+                        }`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-zon-muted mt-1">
                   {kind === 'pv-source'
                     ? 'A panel string carries two 125% factors — one because bright conditions push a panel above its nameplate, one because it runs for hours. Enter the panel short-circuit current (Isc) above, not its rated output.'
