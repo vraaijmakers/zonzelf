@@ -246,3 +246,80 @@ test('one disagreement reads as two steps, not "1 step disagree"', () => {
   assert.match(line, /Two steps disagree/)
   assert.ok(!/1 step disagree/.test(line))
 })
+
+// ---------------------------------------------------------------------------
+// The protection step can finally be detected as done
+// ---------------------------------------------------------------------------
+
+const PROTECTION = {
+  runs: [
+    {
+      runId: 'battery-inverter', label: 'Battery → inverter',
+      amps: 245, volts: 48, oneWayFeet: 5, awg: -3, awgLabel: '4/0',
+      ocpdOptionsA: [300, 350], dropPercent: 0.9, kind: 'general', column: 75,
+    },
+    {
+      runId: 'pv-string', label: 'One panel string → combiner',
+      amps: 14.03, volts: 247, oneWayFeet: 30, awg: 10, awgLabel: '10',
+      ocpdOptionsA: [25, 30], dropPercent: 0.3, kind: 'pv-source', column: 75,
+    },
+  ],
+}
+
+test('protection was the one step that could never read as done', () => {
+  // It published nothing, so the chain dead-ended there: every other step
+  // could be detected complete and this one never could.
+  const without = chainState(FULL).find(s => s.id === 'protection')!
+  assert.equal(without.done, false)
+  assert.equal(without.headline, null)
+
+  const withIt = chainState({ ...FULL, protection: PROTECTION })
+    .find(s => s.id === 'protection')!
+  assert.equal(withIt.done, true)
+  assert.match(withIt.headline ?? '', /2 cable runs sized/)
+  assert.match(withIt.headline ?? '', /4\/0/)
+})
+
+test('a complete chain now actually reaches complete', () => {
+  // Before the protection summary existed this could never be true.
+  assert.equal(chainComplete(FULL), false)
+  assert.equal(chainComplete({ ...FULL, protection: PROTECTION }), true)
+  assert.deepEqual(outstandingSteps({ ...FULL, protection: PROTECTION }), [])
+})
+
+test('confidence stops citing protection once its runs are sized', () => {
+  const before = confidence(FULL)
+  assert.ok(before.drivers.some(d => /cable|protection/i.test(d)))
+
+  const after = confidence({ ...FULL, protection: PROTECTION })
+  assert.ok(
+    !after.drivers.some(d => /cable|protection/i.test(d)),
+    'protection was still reported as outstanding after being sized',
+  )
+  // Not 'narrow': this fixture still has four high-leverage assumptions at
+  // their defaults, and the band is right to say so. Completing every step
+  // does not by itself make an estimate tight.
+  assert.equal(after.level, 'moderate')
+  assert.ok(after.drivers.some(d => /still at their defaults/.test(d)))
+})
+
+test('narrow is reachable, but only when the defaults have been replaced too', () => {
+  const chosen = {
+    ...FULL,
+    protection: PROTECTION,
+    load: { ...LOAD, efficiency: 0.92 },
+    battery: { ...BATTERY, autonomyDays: 3 },
+    panels: { ...PANELS, arrayDerate: 0.74 },
+  }
+  const c = confidence(chosen)
+  assert.equal(c.level, 'narrow')
+  // Even at its narrowest it refuses to sound certain.
+  assert.match(c.summary, /still an estimate/i)
+})
+
+test('an empty run list is not the same as having sized nothing', () => {
+  // A summary object with zero runs must not read as done.
+  const empty = chainState({ ...FULL, protection: { runs: [] } })
+    .find(s => s.id === 'protection')!
+  assert.equal(empty.done, false)
+})

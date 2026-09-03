@@ -6,9 +6,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  AWG_SPECS, awgLabel, usableAmpacity, isOcpdLimited,
-  evaluateGauges, passingGauges, thinnestByAmpacity,
-  type TempColumn,
+  AWG_SPECS, awgLabel, usableAmpacity, isOcpdLimited, evaluateGauges, passingGauges, thinnestByAmpacity, type TempColumn, parallelOptions, MIN_PARALLEL_AWG, PARALLEL_SOURCES, KCMIL_NOTE,
 } from '../awg'
 import { sizeOvercurrent } from '../overcurrent'
 
@@ -188,4 +186,76 @@ test('conductor and device agree — anything that passes can be protected', () 
       }
     }
   }
+})
+
+// ---------------------------------------------------------------------------
+// Parallel conductors — above 4/0 the scale ends
+// ---------------------------------------------------------------------------
+
+const BATTERY_RUN = {
+  amps: 245, oneWayFeet: 5, volts: 48, maxDropPercent: 1,
+  column: 75 as const, kind: 'general' as const, continuous: true,
+}
+
+test('an ordinary 10kW 48V battery run falls off the end of the AWG table', () => {
+  // 245A x 1.25 = 306A of design current. 4/0 carries 230A at 75C, and 4/0 is
+  // the largest AWG there is — so a completely normal system returned nothing.
+  assert.equal(passingGauges(BATTERY_RUN).length, 0)
+  const biggest = AWG_SPECS[AWG_SPECS.length - 1]
+  assert.equal(biggest.awg, -3, '4/0 is the end of the scale')
+  assert.ok(biggest.ampacity[75] < 245 * 1.25)
+})
+
+test('parallel conductors answer the case a single conductor cannot', () => {
+  const options = parallelOptions(BATTERY_RUN)
+  assert.ok(options.length > 0, 'there must be a real answer here')
+  for (const o of options) {
+    assert.ok(o.passes)
+    assert.ok(o.combinedAmpacity >= 245 * 1.25, `${o.count} × ${o.label} does not carry it`)
+    assert.ok(o.voltageDropPercent <= BATTERY_RUN.maxDropPercent)
+  }
+  // Two 2/0 is the answer a real install of this size uses.
+  assert.ok(options.some(o => o.count === 2 && o.label === '2/0'))
+})
+
+test('NEC 310.10(H): nothing smaller than 1/0 may be paralleled', () => {
+  for (const o of parallelOptions({ ...BATTERY_RUN, amps: 400 }, 8)) {
+    assert.ok(o.spec.awg <= MIN_PARALLEL_AWG, `${o.label} is too small to parallel`)
+  }
+  assert.equal(MIN_PARALLEL_AWG, 0, '1/0 is encoded as 0')
+})
+
+test('paralleling divides the voltage drop, it does not add it', () => {
+  // n conductors present 1/n the resistance, so the drop falls.
+  const single = evaluateGauges(BATTERY_RUN).find(g => g.spec.awg === -3)!
+  const doubled = parallelOptions(BATTERY_RUN).find(o => o.count === 2 && o.label === '4/0')!
+  assert.ok(
+    Math.abs(doubled.voltageDropPercent - single.voltageDropPercent / 2) < 0.01,
+    'two in parallel should halve the drop',
+  )
+})
+
+test('one entry per gauge — the fewest that work, not every combination', () => {
+  const options = parallelOptions(BATTERY_RUN, 6)
+  const gauges = options.map(o => o.spec.awg)
+  assert.equal(new Set(gauges).size, gauges.length, 'a gauge appeared twice')
+})
+
+test('options are ordered fewest-conductors first', () => {
+  const options = parallelOptions(BATTERY_RUN)
+  for (let i = 1; i < options.length; i++) {
+    assert.ok(options[i - 1].count <= options[i].count)
+  }
+})
+
+test('a run a single conductor can carry needs no parallel answer', () => {
+  const modest = { ...BATTERY_RUN, amps: 30, maxDropPercent: 3 }
+  assert.ok(passingGauges(modest).length > 0, 'this should pass on a single conductor')
+})
+
+test('the kcmil note names what the table does not cover', () => {
+  assert.match(KCMIL_NOTE, /kcmil/)
+  assert.match(KCMIL_NOTE, /does not carry that table yet/)
+  assert.match(PARALLEL_SOURCES.permitted, /310\.10\(H\)/)
+  assert.match(PARALLEL_SOURCES.identical, /same length/)
 })

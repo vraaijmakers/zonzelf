@@ -281,3 +281,119 @@ export function conductorProtectionView(input: EvaluateInput): ProtectionView {
     sources: [NEC_SOURCES.ampacity, NEC_SOURCES.smallConductor, NEC_SOURCES.terminals],
   }
 }
+
+// ---------------------------------------------------------------------------
+// Parallel conductors — what you actually do above 4/0
+// ---------------------------------------------------------------------------
+
+/**
+ * WHY THIS EXISTS
+ * ---------------
+ * The AWG table stops at 4/0, which carries 230A at 75 degC. A 10kW inverter
+ * on a 48V bank draws about 245A, needing 306A of design current — so a
+ * perfectly ordinary off-grid system falls off the end of the table and the
+ * calculator returned NOTHING, with no explanation.
+ *
+ * Two things happen above 4/0 in the real world:
+ *
+ *   1. AWG ITSELF ENDS. Larger conductors are sized in kcmil (thousand
+ *      circular mils): 250, 300, 350, 400, 500. NEC Table 310.16 continues
+ *      into them. For 306A at 75 degC you would need 350 kcmil. That is a
+ *      thumb-thick cable needing a hydraulic crimper, and this calculator does
+ *      not carry the kcmil table yet.
+ *
+ *   2. PARALLEL CONDUCTORS, which is what DIY off-grid actually does. Two 2/0
+ *      per polarity instead of one enormous cable: easier to route, easier to
+ *      terminate, and usually cheaper. NEC 310.10(H) permits it for 1/0 and
+ *      larger.
+ *
+ * THE CONDITIONS ARE NOT OPTIONAL
+ * -------------------------------
+ * 310.10(H) allows paralleling only when the conductors are the same length,
+ * the same material, the same size, the same insulation type and terminated
+ * the same way. That is not bureaucratic: current divides between them in
+ * inverse proportion to resistance, so a pair that differs in any of those
+ * shares unevenly, and the one carrying more overheats while the meter says
+ * the total is fine. Two 2/0 where one is a foot longer is not two 2/0.
+ *
+ * WHAT THIS DOES NOT MODEL
+ * ------------------------
+ * NEC 310.15(C)(1) derates when more than three current-carrying conductors
+ * share a raceway, and paralleling is a fast way to exceed three. That derate
+ * is not applied here, exactly as it is not applied to the single-conductor
+ * table above. Conduit fill and the separate rules for parallel conductors in
+ * separate raceways are also not modelled.
+ */
+
+/** NEC 310.10(H): nothing smaller than 1/0 may be paralleled. */
+export const MIN_PARALLEL_AWG = 0
+
+export interface ParallelOption {
+  /** Conductors per polarity. */
+  count: number
+  spec: AwgSpec
+  label: string
+  /** Ampacity of one conductor, after the small-conductor rule. */
+  eachAmpacity: number
+  /** All of them together. */
+  combinedAmpacity: number
+  /** Drop with the current shared across them, percent. */
+  voltageDropPercent: number
+  meetsAmpacity: boolean
+  meetsVoltageDrop: boolean
+  passes: boolean
+}
+
+/**
+ * The smallest number of conductors of each gauge that would carry the load.
+ *
+ * Returns one entry per gauge — the fewest conductors that work — rather than
+ * every combination, because "2 × 2/0 or 3 × 1/0" is a choice a person makes
+ * and "2, 3, 4 or 5 × 1/0" is noise.
+ */
+export function parallelOptions(input: EvaluateInput, maxCount = 4): ParallelOption[] {
+  const { amps, oneWayFeet, volts, maxDropPercent, column } = input
+  const { factor } = sizingFactor(input.kind ?? 'general', input.continuous ?? true)
+  const designAmps = amps * factor
+  const roundTripFeet = oneWayFeet * 2
+  const out: ParallelOption[] = []
+
+  for (const spec of AWG_SPECS) {
+    if (spec.awg > MIN_PARALLEL_AWG) continue
+    const each = usableAmpacity(spec, column)
+    for (let count = 2; count <= maxCount; count++) {
+      const combined = each * count
+      // n conductors in parallel present 1/n the resistance.
+      const resistance = (spec.resistancePer100ft / 100) * roundTripFeet / count
+      const drop = amps * resistance
+      const dropPercent = volts > 0 ? (drop / volts) * 100 : Number.POSITIVE_INFINITY
+      const meetsAmpacity = combined >= designAmps
+      const meetsVoltageDrop = dropPercent <= maxDropPercent
+      if (meetsAmpacity && meetsVoltageDrop) {
+        out.push({
+          count, spec, label: awgLabel(spec.awg),
+          eachAmpacity: each, combinedAmpacity: combined,
+          voltageDropPercent: dropPercent,
+          meetsAmpacity, meetsVoltageDrop, passes: true,
+        })
+        break
+      }
+    }
+  }
+  // Fewest conductors first, then thinnest — two fat ones usually beats four
+  // thin ones for terminations, and that is the order people shop in.
+  return out.sort((a, b) => a.count - b.count || b.spec.awg - a.spec.awg)
+}
+
+export const PARALLEL_SOURCES = {
+  permitted: 'NEC 310.10(H) — conductors 1/0 and larger may be paralleled',
+  identical:
+    'NEC 310.10(H)(2) — parallel conductors must be the same length, material, size, ' +
+    'insulation type and termination method',
+} as const
+
+export const KCMIL_NOTE =
+  'Above 4/0 the AWG scale ends and conductors are sized in kcmil — 250, 300, 350, 400, 500. ' +
+  'NEC Table 310.16 continues into them, and this calculator does not carry that table yet. ' +
+  'For most DIY off-grid work the parallel option above is the practical answer anyway: two ' +
+  'manageable cables beat one that needs a hydraulic crimper and a 6-inch bend radius.'
