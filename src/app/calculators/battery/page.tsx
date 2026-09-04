@@ -137,16 +137,6 @@ export default function BatterySizingPage() {
 
   const battery = BATTERY_TYPES.find(b => b.id === selectedType) ?? BATTERY_TYPES[0]
 
-  // The panel calculator needs the real round-trip figure; without this it has
-  // to assume a conservative default. This is the field that was defined here
-  // and never used.
-  useEffect(() => {
-    publishBatterySummary({
-      chemistry: battery.id,
-      roundTrip: battery.efficiency,
-      dod: battery.dod,
-    })
-  }, [battery.id, battery.efficiency, battery.dod])
 
   // One shared model — src/lib/system-efficiency.ts. dailyKwh already carries
   // the inverter stage (it is what the load calculator publishes), so the chain
@@ -216,6 +206,31 @@ export default function BatterySizingPage() {
   const band = scenarioRange(scenarios)
   const chosen = pickScenario(scenarios)
   const cutoffView = cutoffProtectionView(battery.id, effectiveVoltage)
+
+  // The panel calculator needs the real round-trip figure; without this it has
+  // to assume a conservative default. This is the field that was defined here
+  // and never used.
+  useEffect(() => {
+    publishBatterySummary({
+      chemistry: battery.id,
+      roundTrip: battery.efficiency,
+      dod: battery.dod,
+      bankKwh: roundBank(chosen.bankKwh),
+      bankAh: Math.round(chosen.bankAh),
+      autonomyDays: days,
+      systemVoltage: effectiveVoltage,
+      scenarioLabel: chosen.label,
+      bandMinKwh: roundBank(band.min),
+      bandMaxKwh: roundBank(band.max),
+    })
+    // The resolved figures are named individually rather than passing `chosen`
+    // and `band` as objects — those are rebuilt every render, so depending on
+    // them would republish the summary on every keystroke.
+  }, [
+    battery.id, battery.efficiency, battery.dod,
+    chosen.bankKwh, chosen.bankAh, chosen.label, days, effectiveVoltage,
+    band.min, band.max,
+  ])
 
   const annualRecharge = panelSummary
     ? rechargeCheck({

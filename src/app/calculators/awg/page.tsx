@@ -2,6 +2,7 @@
 
 import {
   usePersistentState, useInverterSummary, useArraySummary, useLoadSummary,
+  useProtectionSummary, publishProtectionSummary, type SizedRun,
 } from '@/lib/calc-storage'
 import {
   resolveRuns, combinerAdvice, mpptArrival, looksLikeBatteryVoltage, type RunId,
@@ -14,7 +15,8 @@ import { Info, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   evaluateGauges, passingGauges, thinnestByAmpacity,
-  conductorProtectionView, NEC_SOURCES, type TempColumn,
+  conductorProtectionView, parallelOptions, PARALLEL_SOURCES, KCMIL_NOTE,
+  NEC_SOURCES, type TempColumn,
 } from '@/lib/awg'
 import { awgLabel } from '@/lib/awg'
 import {
@@ -46,6 +48,16 @@ export default function AwgCalculatorPage() {
   const load = useLoadSummary()
   const runs = resolveRuns({ inverter, array, load })
   const activeRun = runs.find(r => r.id === runId) ?? null
+
+  // Which runs have been sized and saved. The cable step is the only one that
+  // is run repeatedly — once per cable — so "done" means every run that
+  // applies has a gauge recorded against it.
+  const saved = useProtectionSummary()
+  const savedRuns = saved?.runs ?? []
+  const applicable = runs.filter(r => r.applies)
+  const savedIds = new Set(savedRuns.map(r => r.runId))
+  const remaining = applicable.filter(r => !savedIds.has(r.id))
+  const savedHere = activeRun ? savedRuns.find(r => r.runId === activeRun.id) : undefined
   const combiner = combinerAdvice(array)
 
   const applyRun = (id: RunId) => {
@@ -76,6 +88,49 @@ export default function AwgCalculatorPage() {
     ? thinnestProtectableAwg({ amps, continuous: true, kind, column })
     : undefined
   const conductorView = conductorProtectionView(input)
+  // Above 4/0 the AWG scale ends, and an ordinary 10kW/48V battery run lands
+  // there. Nothing single passing is a real answer, not a dead end.
+  const parallel = passingGauges(input).length === 0 ? parallelOptions(input) : []
+
+  // Which gauge the user is going with. The conductor output deliberately
+  // refuses to name one — it is a protection-register view showing the set
+  // that passes — so the choice is theirs and this only records it. Defaults
+  // to the thinnest that qualifies, which is what most people buy, but it is
+  // a pre-selection rather than a recommendation.
+  const [chosenAwg, setChosenAwg] = usePersistentState<number | null>('zonzelf:awg:chosen', null)
+  const passing = passingGauges(input)
+  const effectiveAwg = passing.some(g => g.spec.awg === chosenAwg)
+    ? chosenAwg
+    : (thinnest?.spec.awg ?? null)
+  const chosenGauge = passing.find(g => g.spec.awg === effectiveAwg) ?? null
+
+  const saveRun = () => {
+    if (!activeRun || !chosenGauge) return
+    const ocpdForChoice = sizeOvercurrent({
+      amps, continuous: true, kind, awg: chosenGauge.spec.awg, column,
+    })
+    const record: SizedRun = {
+      runId: activeRun.id,
+      label: activeRun.label,
+      amps,
+      volts: voltage,
+      oneWayFeet: lengthFt,
+      awg: chosenGauge.spec.awg,
+      awgLabel: chosenGauge.label,
+      ocpdOptionsA: ocpdForChoice?.allowed ?? [],
+      dropPercent: Math.round(chosenGauge.voltageDropPercent * 100) / 100,
+      kind,
+      column,
+    }
+    // Keyed by run, so re-sizing replaces rather than appending a second
+    // record for the same cable.
+    publishProtectionSummary({
+      runs: [...savedRuns.filter(r => r.runId !== activeRun.id), record],
+    })
+  }
+
+  const forgetRun = (id: string) =>
+    publishProtectionSummary({ runs: savedRuns.filter(r => r.runId !== id) })
 
   // The percentage budget is a proxy; this is the question it stands in for.
   // Uses the thinnest gauge that passed, because that is the one most likely
@@ -134,7 +189,131 @@ export default function AwgCalculatorPage() {
                   that rules out the thinner sizes.
                 </p>
               )}
+
+              {/* The output above refuses to name one gauge — that is the
+                  register. The DECISION is the user's, and recording which
+                  one they made is what lets the chain know this run is done. */}
+              {activeRun && passing.length > 0 && (
+                <div className="border-t border-zon-rule pt-3">
+                  <p className="mb-2 text-xs font-medium text-zon-ink">
+                    Which will you use for {activeRun.label.toLowerCase()}?
+                  </p>
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    {passing.slice(0, 6).map(g => (
+                      <button
+                        key={g.spec.awg}
+                        onClick={() => setChosenAwg(g.spec.awg)}
+                        aria-pressed={effectiveAwg === g.spec.awg}
+                        className={`rounded-lg border px-2.5 py-1 font-mono text-xs transition-colors ${
+                          effectiveAwg === g.spec.awg
+                            ? 'border-zon-gold bg-zon-gold text-zon-ink'
+                            : 'border-zon-rule hover:border-zon-gold-light'
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                  {chosenGauge && (
+                    <p className="mb-2 text-xs text-zon-muted">
+                      {chosenGauge.label} AWG drops{' '}
+                      <span className="tabular-nums">
+                        {chosenGauge.voltageDropPercent.toFixed(1)}%
+                      </span>{' '}
+                      on this run. Thicker is always electrically safer; thinner is cheaper and
+                      easier to terminate.
+                    </p>
+                  )}
+                  <button
+                    onClick={saveRun}
+                    disabled={!chosenGauge}
+                    className="rounded-lg border border-zon-gold-light bg-zon-gold-tint px-3 py-1.5 text-xs font-medium text-zon-gold-deep transition-colors hover:bg-zon-gold-tint disabled:opacity-50"
+                  >
+                    {savedHere
+                      ? savedHere.awg === effectiveAwg
+                        ? 'Saved — update this run'
+                        : `Replace saved ${savedHere.awgLabel} AWG`
+                      : 'Save this run'}
+                  </button>
+                  {savedHere && (
+                    <p className="mt-1.5 text-xs text-zon-muted">
+                      Currently saved as{' '}
+                      <span className="font-mono text-zon-body">{savedHere.awgLabel} AWG</span> at{' '}
+                      {savedHere.amps}A over {savedHere.oneWayFeet}ft.
+                    </p>
+                  )}
+                </div>
+              )}
             </ProtectionOutput>
+
+            {parallel.length > 0 && (
+              <Card className="border-zon-gold-light">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base text-zon-ink">
+                    Nothing single fits — use parallel conductors
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs text-zon-body">
+                  <p>
+                    At {amps}A this run needs more than one 4/0 can carry, and{' '}
+                    <strong className="text-zon-ink">4/0 is where the AWG scale ends</strong>.
+                    Running two or more conductors per polarity is the normal answer, and is
+                    what most 48V inverter installs of this size actually use.
+                  </p>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <caption className="sr-only">
+                        Parallel conductor options that carry this run
+                      </caption>
+                      <thead>
+                        <tr className="border-b border-zon-rule text-left text-zon-muted">
+                          <th scope="col" className="py-1 pr-3 font-medium">Per polarity</th>
+                          <th scope="col" className="py-1 pr-3 text-right font-medium">Carries</th>
+                          <th scope="col" className="py-1 text-right font-medium">Drop</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parallel.map(o => (
+                          <tr key={`${o.count}x${o.spec.awg}`} className="border-b border-zon-rule-soft last:border-0">
+                            <td className="py-1.5 pr-3 font-mono text-zon-ink">
+                              {o.count} × {o.label} AWG
+                            </td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">
+                              {o.combinedAmpacity}A
+                            </td>
+                            <td className="py-1.5 text-right tabular-nums">
+                              {o.voltageDropPercent.toFixed(2)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <p className="rounded-lg border border-zon-amber-tint bg-zon-amber-tint px-3 py-2">
+                    <strong className="text-zon-ink">The conditions are not optional.</strong>{' '}
+                    Parallel conductors must be the same length, material, size, insulation and
+                    termination. Current divides between them in inverse proportion to
+                    resistance, so a pair where one is a foot longer shares unevenly — and the
+                    one carrying more overheats while the total still looks fine.
+                  </p>
+
+                  <p className="text-zon-muted">{KCMIL_NOTE}</p>
+
+                  <div className="border-t border-zon-rule pt-2 text-zon-muted">
+                    <p>{PARALLEL_SOURCES.permitted}</p>
+                    <p>{PARALLEL_SOURCES.identical}</p>
+                    <p className="mt-1">
+                      More than three current-carrying conductors in one raceway derates them
+                      (NEC 310.15(C)(1)), and paralleling is a quick way past three. That derate
+                      is not applied here, exactly as it is not applied to the single-conductor
+                      table.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {ocpdView && (
               <ProtectionOutput view={ocpdView}>
@@ -303,6 +482,49 @@ export default function AwgCalculatorPage() {
                 })}
               </div>
 
+              {applicable.length > 0 && (
+                <div className="rounded-lg border border-zon-rule bg-zon-rule-soft px-3 py-2">
+                  <p className="text-xs font-medium text-zon-ink">
+                    {savedRuns.length} of {applicable.length} run
+                    {applicable.length === 1 ? '' : 's'} sized
+                    {remaining.length === 0 && ' — this step is complete'}
+                  </p>
+                  {remaining.length > 0 ? (
+                    <p className="mt-1 text-xs text-zon-muted">
+                      Still to size: {remaining.map(r => r.label).join(', ')}. Pick each one
+                      above, choose a gauge, and save it.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-zon-body">
+                      Every run has a gauge recorded.{' '}
+                      <Link href="/calculators/system" className="text-zon-gold-deep hover:underline">
+                        See the whole system →
+                      </Link>
+                    </p>
+                  )}
+                  {savedRuns.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {savedRuns.map(r => (
+                        <li key={r.runId} className="flex items-baseline justify-between gap-2 text-xs">
+                          <span className="text-zon-body">
+                            {r.label} — <span className="font-mono text-zon-ink">{r.awgLabel} AWG</span>
+                            <span className="text-zon-muted">
+                              {' '}at {r.amps}A over {r.oneWayFeet}ft
+                            </span>
+                          </span>
+                          <button
+                            onClick={() => forgetRun(r.runId)}
+                            className="shrink-0 text-zon-muted hover:text-zon-body hover:underline"
+                          >
+                            clear
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
               {activeRun ? (
                 <div className="space-y-2 border-t border-zon-rule pt-3 text-xs text-zon-body">
                   {/* Selecting a run whose figures are unknown used to set the
@@ -332,6 +554,25 @@ export default function AwgCalculatorPage() {
                     <p>
                       <strong className="text-zon-ink">Where that current comes from.</strong>{' '}
                       {activeRun.derivation}
+                    </p>
+                  )}
+                  {/* The fields can drift from the chain — redo an upstream
+                      step and the figures here are yesterday's. Offered, never
+                      imposed, the same way the load calculator handles a
+                      preset whose duty cycle has since been corrected. */}
+                  {activeRun.amps !== null && activeRun.volts !== null &&
+                   (amps !== activeRun.amps || voltage !== activeRun.volts) && (
+                    <p className="rounded-lg border border-zon-gold-light bg-zon-gold-tint px-3 py-2">
+                      The fields below say{' '}
+                      <span className="tabular-nums">{amps}A at {voltage}V</span>, but your system
+                      now says{' '}
+                      <span className="tabular-nums">{activeRun.amps}A at {activeRun.volts}V</span>.{' '}
+                      <button
+                        onClick={() => { setAmps(activeRun.amps!); setVoltage(activeRun.volts!) }}
+                        className="font-medium text-zon-gold-deep underline"
+                      >
+                        Use the current figures →
+                      </button>
                     </p>
                   )}
                   <p>{activeRun.note}</p>
@@ -508,19 +749,37 @@ export default function AwgCalculatorPage() {
                 <span id="awg-kind-label" className="block text-sm font-medium mb-1 text-zon-ink">
                   Circuit type
                 </span>
-                <div className="flex gap-2 flex-wrap">
-                  {([['general', 'General load'], ['pv-source', 'Solar panel string']] as const).map(([k, lbl]) => (
-                    <button key={k} onClick={() => setKind(k)} aria-pressed={kind === k}
-                      className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                        kind === k
-                          ? 'bg-zon-gold text-zon-ink border-zon-gold'
-                          : 'border-zon-rule hover:border-zon-gold-light'
-                      }`}
-                    >
-                      {lbl}
-                    </button>
-                  ))}
-                </div>
+                {activeRun ? (
+                  // Determined by the run, not a choice. Offering both buttons
+                  // let the two drift — a battery run could sit there showing
+                  // "Solar panel string" as a live option, which is not a
+                  // thing that exists.
+                  <p className="text-sm text-zon-body">
+                    <span className="font-medium text-zon-ink">
+                      {activeRun.kind === 'pv-source' ? 'Solar panel string' : 'General load'}
+                    </span>
+                    <span className="text-zon-muted">
+                      {' '}— set by the run you picked, not a separate choice.{' '}
+                      {activeRun.kind === 'pv-source'
+                        ? 'A PV source circuit carries two 125% factors; a battery or AC run carries one.'
+                        : 'A battery or AC run carries one 125% factor; only a PV source circuit carries two.'}
+                    </span>
+                  </p>
+                ) : (
+                  <div className="flex gap-2 flex-wrap">
+                    {([['general', 'General load'], ['pv-source', 'Solar panel string']] as const).map(([k, lbl]) => (
+                      <button key={k} onClick={() => setKind(k)} aria-pressed={kind === k}
+                        className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                          kind === k
+                            ? 'bg-zon-gold text-zon-ink border-zon-gold'
+                            : 'border-zon-rule hover:border-zon-gold-light'
+                        }`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-zon-muted mt-1">
                   {kind === 'pv-source'
                     ? 'A panel string carries two 125% factors — one because bright conditions push a panel above its nameplate, one because it runs for hours. Enter the panel short-circuit current (Isc) above, not its rated output.'
