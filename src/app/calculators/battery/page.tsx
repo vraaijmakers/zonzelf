@@ -20,8 +20,11 @@ import {
   overnightShareFrom, coolingShare, heatingShare, isCorrelatedRisk, normalizeBreakdown,
 } from '@/lib/appliance-load'
 import {
-  cutoffProtectionView, roundTripMidpoint, type ChemistryId,
+  cutoffProtectionView, roundTripMidpoint, nominalSystemVoltage, type ChemistryId,
 } from '@/lib/battery-chemistry'
+import {
+  BATTERY_PRESETS, findBatteryPreset, presetVoltageFamily, type BatteryPreset,
+} from '@/lib/battery-preset'
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { createClient } from '@/lib/supabase/client'
@@ -41,9 +44,7 @@ type BatteryModelMatch = {
 // the system-voltage picker above uses — bucket by family instead of an
 // exact match, or every published row would silently never match.
 function voltageFamily(v: number): 12 | 24 | 48 {
-  if (v < 18) return 12
-  if (v < 36) return 24
-  return 48
+  return nominalSystemVoltage(v)
 }
 
 interface BatteryType {
@@ -106,6 +107,10 @@ export default function BatterySizingPage() {
   const [days, setDays] = usePersistentState('zonzelf:battery:days', 2)
   const [voltage, setVoltage, voltageMeta] = usePersistentState('zonzelf:battery:voltage', 24)
   const [selectedType, setSelectedType] = usePersistentState('zonzelf:battery:type', 'lifepo4')
+  // Known pack from BATTERY_PRESETS. Null is the honest default — chemistry
+  // alone remains the normal path. Summaries saved before this field existed
+  // have no id, and the commissioning map stays hidden for those (CLAUDE.md 12b).
+  const [presetId, setPresetId] = usePersistentState<string | null>('zonzelf:battery:presetId', null)
   const [showTypes, setShowTypes] = useState(false)
   // Which scenario the battery-model counts answer. Without this the list
   // silently answered the autonomy-days case only, so "how many do I need to
@@ -207,6 +212,25 @@ export default function BatterySizingPage() {
   const chosen = pickScenario(scenarios)
   const cutoffView = cutoffProtectionView(battery.id, effectiveVoltage)
 
+  const activePreset = presetId ? findBatteryPreset(presetId) : undefined
+
+  const applyBatteryPreset = (preset: BatteryPreset) => {
+    setSelectedType(preset.chemistry)
+    setVoltage(presetVoltageFamily(preset))
+    setPresetId(preset.id)
+  }
+
+  // A stored id that no longer matches the chemistry or voltage on screen is
+  // stale — the user picked a different bank. Drop it rather than keep
+  // publishing a pack they are no longer sizing.
+  useEffect(() => {
+    if (!presetId) return
+    const p = findBatteryPreset(presetId)
+    if (!p || p.chemistry !== battery.id || presetVoltageFamily(p) !== effectiveVoltage) {
+      setPresetId(null)
+    }
+  }, [presetId, battery.id, effectiveVoltage, setPresetId])
+
   // The panel calculator needs the real round-trip figure; without this it has
   // to assume a conservative default. This is the field that was defined here
   // and never used.
@@ -222,6 +246,11 @@ export default function BatterySizingPage() {
       scenarioLabel: chosen.label,
       bandMinKwh: roundBank(band.min),
       bandMaxKwh: roundBank(band.max),
+      presetId: activePreset?.id,
+      brand: activePreset?.brand,
+      model: activePreset?.model,
+      sourceUrl: activePreset?.sourceUrl,
+      seriesCount: activePreset?.seriesCount,
     })
     // The resolved figures are named individually rather than passing `chosen`
     // and `band` as objects — those are rebuilt every render, so depending on
@@ -230,6 +259,8 @@ export default function BatterySizingPage() {
     battery.id, battery.efficiency, battery.dod,
     chosen.bankKwh, chosen.bankAh, chosen.label, days, effectiveVoltage,
     band.min, band.max,
+    activePreset?.id, activePreset?.brand, activePreset?.model,
+    activePreset?.sourceUrl, activePreset?.seriesCount,
   ])
 
   const annualRecharge = panelSummary
@@ -594,7 +625,10 @@ export default function BatterySizingPage() {
                   {SYSTEM_VOLTAGES.map(v => (
                     <button
                       key={v}
-                      onClick={() => setVoltage(v)}
+                      onClick={() => {
+                        setVoltage(v)
+                        if (activePreset && presetVoltageFamily(activePreset) !== v) setPresetId(null)
+                      }}
                       aria-pressed={effectiveVoltage === v}
                       className={`px-4 py-1.5 rounded-lg text-sm border transition-colors ${
                         effectiveVoltage === v
@@ -766,12 +800,68 @@ export default function BatterySizingPage() {
                 {showTypes ? <ChevronUp className="w-4 h-4 text-zon-muted" /> : <ChevronDown className="w-4 h-4 text-zon-muted" />}
               </div>
             </CardHeader>
+            {BATTERY_PRESETS.length > 0 && (
+              <CardContent className="pt-0 pb-3">
+                <div className="rounded-lg bg-zon-rule-soft p-3">
+                  <p className="mb-2 text-xs font-medium text-zon-muted">
+                    Packs we have already read the datasheet for
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {BATTERY_PRESETS.map(preset => {
+                      const active = activePreset?.id === preset.id
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => applyBatteryPreset(preset)}
+                          aria-pressed={active}
+                          className={`rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
+                            active
+                              ? 'border-zon-gold bg-zon-gold text-zon-ink'
+                              : 'border-zon-rule hover:border-zon-gold-light'
+                          }`}
+                        >
+                          <span className="font-medium">{preset.model}</span>
+                          <span className="ml-1.5 text-xs text-zon-muted">
+                            {preset.brand} · {preset.voltage}V {preset.capacityAh}Ah
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-zon-muted">
+                    Picking one fills chemistry and voltage from the manufacturer&apos;s own
+                    manual — that is how a later commissioning map knows which menus to
+                    translate. Chemistry alone stays the normal path.
+                  </p>
+                  {activePreset && (
+                    <p className="mt-2 text-xs text-zon-body">
+                      {activePreset.seriesCount}S {activePreset.chemistry.toUpperCase()} · charge{' '}
+                      {activePreset.recommendedChargeV}V · leave {activePreset.socMinPct}% in the
+                      tank.{' '}
+                      <a
+                        href={activePreset.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-zon-gold-deep hover:underline"
+                      >
+                        Manual
+                      </a>
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            )}
             {showTypes && (
               <CardContent className="space-y-3">
                 {BATTERY_TYPES.map(b => (
                   <button
                     key={b.id}
-                    onClick={() => { setSelectedType(b.id); setShowTypes(false) }}
+                    onClick={() => {
+                      setSelectedType(b.id)
+                      setShowTypes(false)
+                      if (activePreset && activePreset.chemistry !== b.id) setPresetId(null)
+                    }}
                     className={`w-full text-left p-3 rounded-lg border transition-colors ${
                       selectedType === b.id
                         ? 'border-zon-gold-light bg-zon-gold-tint'

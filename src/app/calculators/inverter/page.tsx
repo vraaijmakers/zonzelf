@@ -155,9 +155,14 @@ export default function InverterSizingPage() {
   // partial summary would let step 5 size a string against a null window.
   useEffect(() => {
     if (!pvComplete || unit.acContinuousW === null) return
+    const matched = INVERTER_PRESETS.find(
+      p => p.brand === unit.brand && p.model === unit.model,
+    )
     publishInverterSummary({
+      id: matched?.id,
       brand: unit.brand.trim() || undefined,
       model: unit.model.trim() || undefined,
+      sourceUrl: matched?.sourceUrl,
       acContinuousW: unit.acContinuousW,
       acSurgeW: unit.acSurgeW ?? 0,
       dcSystemVoltage: unit.dcSystemVoltage,
