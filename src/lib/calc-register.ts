@@ -35,6 +35,13 @@ export type OutputId =
   | 'string-fuse'
   | 'mppt-window'
   | 'array-dc-power'
+  | 'battery-type-menu'
+  | 'bms-comms'
+  | 'charge-voltage'
+  | 'soc-stop'
+  | 'equalize'
+  | 'charge-current'
+  | 'cutoff-ladder'
 
 export interface OutputDef {
   id: OutputId
@@ -47,6 +54,7 @@ export interface OutputDef {
     | '/calculators/panels'
     | '/calculators/strings'
     | '/calculators/awg'
+    | '/calculators/system'
   shipped: boolean
   /** What being wrong actually costs. */
   risk: string
@@ -152,6 +160,62 @@ export const CALCULATOR_OUTPUTS: OutputDef[] = [
     shipped: true,
     risk: 'Past the PV input rating the extra array is clipped, not harvested.',
   },
+  {
+    id: 'battery-type-menu',
+    register: 'protection',
+    label: 'Inverter battery-type setting',
+    page: '/calculators/system',
+    shipped: true,
+    risk: 'The SPH ships as gel. Leave that on a lithium pack and you charge it on a lead-acid profile.',
+  },
+  {
+    id: 'bms-comms',
+    register: 'protection',
+    label: 'BMS communication',
+    page: '/calculators/system',
+    shipped: true,
+    risk: 'Without a live BMS the percent-remaining cutoffs do nothing, and voltage on lithium is already near empty.',
+  },
+  {
+    id: 'charge-voltage',
+    register: 'protection',
+    label: 'Charge voltage',
+    page: '/calculators/system',
+    shipped: true,
+    risk: 'Too high trips the BMS or cooks the pack; flattening two disagreeing sheets into one number is how that happens.',
+  },
+  {
+    id: 'soc-stop',
+    register: 'protection',
+    label: 'Percent-remaining stop',
+    page: '/calculators/system',
+    shipped: true,
+    risk: 'A voltage cutoff on LiFePO4 is not 20% left. Percent remaining only works after the BMS is talking.',
+  },
+  {
+    id: 'equalize',
+    register: 'protection',
+    label: 'Equalizing charge',
+    page: '/calculators/system',
+    shipped: true,
+    risk: 'Equalize is a high-voltage stage for flooded lead-acid. On lithium it is abuse.',
+  },
+  {
+    id: 'charge-current',
+    register: 'protection',
+    label: 'Charge current ceilings',
+    page: '/calculators/system',
+    shipped: true,
+    risk: 'A 3 kW generator cannot feed a 100 A charge setting and the house. The ceiling is the lowest of four limits, not the inverter maximum.',
+  },
+  {
+    id: 'cutoff-ladder',
+    register: 'protection',
+    label: 'Open-loop voltage ladder',
+    page: '/calculators/system',
+    shipped: true,
+    risk: 'Items 15/12/14/35/09 out of ascending order are accepted by the LCD and behave undocumented.',
+  },
 ]
 
 export function outputDef(id: OutputId): OutputDef {
@@ -178,6 +242,8 @@ export interface ProtectionView {
     OutputId,
     | 'conductor-gauge' | 'ocpd-rating' | 'cutoff-voltage'
     | 'string-voc' | 'string-current' | 'string-fuse'
+    | 'battery-type-menu' | 'bms-comms' | 'charge-voltage'
+    | 'soc-stop' | 'equalize' | 'charge-current' | 'cutoff-ladder'
   >
   title: string
   /** The options that pass. A set of one is still a set, not a verdict. */

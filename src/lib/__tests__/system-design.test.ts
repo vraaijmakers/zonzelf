@@ -41,6 +41,17 @@ test('chain state covers every step, in order', () => {
   }
 })
 
+test('a chosen pack is named in the battery headline, chemistry otherwise', () => {
+  const named = chainState({
+    ...FULL,
+    battery: { ...BATTERY, model: 'SG48100P', presetId: 'sungold-sg48100p' },
+  })
+  assert.match(named.find(s => s.id === 'battery')!.headline!, /SG48100P/)
+  const generic = chainState(FULL).find(s => s.id === 'battery')!.headline!
+  assert.match(generic, /LIFEPO4/)
+  assert.doesNotMatch(generic, /SG48100P/)
+})
+
 test('an empty chain reports nothing done and invents no headlines', () => {
   const steps = chainState({})
   assert.ok(steps.every(s => !s.done))
