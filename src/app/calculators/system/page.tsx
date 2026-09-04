@@ -15,6 +15,11 @@ import { stepById } from '@/lib/calc-steps'
 import { usePersistentState } from '@/lib/calc-storage'
 import { DEFAULT_TEMP_UNIT, type TempUnit } from '@/lib/temperature'
 import CalculatorChrome from '@/components/calculators/CalculatorChrome'
+import CommissioningStepCard from '@/components/calculators/CommissioningStepCard'
+import {
+  commissioningPairing, commissioningMap, parallelCountFor,
+  inverterOffersCommissioningMap,
+} from '@/lib/commissioning'
 
 /**
  * Step 7 — the whole chain at once.
@@ -56,8 +61,25 @@ export default function SystemPage() {
   // Same preference the array step writes, so temperatures read consistently
   // across the chain rather than reverting to Celsius here.
   const [unit] = usePersistentState<TempUnit>('zonzelf:tempUnit', DEFAULT_TEMP_UNIT)
+  const [generatorKw, setGeneratorKw] = usePersistentState<number | null>(
+    'zonzelf:system:generatorKw', null,
+  )
 
   const steps = chainState(summaries)
+  const pair = commissioningPairing(
+    summaries.inverter
+      ? { id: summaries.inverter.id, brand: summaries.inverter.brand, model: summaries.inverter.model }
+      : undefined,
+    summaries.battery?.presetId,
+  )
+  const map = pair
+    ? commissioningMap(pair, {
+        parallelCount: parallelCountFor(summaries.battery?.bankKwh, pair.battery),
+        generatorKw: generatorKw ?? undefined,
+        array: summaries.array ?? undefined,
+      })
+    : null
+  const sphWaitingForPack = !map && inverterOffersCommissioningMap(summaries.inverter ?? {})
   const conflicts = disagreements(summaries)
   const facts = assumptions(summaries, unit)
   const trust = confidence(summaries, unit)
@@ -187,6 +209,120 @@ export default function SystemPage() {
               </CardContent>
             </Card>
           </section>
+
+          {(map || sphWaitingForPack || anyDone) && (
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold text-zon-ink">
+                {map
+                  ? `Programming ${map.inverterModel} with ${map.batteryModel}`
+                  : 'Programming the inverter'}
+              </h2>
+              {!map && (
+                <Card>
+                  <CardContent className="pt-4 space-y-2 text-sm text-zon-body">
+                    <p>
+                      Inverter menu numbers are model-specific. This page only translates
+                      them for a pairing we have actually read: a Sun Gold SPH8048P or
+                      SPH10048P with an SG48100P pack.
+                    </p>
+                    {sphWaitingForPack ? (
+                      <p>
+                        Your inverter is one of those units. Pick{' '}
+                        <strong className="text-zon-ink">SG48100P</strong> under “Packs we
+                        have already read the datasheet for” on the{' '}
+                        <Link href="/calculators/battery" className="text-zon-gold-deep hover:underline">
+                          battery step
+                        </Link>
+                        , then come back. Chemistry alone is not enough — 48 V lithium is
+                        many packs.
+                      </p>
+                    ) : (
+                      <p>
+                        Pick the SPH unit on the{' '}
+                        <Link href="/calculators/inverter" className="text-zon-gold-deep hover:underline">
+                          inverter step
+                        </Link>
+                        {' '}and the SG48100P on the{' '}
+                        <Link href="/calculators/battery" className="text-zon-gold-deep hover:underline">
+                          battery step
+                        </Link>
+                        . Until both are chosen,{' '}
+                        <Link href="/guides/inverter-settings" className="text-zon-gold-deep hover:underline">
+                          the inverter-settings guide
+                        </Link>
+                        {' '}is the starting point.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              {map && (
+                <>
+                  <p className="text-sm text-zon-body">
+                    A procedure built from the two manufacturer manuals. Work through it in
+                    order — the sequence is the manual&apos;s, and some items cannot be
+                    changed once the machine is running. Menu numbers are this firmware and
+                    these two models;{' '}
+                    <Link href="/guides/inverter-settings" className="text-zon-gold-deep hover:underline">
+                      the inverter-settings guide
+                    </Link>{' '}
+                    is the starting point for anything else.
+                  </p>
+
+                  <div className="rounded-lg border border-zon-rule bg-zon-cream px-4 py-3">
+                    <label htmlFor="system-generator-kw" className="block text-sm font-medium text-zon-ink">
+                      Generator size
+                      <span className="ml-1 font-normal text-zon-muted">(optional)</span>
+                    </label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input
+                        id="system-generator-kw"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.1"
+                        value={generatorKw ?? ''}
+                        onChange={e => {
+                          const v = e.target.value.trim()
+                          if (v === '') { setGeneratorKw(null); return }
+                          const n = parseFloat(v)
+                          setGeneratorKw(Number.isFinite(n) && n > 0 ? n : null)
+                        }}
+                        className="w-24 rounded-lg border border-zon-rule px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zon-gold-light"
+                      />
+                      <span className="text-sm text-zon-muted">kW</span>
+                    </div>
+                    <p className="mt-1 text-xs text-zon-muted">
+                      Needed for the charge-current ceiling on AC-in. Leave blank if there is
+                      no generator — that row will say so rather than invent amps.
+                    </p>
+                  </div>
+
+                  {map.steps.map((step, i) => (
+                    <CommissioningStepCard key={step.id} step={step} n={i + 1}>
+                      {step.id === 'settings' && (
+                        <div className="pt-1">
+                          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zon-muted">
+                            Item 01 — what job this system has
+                          </p>
+                          <ul className="space-y-2 text-sm">
+                            {map.workModes.map(mode => (
+                              <li key={mode.id}>
+                                <span className="font-medium text-zon-ink">{mode.label}.</span>{' '}
+                                <span className="text-zon-body">{mode.when}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </CommissioningStepCard>
+                  ))}
+
+                  <CommissioningStepCard step={map.fallback} tone="fallback" />
+                </>
+              )}
+            </section>
+          )}
 
           {/* The cable schedule — what to actually buy, per run. */}
           {summaries.protection && summaries.protection.runs.length > 0 && (

@@ -95,9 +95,10 @@ export function chainState(s: ChainSummaries): StepState[] {
         break
       case 'battery':
         if (s.battery) {
+          const pack = s.battery.model ?? s.battery.chemistry.toUpperCase()
           headline = s.battery.bankKwh !== undefined
-            ? `${s.battery.bankKwh} kWh of ${s.battery.chemistry.toUpperCase()}`
-            : `${s.battery.chemistry.toUpperCase()} chosen, bank size not published`
+            ? `${s.battery.bankKwh} kWh of ${pack}`
+            : `${pack} chosen, bank size not published`
         }
         break
       case 'inverter':

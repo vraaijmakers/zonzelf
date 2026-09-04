@@ -230,6 +230,18 @@ export interface BatterySummary {
   /** Low and high end of the scenario band, kWh — the honest spread. */
   bandMinKwh?: number
   bandMaxKwh?: number
+  /**
+   * Present when the pack came from BATTERY_PRESETS rather than chemistry
+   * alone. Summaries saved before the commissioning map existed omit this,
+   * and that is a real runtime case — the map stays hidden until a known
+   * id is published. See CLAUDE.md 12b.
+   */
+  presetId?: string
+  brand?: string
+  model?: string
+  sourceUrl?: string
+  /** Series cell count from the admitted row, e.g. 16 for a 51.2 V LiFePO4. */
+  seriesCount?: number
 }
 
 export const BATTERY_SUMMARY_KEY = 'zonzelf:battery:summary'
@@ -262,6 +274,11 @@ export const PANEL_SUMMARY_KEY = 'zonzelf:panels:summary'
  * sizing an arrangement against a default nobody chose.
  */
 export interface InverterSummary {
+  /**
+   * Present when the unit came from INVERTER_PRESETS. Typed-in units have
+   * brand/model but no id, and the commissioning map stays hidden for those.
+   */
+  id?: string
   /** Present when the unit came from the preset list rather than typed in. */
   brand?: string
   model?: string
