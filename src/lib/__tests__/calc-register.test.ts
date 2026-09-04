@@ -29,10 +29,15 @@ test('the five protection outputs the design named are all in the catalog', () =
 })
 
 test('shipped protection is every output the calculators actually emit', () => {
+  // The commissioning outputs are emitted on /calculators/system. Four of them
+  // (battery type, BMS comms, SOC stops, equalize) render as rows of the
+  // settings table rather than through ProtectionOutput — the register
+  // classifies the output and its risk, not the chrome it is drawn in.
   const ids = shippedProtection().map(o => o.id).sort()
   assert.deepEqual(ids, [
-    'conductor-gauge', 'cutoff-voltage', 'ocpd-rating',
-    'string-current', 'string-fuse', 'string-voc',
+    'battery-type-menu', 'bms-comms', 'charge-current', 'charge-voltage',
+    'conductor-gauge', 'cutoff-ladder', 'cutoff-voltage', 'equalize',
+    'ocpd-rating', 'soc-stop', 'string-current', 'string-fuse', 'string-voc',
   ])
 })
 
@@ -61,6 +66,17 @@ test('the string outputs split across both registers, and the split is the lesso
   assert.equal(outputDef('string-fuse').register, 'protection')
   assert.equal(outputDef('mppt-window').register, 'capacity')
   assert.equal(outputDef('array-dc-power').register, 'capacity')
+})
+
+test('commissioning outputs ship from the system page', () => {
+  for (const id of [
+    'battery-type-menu', 'bms-comms', 'charge-voltage',
+    'soc-stop', 'equalize', 'charge-current',
+  ] as OutputId[]) {
+    assert.equal(outputDef(id).register, 'protection', id)
+    assert.equal(outputDef(id).page, '/calculators/system', id)
+    assert.equal(outputDef(id).shipped, true, id)
+  }
 })
 
 test('every output ships from the page that owns it', () => {
