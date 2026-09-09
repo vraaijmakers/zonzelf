@@ -21,7 +21,7 @@ export default function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm text-gray-500 mb-6">Last updated: 20 August 2026</p>
+      <p className="text-sm text-gray-500 mb-6">Last updated: 8 September 2026</p>
 
       <p className="text-gray-700 leading-relaxed">
         This page explains what data ZonZelf collects when you use the site, why, and what
@@ -64,6 +64,11 @@ export default function PrivacyPage() {
           not store payment card details ourselves — subscription billing, once launched, is
           handled by a third-party payment processor.
         </p>
+        <p>
+          Email delivery and legal correspondence are handled through Microsoft 365 (Microsoft
+          Exchange Online), which also acts as a data processor for any personal information in
+          those communications.
+        </p>
       </Section>
 
       <Section title="Your rights">
@@ -75,8 +80,10 @@ export default function PrivacyPage() {
         </p>
         <p>
           If you already hold an account from an earlier version of the site, you can request
-          access to or deletion of it and its associated data by contacting us, and we will
-          action it by hand. If you are in the EU/EEA, you have rights under the GDPR, including
+          access to or deletion of it and its associated data by emailing{' '}
+          <a href="mailto:privacy@zonzelf.com" className="text-yellow-700 hover:underline">
+            privacy@zonzelf.com
+          </a>, and we will action it by hand. If you are in the EU/EEA, you have rights under the GDPR, including
           access, correction, deletion, and data portability.
         </p>
       </Section>
@@ -90,10 +97,11 @@ export default function PrivacyPage() {
 
       <Section title="Contact">
         <p>
-          [TODO: publish a real, monitored contact channel here — an email address or a contact
-          form — before this page is relied on. It should not point people at the source code
-          repository. This matters more here than elsewhere on the site: GDPR data-access and
-          deletion requests need a reachable channel.]
+          For questions about this policy, GDPR rights, or to request access to or deletion of
+          your personal data, contact us at{' '}
+          <a href="mailto:privacy@zonzelf.com" className="text-yellow-700 hover:underline">
+            privacy@zonzelf.com
+          </a>.
         </p>
       </Section>
     </div>

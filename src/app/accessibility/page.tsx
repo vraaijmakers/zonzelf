@@ -34,7 +34,7 @@ export default function AccessibilityPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold mb-2">Accessibility Statement</h1>
-      <p className="text-sm text-gray-500 mb-6">Last reviewed: 20 August 2026</p>
+      <p className="text-sm text-gray-500 mb-6">Last reviewed: 8 September 2026</p>
 
       <p className="text-gray-700 leading-relaxed">
         ZonZelf aims to meet <strong>WCAG 2.1 level AA</strong> — the widely used standard for
@@ -83,8 +83,10 @@ export default function AccessibilityPage() {
           <span>
             If you hit a barrier using ZonZelf with a screen reader, keyboard-only navigation, or
             any other assistive technology, we want to know. Accessibility bugs are treated as
-            real bugs, not nice-to-haves. [TODO: publish a real, monitored contact channel here —
-            an email address or a contact form.]
+            real bugs, not nice-to-haves. Email us at{' '}
+            <a href="mailto:hello@zonzelf.com" className="text-yellow-700 hover:underline">
+              hello@zonzelf.com
+            </a>.
           </span>
         </p>
       </Section>
