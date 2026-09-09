@@ -21,7 +21,7 @@ export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold mb-2">Terms of Service</h1>
-      <p className="text-sm text-gray-500 mb-6">Last updated: 20 August 2026</p>
+      <p className="text-sm text-gray-500 mb-6">Last updated: 8 September 2026</p>
 
       <p className="text-gray-700 leading-relaxed">
         These terms govern your use of ZonZelf (zonzelf.com / zonzelf.app), a community
@@ -116,9 +116,10 @@ export default function TermsPage() {
 
       <Section title="Contact">
         <p>
-          [TODO: publish a real, monitored contact channel here — an email address or a contact
-          form — before this page is relied on. It should not point people at the source code
-          repository.]
+          For questions or concerns about these terms, contact us at{' '}
+          <a href="mailto:legal@zonzelf.com" className="text-yellow-700 hover:underline">
+            legal@zonzelf.com
+          </a>.
         </p>
       </Section>
     </div>
