@@ -433,6 +433,23 @@ handlers and server components re-check the user's role — never trust a client
 `user_id`. The anon key is public by design; the service-role key never leaves a server
 context and never enters this public repo.
 
+### 9b. A magic link goes wherever Supabase's allowlist says, not where you asked
+
+`LoginForm.tsx` builds `emailRedirectTo` from `window.location.origin`, so it always asks for
+the host the sign-in was submitted from. Supabase honors that **only** if it matches a pattern
+in Authentication → URL Configuration → Redirect URLs; anything else silently falls back to
+the project's Site URL, with no error at the call site and nothing in the app's logs.
+
+**The origin includes the port.** `http://localhost:3000/**` does not match `localhost:3010`,
+which is why pinning local dev to 3010 (2f19ede, 2026-08-28) quietly broke local sign-in while
+staging kept working — every link from a localhost login page went to the Site URL,
+`staging.zonzelf.app`, and stayed broken until it was noticed on 2026-09-09.
+
+Any new origin — a production domain, a preview URL, a different dev port — needs its own
+`/**` pattern added there **in the same change that introduces it**. Symptom to recognise: the
+link lands on a host nobody requested. Check the allowlist before suspecting the app code; the
+app code has been right every time so far.
+
 ### 10. Migrations are versioned files, applied everywhere
 
 Schema changes are committed SQL migration files, never clicks in the Supabase dashboard.
@@ -537,7 +554,7 @@ fails the Blue Ocean feature-creep test, say so before building it.
 ## Development Commands
 
 ```bash
-npm run dev      # next dev — http://localhost:3000
+npm run dev      # next dev — http://localhost:3010 (pinned; 3000 is often held by Grafana)
 npm run build    # next build — must pass before any commit
 npm run lint     # eslint
 npm test         # node --test over src/lib/__tests__/*.test.ts — must pass before any commit
@@ -552,7 +569,7 @@ npm start        # production server
   is not wrong. Fix: `rm -rf .next && npm run build`. Check this **before** touching
   `layout.tsx`.
 - **`rm -rf .next` while `next dev` is running drops its build output.** The dev server does
-  not always recover on its own — check `curl -sf http://localhost:3000` after clearing
+  not always recover on its own — check `curl -sf http://localhost:3010` after clearing
   `.next` and restart the dev server if it doesn't respond. Prefer stopping the dev server
   before clearing `.next`.
 - **`npm run lint` is clean of errors** — the 13 `react/no-unescaped-entities` errors that
