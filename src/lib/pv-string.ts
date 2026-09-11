@@ -246,6 +246,36 @@ export const EXAMPLE_PANEL: PanelSpec = {
   maxSeriesFuseA: 20,
 }
 
+/**
+ * The large-format sibling of EXAMPLE_PANEL, on exactly the same terms.
+ *
+ * It exists so "same watts, different panel" can be worked through with two
+ * modules that are honestly comparable: 3 x 400 W and 2 x 600 W are both
+ * 1200 W, so everything that differs between those builds differs because of
+ * the panel rather than because one sheet was flattered. Round numbers again,
+ * and it is nobody's product.
+ *
+ * Typical of its class rather than best-in-class. A 600 W module is the
+ * roughly 2278 x 1134 mm, 210 mm-cell format, so it carries BOTH a higher Voc
+ * and a higher Isc than a 400 W — and each of those lands on a different
+ * tracker limit. The gentler -0.26 %/degC is typical too, because large
+ * modern modules tend to be n-type; that is the guide's point about
+ * coefficients mattering more than nameplate, visible in the preset itself.
+ *
+ * Checks, the same ones panel-review.ts runs: Vmp x Imp = 45.6 x 13.2 =
+ * 601.9 W against a 600 W nameplate (0.3% out), fill factor 0.79.
+ */
+export const EXAMPLE_PANEL_LARGE: PanelSpec = {
+  wattsStc: 600,
+  vocStc: 55.0,
+  vmpStc: 45.6,
+  iscStc: 13.9,
+  impStc: 13.2,
+  betaVoc: -0.26,
+  betaPmax: -0.32,
+  maxSeriesFuseA: 25,
+}
+
 /** A made-up tracker, on the same terms as EXAMPLE_PANEL. */
 export const EXAMPLE_TRACKER: TrackerSpec = {
   pvMaxInputV: 500,
