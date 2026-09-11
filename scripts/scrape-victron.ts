@@ -22,7 +22,7 @@
 // a single-page fetch, so there's nothing to rate-limit.
 
 import * as cheerio from 'cheerio'
-import { type ParsedBattery, fetchHtml, getServiceRoleClient, upsertBatteries } from './lib/scrape-common'
+import { type ParsedBattery, fetchHtml, getServiceRoleClient, upsertBatteries, reportScrapeHealth } from './lib/scrape-common'
 
 const URL_ = 'https://www.victronenergy.com/batteries/lithium-battery-12-8v'
 const LABEL_PATTERN = /^LiFePO4\s+[Bb]attery\s+(\d+,\d+)V[\s-]*(\d+)\s*Ah/
@@ -76,7 +76,10 @@ async function main() {
   console.log(`Parsed ${batteries.length} distinct model(s).`)
 
   const supabase = getServiceRoleClient()
-  await upsertBatteries(supabase, batteries, 'victron')
+  const outcomes = await upsertBatteries(supabase, batteries, 'victron')
+  // No discovery stage — one page is parsed straight into records, so `parsed`
+  // is the only count there is.
+  reportScrapeHealth({ source: 'victron', parsed: batteries.length, outcomes })
 }
 
 // Only run when executed directly — importing this file for

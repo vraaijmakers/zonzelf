@@ -13,7 +13,7 @@
 // disallow list (cart/checkout/account), no crawl-delay directive — this
 // script still sleeps 10s between requests to be a respectful crawler.
 
-import { type ParsedBattery, fetchHtml, sleep, getServiceRoleClient, upsertBatteries } from './lib/scrape-common'
+import { type ParsedBattery, fetchHtml, sleep, getServiceRoleClient, upsertBatteries, reportScrapeHealth } from './lib/scrape-common'
 
 const SITE = 'https://sungoldpower.com'
 const CATEGORY_URL = `${SITE}/collections/battery`
@@ -92,7 +92,8 @@ async function main() {
 
   console.log(`\nParsed ${parsed.length}/${productUrls.length} products.`)
   const supabase = getServiceRoleClient()
-  await upsertBatteries(supabase, parsed, 'sungoldpower')
+  const outcomes = await upsertBatteries(supabase, parsed, 'sungoldpower')
+  reportScrapeHealth({ source: 'sungoldpower', discovered: productUrls.length, parsed: parsed.length, outcomes })
 }
 
 // Only run when executed directly — importing this file for parseProduct

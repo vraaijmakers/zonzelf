@@ -27,6 +27,8 @@ import {
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import MpptWindowBar, { type WindowMarker } from '@/components/calculators/MpptWindowBar'
+import CountGranularity from '@/components/calculators/CountGranularity'
+import { panelCountMap } from '@/lib/panel-granularity'
 
 /**
  * Step 5 — the arrangement.
@@ -192,6 +194,12 @@ export default function ArrayWiringPage() {
   const seriesMax = ready ? maxSeries(panel!, site, tracker!.pvMaxInputV) : 0
   const seriesMin = ready ? minSeries(panel!, site, tracker!.mpptMinV) : 0
   const arrangements = ready ? evaluateArrangements(panel!, tracker!, site, panelCount) : []
+  // The same question asked across a RANGE of counts. Step 5 has only ever
+  // judged the one count in front of it, which is why "no arrangement of 11
+  // panels works" was as far as this page could get.
+  const countMap = ready
+    ? panelCountMap(panel!, tracker!, site, { target: panelSummary?.panels ?? panelCount })
+    : null
   const best = arrangements.find(a => a.ideal) ?? arrangements.find(a => a.safe) ?? arrangements[0]
   // Nothing passing is a real answer and has to look like one. The card must
   // not headline a destroying arrangement in gold as though it were a result.
@@ -412,9 +420,25 @@ export default function ArrayWiringPage() {
                           works with this inverter.</strong> Every option runs into one of its
                           limits — {tracker.pvMaxInputV}V in, {tracker.pvMaxCurrentA}A per
                           tracker, or the {tracker.mpptMinV}V tracking floor. The table shows
-                          which one each hits. A different panel, a bigger unit, or splitting the
-                          array across more trackers are the ways out; a bigger array on the same
-                          box is not.
+                          which one each hits.{' '}
+                          {countMap?.nearestAtOrAbove || countMap?.nearestBelow ? (
+                            <>
+                              <strong className="text-zon-ink">
+                                Changing the count is usually the fix, and it does not need a
+                                different inverter
+                              </strong>{' '}
+                              — {[countMap.nearestBelow, countMap.nearestAtOrAbove]
+                                .filter((n): n is number => n !== null)
+                                .join(' or ')}{' '}
+                              panels wires on this same unit. The counts table below shows what
+                              each one costs you against the energy target.
+                            </>
+                          ) : (
+                            <>
+                              No count in range wires on this unit, so this one needs a different
+                              panel or a different inverter — not more modules.
+                            </>
+                          )}
                         </span>
                       </p>
                     )}
@@ -539,6 +563,12 @@ export default function ArrayWiringPage() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Which COUNTS wire at all — the cross-count view the table above
+              cannot give, because it only ever looks at one count. */}
+          {countMap && tracker && panel && (
+            <CountGranularity map={countMap} tracker={tracker} panelWatts={panel.wattsStc} />
           )}
 
           {/* Temperature — the input that decides everything. */}

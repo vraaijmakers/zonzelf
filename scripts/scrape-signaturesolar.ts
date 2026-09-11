@@ -30,6 +30,7 @@
 
 import {
   fetchHtml, sleep, getServiceRoleClient, updateScrapedFields, tallyOutcomes,
+  reportScrapeHealth,
   type ScrapeOutcome,
 } from './lib/scrape-common'
 
@@ -69,12 +70,14 @@ function parsePrice(html: string, url: string): number | null {
 async function main() {
   const supabase = getServiceRoleClient()
   const outcomes: ScrapeOutcome[] = []
+  let priced = 0
 
   for (const [i, { sku, url }] of PRODUCTS.entries()) {
     console.log(`[${i + 1}/${PRODUCTS.length}] ${url}`)
     const html = await fetchHtml(url)
     const price_usd = parsePrice(html, url)
     if (price_usd !== null) {
+      priced++
       outcomes.push(...await updateScrapedFields(
         supabase,
         { column: 'sku', value: sku },
@@ -86,6 +89,7 @@ async function main() {
   }
 
   console.log(`\nDone: ${tallyOutcomes(outcomes)}.`)
+  reportScrapeHealth({ source: 'signaturesolar', discovered: PRODUCTS.length, parsed: priced, outcomes })
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
