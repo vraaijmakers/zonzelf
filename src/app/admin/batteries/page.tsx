@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { reviewBatteryModel, worstSeverity, findLikelyDuplicates, type ReviewSeverity } from '@/lib/battery-review'
+import { FIELD_LABELS, SCRAPED_FIELDS, formatFieldValue, mergeProposal } from '@/lib/battery-revision'
 import BatteryReviewActions from '@/components/admin/BatteryReviewActions'
+import BatteryRevisionActions from '@/components/admin/BatteryRevisionActions'
 
 type BatteryModelRow = {
   id: number
@@ -14,8 +16,18 @@ type BatteryModelRow = {
   dod_rated: number | null
   price_usd: number | null
   source_url: string
+  retailer: string | null
+  retailer_url: string | null
   scraped_at: string
   is_published: boolean
+}
+
+type RevisionRow = {
+  id: number
+  battery_model_id: number
+  proposed: Record<string, unknown>
+  source: string
+  scraped_at: string
 }
 
 const SEVERITY_RANK: Record<ReviewSeverity, number> = { fail: 0, warn: 1, ok: 2 }
@@ -36,11 +48,36 @@ export default async function AdminBatteriesPage() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('battery_models')
-    .select('id, brand, model, sku, chemistry, voltage, capacity_ah, capacity_kwh, dod_rated, price_usd, source_url, scraped_at, is_published')
+    .select('id, brand, model, sku, chemistry, voltage, capacity_ah, capacity_kwh, dod_rated, price_usd, source_url, retailer, retailer_url, scraped_at, is_published')
+    .order('scraped_at', { ascending: true })
+
+  // Changes a re-scrape wants to make to rows that are already live. These are
+  // NOT applied to the table above — the whole point of the gate is that the
+  // published values a visitor sees stay as a human left them until this queue
+  // is worked. See supabase/migrations/20260909000001_battery_model_revisions.sql.
+  const { data: revisionData, error: revisionsError } = await supabase
+    .from('battery_model_revisions')
+    .select('id, battery_model_id, proposed, source, scraped_at')
+    .eq('status', 'pending')
     .order('scraped_at', { ascending: true })
 
   const rows = (data ?? []) as BatteryModelRow[]
   const duplicates = findLikelyDuplicates(rows)
+  const byId = new Map(rows.map(row => [row.id, row]))
+
+  const proposals = ((revisionData ?? []) as RevisionRow[])
+    .map(revision => {
+      const row = byId.get(revision.battery_model_id)
+      if (!row) return null
+      const changed = SCRAPED_FIELDS.filter(field =>
+        Object.prototype.hasOwnProperty.call(revision.proposed, field))
+      // Run the same automated checks against the row as it WOULD be, so a
+      // proposal that would push a live battery to $32/kWh says so before it
+      // is applied rather than after.
+      const flags = reviewBatteryModel(mergeProposal(row, revision.proposed))
+      return { revision, row, changed, flags }
+    })
+    .filter(entry => entry !== null)
 
   const pending = rows
     .filter(r => !r.is_published)
@@ -48,13 +85,15 @@ export default async function AdminBatteriesPage() {
     .sort((a, b) => SEVERITY_RANK[worstSeverity(a.flags)] - SEVERITY_RANK[worstSeverity(b.flags)])
 
   const published = rows.filter(r => r.is_published)
+  const proposedFor = new Set(proposals.map(p => p.row.id))
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">Battery Review</h1>
       <p className="text-sm text-gray-600 mb-2 max-w-2xl">
         Scraped rows land here unpublished — nothing shows up on the public battery calculator
-        until it&apos;s approved below.
+        until it&apos;s approved below. A re-scrape never edits a row that is already live either:
+        it proposes the change and waits for you here.
       </p>
       <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-6 max-w-2xl text-sm text-gray-700">
         <p className="mb-2">
@@ -72,6 +111,93 @@ export default async function AdminBatteriesPage() {
       </div>
 
       {error && <p className="text-sm text-red-600 mb-4">Couldn&apos;t load battery models: {error.message}</p>}
+      {revisionsError && (
+        <p className="text-sm text-red-600 mb-4">
+          Couldn&apos;t load proposed changes: {revisionsError.message}. A re-scrape may be waiting on
+          review that isn&apos;t shown here.
+        </p>
+      )}
+
+      {proposals.length > 0 && (
+        <>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+            Proposed changes to live rows ({proposals.length})
+          </h2>
+          <p className="text-sm text-gray-600 mb-3 max-w-2xl">
+            A scraper found these batteries listed differently than the version currently on the
+            battery calculator. <strong>Nothing has changed yet.</strong> Open the source link, check
+            which version the page actually says today, then apply the change or keep what&apos;s live.
+          </p>
+
+          <div className="space-y-3 mb-10">
+            {proposals.map(({ revision, row, changed, flags }) => {
+              const severity = worstSeverity(flags)
+              return (
+                <div key={revision.id} className="bg-white border border-amber-200 rounded-lg px-4 py-3">
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{row.brand} {row.model}</span>
+                        <span className="text-[10px] uppercase tracking-wide bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">
+                          live
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          from {revision.source}, {new Date(revision.scraped_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <a
+                        href={row.retailer_url ?? row.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline break-all"
+                      >
+                        {row.retailer_url ?? row.source_url}
+                      </a>
+                    </div>
+                    <BatteryRevisionActions revisionId={revision.id} hasFailingCheck={severity === 'fail'} />
+                  </div>
+
+                  <table className="text-xs mb-2">
+                    <thead>
+                      <tr className="text-gray-400">
+                        <th className="text-left font-normal pr-6 pb-0.5">Field</th>
+                        <th className="text-left font-normal pr-6 pb-0.5">Live now</th>
+                        <th className="text-left font-normal pb-0.5">Scraper found</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {changed.map(field => (
+                        <tr key={field}>
+                          <td className="pr-6 text-gray-600 align-top">{FIELD_LABELS[field]}</td>
+                          <td className="pr-6 text-gray-500 align-top line-through">
+                            {formatFieldValue(field, row[field])}
+                          </td>
+                          <td className="font-medium text-gray-900 align-top">
+                            {formatFieldValue(field, revision.proposed[field])}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {flags.length === 0 ? (
+                    <p className="text-xs text-green-700">✓ The proposed values pass every automated check.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {flags.map(flag => (
+                        <li key={flag.code} className="flex items-start gap-2 text-xs">
+                          <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${SEVERITY_DOT[flag.severity]}`} />
+                          <span className={SEVERITY_TEXT[flag.severity]}>{flag.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
         Pending review ({pending.length})
@@ -151,6 +277,11 @@ export default async function AdminBatteriesPage() {
             <div className="text-sm min-w-0">
               <span className="font-medium">{row.brand} {row.model}</span>
               <span className="text-gray-400 ml-2">{row.voltage}V · {row.capacity_ah}Ah · {row.chemistry}</span>
+              {proposedFor.has(row.id) && (
+                <span className="text-[10px] uppercase tracking-wide bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 ml-2 align-middle">
+                  change proposed
+                </span>
+              )}
             </div>
             <BatteryReviewActions id={row.id} isPublished={row.is_published} />
           </div>

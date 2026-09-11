@@ -76,7 +76,7 @@ async function main() {
   console.log(`Parsed ${batteries.length} distinct model(s).`)
 
   const supabase = getServiceRoleClient()
-  await upsertBatteries(supabase, batteries)
+  await upsertBatteries(supabase, batteries, 'victron')
 }
 
 // Only run when executed directly — importing this file for
