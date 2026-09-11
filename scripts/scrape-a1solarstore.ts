@@ -22,7 +22,7 @@
 // Only price_usd is scraped live, since that's the one field that actually
 // changes and A1 SolarStore is the priced retailer, not the spec source.
 
-import { fetchHtml, getServiceRoleClient, upsertBatteries, type ParsedBattery } from './lib/scrape-common'
+import { fetchHtml, getServiceRoleClient, upsertBatteries, reportScrapeHealth, type ParsedBattery } from './lib/scrape-common'
 
 const RETAILER = 'A1 SolarStore'
 
@@ -71,7 +71,8 @@ async function main() {
 
   console.log(`\nPriced ${parsed.length}/${PRODUCTS.length} products.`)
   const supabase = getServiceRoleClient()
-  await upsertBatteries(supabase, parsed, 'a1solarstore')
+  const outcomes = await upsertBatteries(supabase, parsed, 'a1solarstore')
+  reportScrapeHealth({ source: 'a1solarstore', discovered: PRODUCTS.length, parsed: parsed.length, outcomes })
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

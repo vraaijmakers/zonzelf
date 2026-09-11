@@ -12,7 +12,7 @@
 // crawl-delay — this script sleeps 10s between every request to honor that.
 
 import * as cheerio from 'cheerio'
-import { type ParsedBattery, fetchHtml, sleep, getServiceRoleClient, upsertBatteries } from './lib/scrape-common'
+import { type ParsedBattery, fetchHtml, sleep, getServiceRoleClient, upsertBatteries, reportScrapeHealth } from './lib/scrape-common'
 
 const SITE = 'https://eg4electronics.com'
 const CATEGORY_URL = `${SITE}/categories/batteries`
@@ -115,7 +115,8 @@ async function main() {
 
   console.log(`\nParsed ${parsed.length}/${productUrls.length} products.`)
   const supabase = getServiceRoleClient()
-  await upsertBatteries(supabase, parsed, 'eg4')
+  const outcomes = await upsertBatteries(supabase, parsed, 'eg4')
+  reportScrapeHealth({ source: 'eg4', discovered: productUrls.length, parsed: parsed.length, outcomes })
 }
 
 // Only run when executed directly — importing this file for parseProduct

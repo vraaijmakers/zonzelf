@@ -20,6 +20,18 @@ import {
   type FieldChange,
   type ScrapedRecord,
 } from '../../src/lib/battery-revision'
+import {
+  assessScrape,
+  formatScrapeHealth,
+  type ScrapeHealth,
+  type ScrapeOutcome,
+  type ScrapeRun,
+} from '../../src/lib/scrape-health'
+
+// ScrapeOutcome moved to src/lib/scrape-health.ts so CI can test the health
+// rules without a service-role key (rule 9). Re-exported because every scraper
+// imports it from here.
+export type { ScrapeOutcome, ScrapeRun } from '../../src/lib/scrape-health'
 
 export const USER_AGENT = 'ZonZelfBot/0.1 (+https://zonzelf.com; battery spec research)'
 
@@ -62,18 +74,21 @@ export function getServiceRoleClient(): SupabaseClient {
 }
 
 /**
- * What a scrape did to one row.
+ * Did this run actually work? Every scraper ends by calling this, and it is the
+ * only thing standing between a broken source site and a green scheduled job —
+ * see src/lib/scrape-health.ts for the two failures that used to exit 0.
  *
- *   inserted   — new row, unpublished, waiting in the review queue
- *   updated    — existing UNPUBLISHED row written in place (nothing live to protect)
- *   unchanged  — the source still agrees with the row; only scraped_at moved
- *   proposed   — published row, change queued in battery_model_revisions
- *   suppressed — published row, but a reviewer already rejected this exact change
- *   missing    — nothing matched (update-only scrapers)
- *   failed     — the write errored; the message is on stderr
+ * Sets `process.exitCode` rather than calling process.exit(), so stdout flushes
+ * and the caller's own logging still lands. Not a throw: the scrapers' catch
+ * prints a stack trace, and a stack trace is the wrong shape for "eg4's
+ * category page is empty" — that is a finding, not a crash.
  */
-export type ScrapeOutcome =
-  | 'inserted' | 'updated' | 'unchanged' | 'proposed' | 'suppressed' | 'missing' | 'failed'
+export function reportScrapeHealth(run: ScrapeRun): ScrapeHealth {
+  const health = assessScrape(run)
+  for (const line of formatScrapeHealth(run, health)) console.log(line)
+  if (!health.ok) process.exitCode = 1
+  return health
+}
 
 type ExistingRow = ScrapedRecord & { id: number; is_published: boolean }
 
