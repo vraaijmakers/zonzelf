@@ -19,13 +19,19 @@
 // updates. Adding a brand to real discovery is future work (see roadmap item
 // "Battery scraper: brand discovery + LLM extraction").
 //
-// Updates are written unpublished. Filling in a price on an
-// already-published row is exactly the "re-review gate" risk the roadmap
-// item "Battery scraper: re-scrape scheduling + published-row review gate"
-// describes — new scraped data isn't trusted until a human looks at it,
-// price included. An admin re-approves in /admin/batteries.
+// Filling in a price on an already-published row is new scraped data reaching
+// a visitor without review — price included. Until 2026-09-09 this script
+// handled that by setting is_published = false on the row it updated, which
+// was safe but took a live battery off /calculators/battery to do it, on a
+// scraper whose whole job is a routine price refresh. It now goes through the
+// shared review gate instead (updateScrapedFields): an unpublished row is
+// written in place, a published one keeps its live price and gets a proposal
+// an admin applies in /admin/batteries.
 
-import { fetchHtml, sleep, getServiceRoleClient } from './lib/scrape-common'
+import {
+  fetchHtml, sleep, getServiceRoleClient, updateScrapedFields, tallyOutcomes,
+  type ScrapeOutcome,
+} from './lib/scrape-common'
 
 const CRAWL_DELAY_MS = 10_000
 const RETAILER = 'Signature Solar'
@@ -62,32 +68,24 @@ function parsePrice(html: string, url: string): number | null {
 
 async function main() {
   const supabase = getServiceRoleClient()
+  const outcomes: ScrapeOutcome[] = []
 
   for (const [i, { sku, url }] of PRODUCTS.entries()) {
     console.log(`[${i + 1}/${PRODUCTS.length}] ${url}`)
     const html = await fetchHtml(url)
     const price_usd = parsePrice(html, url)
     if (price_usd !== null) {
-      const { data, error } = await supabase
-        .from('battery_models')
-        .update({
-          price_usd,
-          retailer: RETAILER,
-          retailer_url: url,
-          is_published: false,
-        })
-        .eq('sku', sku)
-        .select('id, brand, model')
-      if (error) {
-        console.error(`  update failed for sku ${sku}: ${error.message}`)
-      } else if (!data || data.length === 0) {
-        console.warn(`  no battery_models row with sku ${sku} — nothing updated`)
-      } else {
-        console.log(`  ✓ ${data[0].brand} ${data[0].model} → $${price_usd} (unpublished, pending review)`)
-      }
+      outcomes.push(...await updateScrapedFields(
+        supabase,
+        { column: 'sku', value: sku },
+        { price_usd, retailer: RETAILER, retailer_url: url },
+        'signaturesolar',
+      ))
     }
     if (i < PRODUCTS.length - 1) await sleep(CRAWL_DELAY_MS)
   }
+
+  console.log(`\nDone: ${tallyOutcomes(outcomes)}.`)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -71,7 +71,7 @@ async function main() {
 
   console.log(`\nPriced ${parsed.length}/${PRODUCTS.length} products.`)
   const supabase = getServiceRoleClient()
-  await upsertBatteries(supabase, parsed)
+  await upsertBatteries(supabase, parsed, 'a1solarstore')
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
