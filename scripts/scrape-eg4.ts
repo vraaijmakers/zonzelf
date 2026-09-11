@@ -115,7 +115,7 @@ async function main() {
 
   console.log(`\nParsed ${parsed.length}/${productUrls.length} products.`)
   const supabase = getServiceRoleClient()
-  await upsertBatteries(supabase, parsed)
+  await upsertBatteries(supabase, parsed, 'eg4')
 }
 
 // Only run when executed directly — importing this file for parseProduct
