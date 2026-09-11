@@ -1,0 +1,125 @@
+name: Release — drift alarm
+
+# THE FAILURE THIS EXISTS TO PREVENT, and it is not hypothetical. On 2026-09-11
+# main was found 160 commits and 22 days behind staging, with no VERSION file,
+# no workflows and no tags — it had never been released to at all, across
+# fifteen develop -> staging PRs. Nothing anywhere reported that. The release
+# flow in CLAUDE.md was correct and simply stopped being run, silently.
+#
+# WHY THIS RAISES AN ISSUE RATHER THAN OPENING THE RELEASE PR. Two constraints
+# rule that out. A pull request opened with the workflow's own GITHUB_TOKEN
+# does NOT trigger pull_request workflows — GitHub's loop prevention — so it
+# would never get the "Build & Lint" check that main requires, and with
+# enforce_admins on, nobody could merge it. It would be a stuck PR that looks
+# like progress. And this is a single-maintainer repo, so a required-review
+# gate is not available either: you cannot approve your own pull request.
+#
+# So the human opens the PR (npm run release:open, from a machine whose token
+# does trigger CI) and merging it IS the approval. This workflow's whole job is
+# to make sure nobody forgets that it is waiting.
+
+on:
+  schedule:
+    # Thursday 08:23 UTC — a working day, so a nag has somewhere to go.
+    - cron: '23 8 * * 4'
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  # Past either of these, say something.
+  MAX_COMMITS: 20
+  MAX_DAYS: 7
+  ISSUE_TITLE: 'Release: main is behind staging'
+
+jobs:
+  drift:
+    name: Is main behind staging?
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Measure and report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin main staging --quiet
+
+          BEHIND=$(git rev-list --count origin/main..origin/staging)
+          if [ "$BEHIND" -eq 0 ]; then
+            echo "main is level with staging."
+            echo "main is level with staging — nothing to release." >> "$GITHUB_STEP_SUMMARY"
+            # Close a standing alarm: the release happened.
+            NUM=$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title \
+                  --jq "[.[] | select(.title == \"$ISSUE_TITLE\")][0].number // empty")
+            if [ -n "$NUM" ]; then
+              gh issue close "$NUM" --comment "main is level with staging again. Closing automatically."
+              echo "Closed the standing drift issue (#$NUM)."
+            fi
+            exit 0
+          fi
+
+          # Age of the OLDEST unreleased commit — "how long has this been
+          # waiting", which is the number that matters. The newest commit being
+          # minutes old says nothing about a release that stalled in August.
+          OLDEST_TS=$(git log origin/main..origin/staging --format=%ct | tail -1)
+          DAYS=$(( ( $(date +%s) - OLDEST_TS ) / 86400 ))
+          VERSION=$(git show origin/staging:VERSION 2>/dev/null | tr -d '[:space:]' || echo "unknown")
+
+          {
+            echo "### Release status"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Commits on staging, not on main | $BEHIND |"
+            echo "| Oldest has waited | $DAYS days |"
+            echo "| staging VERSION | $VERSION |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$BEHIND" -le "$MAX_COMMITS" ] && [ "$DAYS" -le "$MAX_DAYS" ]; then
+            echo "$BEHIND commit(s), oldest $DAYS day(s) — inside thresholds, staying quiet."
+            exit 0
+          fi
+
+          BODY=$(cat <<EOF
+          \`main\` is **$BEHIND commit(s)** behind \`staging\`, and the oldest has been waiting **$DAYS day(s)**.
+
+          staging is at version \`$VERSION\`.
+
+          Nothing is broken — this is the release step not having been run. To release:
+
+          \`\`\`bash
+          npm run release:open      # opens the staging -> main PR from your machine
+          \`\`\`
+
+          It has to be opened from your machine rather than by this workflow: a PR opened with
+          Actions' own token does not trigger the \`Build & Lint\` check that \`main\` requires,
+          and with \`enforce_admins\` on, such a PR can never be merged by anyone.
+
+          Merging that PR is the approval. \`release-tag.yml\` tags \`main\` from \`VERSION\`
+          afterwards, and this issue closes itself once \`main\` is level again.
+
+          <sub>Raised by \`.github/workflows/release-drift.yml\`. Thresholds: $MAX_COMMITS commits / $MAX_DAYS days.</sub>
+          EOF
+          )
+          # Heredoc above is indented for readability; strip that indent.
+          BODY=$(echo "$BODY" | sed 's/^          //')
+
+          NUM=$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title \
+                --jq "[.[] | select(.title == \"$ISSUE_TITLE\")][0].number // empty")
+          if [ -n "$NUM" ]; then
+            gh issue edit "$NUM" --body "$BODY"
+            echo "Updated the standing drift issue (#$NUM)."
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$BODY" >/dev/null
+            echo "Opened a drift issue."
+          fi
+          echo "::warning::main is $BEHIND commit(s) / $DAYS day(s) behind staging."

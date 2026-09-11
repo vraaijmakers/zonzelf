@@ -1,0 +1,51 @@
+name: Release — tag main
+
+# main carries the version, so main should carry the tag. CLAUDE.md says git
+# tags live on main only and match VERSION exactly; leaving that to a human at
+# the end of a release is how a repo ends up with 160 unreleased commits and
+# zero tags, which is exactly where this one was on 2026-09-11.
+#
+# Safe to run on every push to main: it only ever ADDS a tag that is missing,
+# never moves or deletes one. A re-run after a revert does nothing.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Tag from VERSION
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create the tag if VERSION does not have one
+        run: |
+          set -euo pipefail
+          if [ ! -f VERSION ]; then
+            echo "::warning::No VERSION file on main — nothing to tag."
+            exit 0
+          fi
+          V="$(tr -d '[:space:]' < VERSION)"
+          case "$V" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::VERSION is '$V', which is not MAJOR.MINOR.PATCH."; exit 1 ;;
+          esac
+          TAG="v$V"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists — nothing to do."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "Tagged $(git rev-parse --short HEAD) as $TAG."
+          echo "### Tagged \`$TAG\`" >> "$GITHUB_STEP_SUMMARY"
