@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, ChevronRight } from 'lucide-react'
+import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -35,6 +35,14 @@ const GUIDES = [
     description: 'Why solar panels make MORE voltage when they are cold, what the two numbers on your inverter\u2019s solar input actually mean, and how to work out how many panels can go in a string. With the formulas.',
     tags: ['arrays', 'intermediate'],
     readTime: '15 min',
+  },
+  {
+    icon: Ruler,
+    slug: 'choosing-panels',
+    title: 'Choosing Panels: 3 x 400 W vs 2 x 600 W',
+    description: 'Same watts, different array. What actually changes when you pick more small panels over fewer big ones \u2014 area, weight, wiring arrangements, shade, clipping, freight \u2014 and the one spec that outlives the decision.',
+    tags: ['arrays', 'buying', 'beginner'],
+    readTime: '12 min',
   },
   {
     icon: Cable,

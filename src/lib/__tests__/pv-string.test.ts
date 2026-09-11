@@ -6,7 +6,7 @@ import {
   checkArrangement, evaluateArrangements,
   stringVocProtectionView, stringCurrentProtectionView, stringFuseProtectionView,
   PV_IRRADIANCE_FACTOR, DEFAULT_CELL_RISE_C, DEFAULT_MPPT_HEADROOM,
-  PANEL_PRESETS, EXAMPLE_PANEL, EXAMPLE_TRACKER,
+  PANEL_PRESETS, EXAMPLE_PANEL, EXAMPLE_PANEL_LARGE, EXAMPLE_TRACKER,
   type PanelSpec, type TrackerSpec, type SiteConditions,
 } from '../pv-string'
 import { assertProtectionView } from '../calc-register'
@@ -508,4 +508,55 @@ test('guide: the back-feed table matches, and 20 panels is exactly 8 kW', () => 
   assert.equal(stringFuseRequired(3, EXAMPLE_PANEL.iscStc, EXAMPLE_PANEL.maxSeriesFuseA), true)
   // 10 in series on each of two trackers, at 400W a panel.
   assert.equal(10 * 2 * EXAMPLE_PANEL.wattsStc, EXAMPLE_TRACKER.pvMaxPowerW)
+})
+
+// ---------------------------------------------------------------------------
+// EXAMPLE_PANEL_LARGE — the 600 W sibling /guides/choosing-panels compares
+// against. Its whole job is to be a fair counterpart to EXAMPLE_PANEL, so a
+// later tidy-up that quietly "rounds" one of its figures would turn the guide
+// into an argument for a panel that does not exist.
+// ---------------------------------------------------------------------------
+
+test('both worked-example panels pass the same admission checks a real preset does', () => {
+  for (const [name, panel] of [
+    ['EXAMPLE_PANEL', EXAMPLE_PANEL],
+    ['EXAMPLE_PANEL_LARGE', EXAMPLE_PANEL_LARGE],
+  ] as const) {
+    const flags = reviewPanelSpec({ ...panel, brand: 'Worked example', model: name })
+    assert.equal(
+      worstSeverity(flags),
+      'ok',
+      `${name} should raise no review flags, got ${JSON.stringify(flags)}`,
+    )
+  }
+})
+
+test('the two example panels differ the way the guide says they do', () => {
+  // Bigger nameplate, and BOTH of the ratings that land on tracker limits.
+  assert.ok(EXAMPLE_PANEL_LARGE.wattsStc > EXAMPLE_PANEL.wattsStc)
+  assert.ok(EXAMPLE_PANEL_LARGE.vocStc > EXAMPLE_PANEL.vocStc)
+  assert.ok(EXAMPLE_PANEL_LARGE.iscStc > EXAMPLE_PANEL.iscStc)
+  // Gentler Voc coefficient, because larger modern modules tend to be n-type.
+  // The guide leans on this to make the point that the coefficient outlives
+  // the wattage choice, so the ordering is load-bearing, not decorative.
+  assert.ok(
+    Math.abs(EXAMPLE_PANEL_LARGE.betaVoc) < Math.abs(EXAMPLE_PANEL.betaVoc),
+    'the large example must have the GENTLER Voc coefficient',
+  )
+})
+
+test('the 600 W example clips a 17 A tracker where the 400 W one does not', () => {
+  // The claim /guides/choosing-panels makes in section 4, locked to the same
+  // arithmetic checkArrangement() uses: one string, one tracker, Isc lifted by
+  // the irradiance factor. Against the EG4 6000XP's published pair (17 A
+  // usable, 25 A short-circuit) the large panel is over the HARVEST limit and
+  // under the DAMAGE one — "you lose peaks", not "you lose the inverter".
+  const usableA = 17
+  const damageA = 25
+  const smallA = EXAMPLE_PANEL.iscStc * PV_IRRADIANCE_FACTOR
+  const largeA = EXAMPLE_PANEL_LARGE.iscStc * PV_IRRADIANCE_FACTOR
+
+  assert.ok(smallA < usableA, `400 W string should not clip: ${smallA} A`)
+  assert.ok(largeA > usableA, `600 W string should clip: ${largeA} A`)
+  assert.ok(largeA < damageA, `600 W string must stay under the damage limit: ${largeA} A`)
 })
