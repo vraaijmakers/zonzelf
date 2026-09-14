@@ -74,16 +74,34 @@ async function main() {
 
   for (const [i, { sku, url }] of PRODUCTS.entries()) {
     console.log(`[${i + 1}/${PRODUCTS.length}] ${url}`)
-    const html = await fetchHtml(url)
-    const price_usd = parsePrice(html, url)
-    if (price_usd !== null) {
-      priced++
-      outcomes.push(...await updateScrapedFields(
-        supabase,
-        { column: 'sku', value: sku },
-        { price_usd, retailer: RETAILER, retailer_url: url },
-        'signaturesolar',
-      ))
+    try {
+      const html = await fetchHtml(url)
+      const price_usd = parsePrice(html, url)
+      if (price_usd !== null) {
+        priced++
+        outcomes.push(...await updateScrapedFields(
+          supabase,
+          { column: 'sku', value: sku },
+          { price_usd, retailer: RETAILER, retailer_url: url },
+          'signaturesolar',
+        ))
+      }
+    } catch (err) {
+      // One dead product page must not cost the others their price refresh.
+      // Without this the throw escaped main() and exited 1 on the spot: on
+      // 2026-09-14 the LL-S 404'd at [1/3] and the 280Ah and 314Ah pages —
+      // both healthy — were never fetched. scrape-health.ts is explicit that
+      // partial loss is a warning, not a failure; it just never got to run.
+      //
+      // A 404 here is not the same event as a 404 mid-crawl, though. PRODUCTS
+      // is hand-verified, so a dead URL means the mapping is stale, and the
+      // row keeps last month's price behind a buy link that goes nowhere
+      // until someone re-points or retires the entry. Hence the second line:
+      // priced < PRODUCTS.length only ever surfaces as a warning, and a
+      // warning on an otherwise-green weekly job is easy to scroll past.
+      console.warn(`  ✗ ${sku}: fetch failed: ${(err as Error).message}`)
+      console.warn(`    Hand-verified URL no longer resolves. Re-point or remove this`)
+      console.warn(`    entry, and check the row it prices for a dead retailer_url.`)
     }
     if (i < PRODUCTS.length - 1) await sleep(CRAWL_DELAY_MS)
   }
