@@ -62,25 +62,32 @@ export default function CountGranularity({
               <strong className="text-zon-ink">
                 {target} panels cannot be wired on this unit
               </strong>{' '}
-              — but a nearby count can, and buying one more panel is usually the cheapest fix
-              on this page.{' '}
+              {/* "Buy one more panel" is the usual fix and was once said here
+                  unconditionally — which contradicted the very next sentence
+                  whenever nothing ABOVE the target wires. Going up is only
+                  advice when going up actually works. */}
               {up !== null && down !== null ? (
                 <>
+                  — but a nearby count can.{' '}
                   <strong className="text-zon-ink">{down}</strong> works and leaves you short of
                   the energy target; <strong className="text-zon-ink">{up}</strong> works and
                   overshoots it. Either is a real build; {target} is not.
                 </>
               ) : up !== null ? (
                 <>
-                  <strong className="text-zon-ink">{up}</strong> is the next count that works.
+                  — but a nearby count can.{' '}
+                  <strong className="text-zon-ink">{up}</strong> is the next count that works,
+                  and buying the extra panel is usually the cheapest fix on this page.
                 </>
               ) : down !== null ? (
                 <>
-                  <strong className="text-zon-ink">{down}</strong> works, and nothing above{' '}
-                  {target} does — see the ceiling below.
+                  — and neither can any larger count.{' '}
+                  <strong className="text-zon-ink">{down}</strong> is the biggest that works on
+                  this unit, so going up is not the way out here: buying more panels makes it
+                  worse, not better. See the ceiling below.
                 </>
               ) : (
-                <>No count in this range wires on this unit at all.</>
+                <>— and no count in this range wires on this unit at all.</>
               )}
             </span>
           </p>

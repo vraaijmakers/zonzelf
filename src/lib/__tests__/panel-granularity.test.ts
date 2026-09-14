@@ -121,3 +121,30 @@ test('parity is reported when the window really does support it', () => {
     assert.ok(map.options.some(o => !o.wirable && o.panels % 2 === 1))
   }
 })
+
+// The banner said "buying one more panel is usually the cheapest fix" before
+// branching on what actually works, so when nothing ABOVE the target wired it
+// contradicted its own next sentence: buy one more, and nothing above this
+// works. Found on staging, Orlando + 20 panels. The shape that drives that
+// branch is nearestAtOrAbove === null with a nearestBelow — going UP is the
+// one thing that cannot help — which is the exact inverse of the claim this
+// module was written to disprove, and just as wrong in the other direction.
+test('when nothing above the target wires, going up is not advice', () => {
+  const mild: SiteConditions = { lowestExpectedC: 0.6, designHighC: 35.5 }
+  const map = panelCountMap(SG550WM, TRACKER, mild, { target: 20 })
+  assert.equal(map.targetWirable, false)
+  assert.equal(map.nearestAtOrAbove, null, 'nothing at or above 20 wires')
+  assert.equal(map.nearestBelow, 18)
+  assert.equal(map.ceiling, 18, 'and 18 is the ceiling, so bigger is strictly worse')
+})
+
+// A warm site moves the binding limit from voltage to current, which is why
+// the same pairing wires 9 panels in Orlando and refuses them in Denver.
+test('the same pairing wires different counts at different design lows', () => {
+  const mild: SiteConditions = { lowestExpectedC: 0.6, designHighC: 35.5 }
+  const warm = panelCountMap(SG550WM, TRACKER, mild, { target: 20 })
+  const cold = panelCountMap(SG550WM, TRACKER, COLD, { target: 20 })
+  assert.ok(warm.wirableCounts.includes(9), 'nine wires on a mild morning')
+  assert.ok(!cold.wirableCounts.includes(9), 'and does not on a -25.9 degC one')
+  assert.ok(warm.ceiling! > cold.ceiling!, 'a warmer site allows a taller string, so a bigger array')
+})
