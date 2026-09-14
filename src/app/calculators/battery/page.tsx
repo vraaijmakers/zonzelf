@@ -28,6 +28,7 @@ import {
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { createClient } from '@/lib/supabase/client'
+import { priceDisplay, formatAsOf } from '@/lib/battery-price'
 
 type BatteryModelMatch = {
   id: number
@@ -37,6 +38,7 @@ type BatteryModelMatch = {
   capacity_ah: number
   capacity_kwh: number
   price_usd: number | null
+  price_scraped_at: string | null
   source_url: string
 }
 
@@ -290,7 +292,7 @@ export default function BatterySizingPage() {
     const supabase = createClient()
     supabase
       .from('battery_models')
-      .select('id, brand, model, voltage, capacity_ah, capacity_kwh, price_usd, source_url')
+      .select('id, brand, model, voltage, capacity_ah, capacity_kwh, price_usd, price_scraped_at, source_url')
       .eq('chemistry', battery.id)
       .order('capacity_kwh', { ascending: true })
       .then(({ data, error }) => {
@@ -487,7 +489,11 @@ export default function BatterySizingPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {matchingModels.map(m => {
                   const units = Math.ceil(chosen.bankKwh / m.capacity_kwh)
-                  const totalPrice = m.price_usd != null ? units * m.price_usd : null
+                  // A price the site cannot still vouch for is not shown as a
+                  // bank total — see src/lib/battery-price.ts.
+                  const price = priceDisplay(m.price_usd, m.price_scraped_at)
+                  const unitPrice = price.kind === 'dated' || price.kind === 'undated' ? price.price : null
+                  const totalPrice = unitPrice != null ? units * unitPrice : null
                   return (
                     <div
                       key={m.id}
@@ -528,7 +534,17 @@ export default function BatterySizingPage() {
                               <span className="text-lg font-bold leading-tight tabular-nums text-zon-gold-deep">
                                 ~${totalPrice.toLocaleString()}
                               </span>
+                              {price.kind === 'dated' && (
+                                <span className="text-[11px] leading-tight text-zon-muted">
+                                  as of {formatAsOf(price.asOf)}
+                                </span>
+                              )}
                             </>
+                          ) : price.kind === 'stale' ? (
+                            // Saying the price aged out is more use than
+                            // implying there never was one — the shop may
+                            // still stock it at a number nobody has re-read.
+                            <span className="text-xs text-zon-muted">Price out of date</span>
                           ) : (
                             <span className="text-xs text-zon-muted">Price not published</span>
                           )}
