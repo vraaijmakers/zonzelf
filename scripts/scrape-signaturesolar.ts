@@ -37,14 +37,28 @@ import {
 const CRAWL_DELAY_MS = 10_000
 const RETAILER = 'Signature Solar'
 
+// RETIRED 2026-09-14 — EG4 LL-S 48V 100AH (sku EG4LL48V100AV4), which used to
+// be the first entry here:
+//   https://signaturesolar.com/eg4-ll-s-lithium-battery-48v-100ah-server-rack-battery-ul1973-ul9540a-10-year-warranty
+// Signature Solar delisted it. Hard 404, no redirect, and absent from their EG4
+// brand page, so it moved nowhere — this mapping had nothing left to point at.
+//
+// THE PRODUCT IS NOT DISCONTINUED. EG4 still lists it and its spec page was
+// re-confirmed live the same day. Checked specifically, because their site's
+// "Legacy Products" nav item appears on every page — including on products EG4
+// introduced that week — so its presence on a product page proves nothing. A
+// replacement reseller is therefore worth finding, but it belongs in THAT
+// reseller's scraper (see scrape-a1solarstore.ts), hand-verified the same way,
+// never re-pointed from here.
+//
+// DO NOT fill this gap with the "EG4 LifePower4 V2" 100Ah product on the same
+// storefront. It is a different battery, and the comment this replaces existed
+// to warn about exactly that confusion.
+//
+// The battery_models row stays PUBLISHED with no price — specs are cited from
+// EG4's own page, not from a shop. Its dead price and retailer link were
+// cleared by supabase/migrations/20260914000002_battery_lls_price_retired.sql.
 const PRODUCTS: { sku: string; url: string }[] = [
-  {
-    // EG4 LL-S 48V 100AH — matches battery_models row "LL-S 48V 100AH
-    // Lithium Iron Phosphate Battery". Do not confuse with the newer
-    // "EG4 LifePower4 V2" 100Ah product on the same storefront.
-    sku: 'EG4LL48V100AV4',
-    url: 'https://signaturesolar.com/eg4-ll-s-lithium-battery-48v-100ah-server-rack-battery-ul1973-ul9540a-10-year-warranty',
-  },
   {
     // EG4 WallMount 280Ah All Weather — the "AllWeather" (outdoor) variant,
     // not the separately-listed "Indoor" 280Ah product.
