@@ -1,0 +1,44 @@
+# ZonZelf — Staging
+#
+# Joins the existing webapps-docker network (nginx already running for
+# bond/campground-finder). nginx proxies http://staging.zonzelf.app/ (VPN
+# clients only, via a /etc/hosts entry — this box has no public DNS record)
+# to zonzelf:3000.
+#
+# One-time server setup (as user seecago):
+#   git clone https://github.com/vraaijmakers/zonzelf.git ~/zonzelf
+#   cd ~/zonzelf && git checkout staging
+#   cat > .env <<EOF
+#   NEXT_PUBLIC_SUPABASE_URL=...
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+#   ANTHROPIC_API_KEY=...
+#   EOF
+#   docker compose -f docker-compose.staging.yml up -d --build
+#
+# Subsequent deploys:
+#   cd ~/zonzelf && git pull && docker compose -f docker-compose.staging.yml up -d --build
+
+networks:
+  webapps-docker:
+    external: true
+
+services:
+  zonzelf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-placeholder-anon-key}
+    image: zonzelf:staging
+    container_name: zonzelf
+    restart: unless-stopped
+    environment:
+      APP_ENV: staging
+      PORT: "3000"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    env_file:
+      - path: .env
+        required: false
+    networks:
+      - webapps-docker

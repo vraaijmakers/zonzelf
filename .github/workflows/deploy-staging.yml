@@ -1,0 +1,71 @@
+name: Deploy — Staging
+
+# Runs on the self-hosted runner ("zonzelf-staging") registered on the
+# seecago.com VPN box. The runner makes outbound-only connections to
+# GitHub — no inbound access to the box is required.
+#
+# One-time setup on the VPS (as user seecago):
+#   1. Clone the app:    git clone https://github.com/vraaijmakers/zonzelf.git ~/zonzelf
+#                         cd ~/zonzelf && git checkout staging
+#   2. Real credentials: cp .env.example .env, then fill in Supabase/Anthropic values
+#                         (placeholders are fine to start — see CLAUDE.md)
+#   3. Register a runner scoped to this repo (GitHub → Settings → Actions →
+#      Runners → New self-hosted runner), extract it to ~/actions-runner-zonzelf,
+#      then: ./config.sh --url https://github.com/vraaijmakers/zonzelf --token <token>
+#   4. sudo ./svc.sh install seecago && sudo ./svc.sh start
+#
+# See docker-compose.staging.yml for how the app itself is built and run, and
+# ../PROJECT.md / CLAUDE.md for the reverse-proxy/TLS setup this deploys behind.
+
+on:
+  push:
+    branches: [staging]
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
+env:
+  APP_DIR: /home/seecago/zonzelf
+
+jobs:
+  deploy:
+    name: Build → up
+    runs-on: self-hosted
+
+    steps:
+      - name: Sync app code on host
+        run: |
+          set -e
+          cd "$APP_DIR"
+          git fetch origin staging
+          # .env is gitignored, so a hard reset leaves real credentials intact.
+          git reset --hard origin/staging
+          echo "==> $APP_DIR now at $(git rev-parse --short HEAD)"
+
+      - name: Build image and recreate container
+        run: |
+          set -e
+          cd "$APP_DIR"
+          docker compose -f docker-compose.staging.yml build --pull
+          docker compose -f docker-compose.staging.yml up -d --remove-orphans
+
+      - name: Reclaim disk — prune superseded images & build cache
+        if: always()
+        run: |
+          # Each deploy rebuilds the image and leaves the prior one dangling.
+          # /var is a small partition on this box — prune every deploy, never fatal.
+          docker image prune -af >/dev/null 2>&1 || true
+          docker builder prune -f >/dev/null 2>&1 || true
+          echo "==> /var after prune:"; df -h /var | tail -1
+
+      - name: Health check
+        run: |
+          sleep 3
+          ZONZELF_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' zonzelf)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "http://${ZONZELF_IP}:3000/")
+          echo "zonzelf / -> ${STATUS}"
+          case "$STATUS" in
+            200) echo "Healthy." ;;
+            *) echo "Health check failed (HTTP ${STATUS})"; exit 1 ;;
+          esac

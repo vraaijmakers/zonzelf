@@ -1,9 +1,17 @@
 import Link from 'next/link'
-import { Battery, Cable, Zap, Sun, BookOpen, Settings, ChevronRight } from 'lucide-react'
+import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
 const GUIDES = [
+  {
+    icon: Workflow,
+    slug: 'how-it-works',
+    title: 'How a Solar System Works',
+    description: 'Start from a single panel and a light bulb and build up: why you need a charge controller, why you need a battery, and what "charging" vs. "supplying the house" actually means.',
+    tags: ['fundamentals', 'beginner'],
+    readTime: '14 min',
+  },
   {
     icon: Battery,
     slug: 'batteries',
@@ -19,6 +27,22 @@ const GUIDES = [
     description: 'Why draining batteries too low kills them early — and how to configure your inverter shutdown voltage for each chemistry.',
     tags: ['batteries', 'inverter', 'beginner'],
     readTime: '5 min',
+  },
+  {
+    icon: Sun,
+    slug: 'strings-and-mppt',
+    title: 'Strings, Voc & the MPPT Window',
+    description: 'Why solar panels make MORE voltage when they are cold, what the two numbers on your inverter\u2019s solar input actually mean, and how to work out how many panels can go in a string. With the formulas.',
+    tags: ['arrays', 'intermediate'],
+    readTime: '15 min',
+  },
+  {
+    icon: Ruler,
+    slug: 'choosing-panels',
+    title: 'Choosing Panels: 3 x 400 W vs 2 x 600 W',
+    description: 'Same watts, different array. What actually changes when you pick more small panels over fewer big ones \u2014 area, weight, wiring arrangements, shade, clipping, freight \u2014 and the one spec that outlives the decision.',
+    tags: ['arrays', 'buying', 'beginner'],
+    readTime: '12 min',
   },
   {
     icon: Cable,

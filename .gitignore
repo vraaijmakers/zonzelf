@@ -32,10 +32,16 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
 
+# supabase CLI — .temp/ holds a live pooler connection string with the DB
+# password embedded in plaintext (created by `supabase link`/`db push`).
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+scripts/.site-climate-cache.json

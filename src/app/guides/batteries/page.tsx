@@ -8,10 +8,14 @@ export const metadata = {
   description: 'LiFePO4 vs AGM vs Gel vs Flooded Lead-Acid. Honest comparison of every battery chemistry used in off-grid and hybrid solar systems.',
 }
 
+import { formatRoundTrip } from '@/lib/battery-chemistry'
+
 const COMPARISON = [
   { label: 'Depth of discharge',    lifepo4: '80–90%',       agm: '50%',         gel: '50%',          fla: '50%' },
   { label: 'Cycle life',            lifepo4: '3,000–6,000+', agm: '400–800',     gel: '500–1,000',    fla: '500–1,200' },
-  { label: 'Round-trip efficiency', lifepo4: '95–98%',       agm: '80–85%',      gel: '80–85%',       fla: '70–80%' },
+  // Rendered from src/lib/battery-chemistry.ts so the guide and the calculator
+  // cannot drift apart — they had, and the calculator was quietly optimistic.
+  { label: 'Round-trip efficiency', lifepo4: formatRoundTrip('lifepo4'), agm: formatRoundTrip('agm'), gel: formatRoundTrip('gel'), fla: formatRoundTrip('flooded') },
   { label: 'Maintenance',           lifepo4: 'None',         agm: 'None',        gel: 'None',         fla: 'Monthly (water)' },
   { label: 'Venting required',      lifepo4: 'No',           agm: 'No',          gel: 'No',           fla: 'Yes (H₂ gas)' },
   { label: 'BMS required',          lifepo4: 'Yes (built-in usually)', agm: 'No', gel: 'No',          fla: 'No' },
@@ -69,7 +73,7 @@ export default function BatteriesGuidePage() {
         <h1 className="text-3xl font-bold mb-3">Battery Types for DIY Solar</h1>
         <p className="text-lg text-gray-600">
           Four battery chemistries dominate DIY solar: LiFePO4, AGM, Gel, and Flooded Lead-Acid.
-          They all store energy but behave very differently. Here's what actually matters when choosing.
+          They all store energy but behave very differently. Here&apos;s what actually matters when choosing.
         </p>
       </div>
 
@@ -151,7 +155,7 @@ export default function BatteriesGuidePage() {
         </div>
         <p className="text-gray-700 mb-4">
           LiFePO4 is the safest lithium chemistry — unlike laptop or EV batteries (NMC/NCA),
-          it doesn't catch fire or experience thermal runaway under normal use. It's been the
+          it doesn&apos;t catch fire or experience thermal runaway under normal use. It&apos;s been the
           standard for serious off-grid builds for the last few years, and prices have dropped significantly.
         </p>
         <p className="text-gray-700 mb-4">
@@ -174,13 +178,48 @@ export default function BatteriesGuidePage() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cons</p>
             <Con text="Higher upfront cost ($400–600/kWh)" />
             <Con text="Needs a BMS — most batteries include one, but verify" />
-            <Con text="Don't charge below freezing without a self-heating BMS" />
+            <Con text="Charging stops (or worse, damages cells) below freezing unless the BMS and battery are rated for it — see below" />
             <Con text="Cell voltage curve is very flat — harder to gauge state of charge from voltage alone" />
           </div>
         </div>
-        <Card className="border-blue-100 bg-blue-50">
+        <Card className="border-blue-100 bg-blue-50 mb-4">
+          <CardContent className="pt-3 pb-3 space-y-2">
+            <Warn text="Charging LiFePO4 below 0°C (32°F) causes permanent lithium plating damage — this only applies to charging, not discharging; a healthy LiFePO4 bank can still supply power down to around -20°C (-4°F)." />
+            <p className="text-sm text-gray-700 pl-6">
+              Most reputable batteries have a BMS that protects the cells by simply refusing to
+              charge below freezing — which stops the damage, but also means your solar stops
+              reaching the battery for however long it stays that cold, unless the battery is
+              specifically <strong>self-heating</strong> (an internal heater that warms the cells
+              enough to resume charging — a feature, not a given). Cheaper or unbranded packs may
+              skip low-temperature charge protection entirely, in which case the damage happens
+              silently with no fault indicated until capacity has already dropped.
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-amber-100 bg-amber-50">
           <CardContent className="pt-3 pb-3">
-            <Warn text="Charging LiFePO4 at temperatures below 0°C (32°F) causes permanent lithium plating damage. If your batteries are in an unheated space in winter, look for self-heating models or add a low-temp cutoff to your charge controller." />
+            <p className="text-sm font-semibold text-amber-800 mb-2">
+              Installing in an unheated space? (shed, garage, boat, unconditioned outbuilding)
+            </p>
+            <p className="text-sm text-gray-700 mb-2">
+              Don&apos;t assume a battery has cold-charge protection because it&apos;s LiFePO4 —
+              check the datasheet for these before you buy, not after:
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
+              <li><strong>Charge temperature range</strong> — listed separately from the discharge
+                range. If the datasheet only gives one operating-temperature range, ask the
+                vendor which one it is.</li>
+              <li><strong>Self-heating</strong> — stated explicitly (&quot;low-temp heating&quot;,
+                &quot;self-heating BMS&quot;) or not present at all. Don&apos;t infer it from
+                marketing photos of snow.</li>
+              <li><strong>Low-temp charge cutoff</strong> — confirms the BMS will refuse to charge
+                below its rated minimum rather than passing current through regardless.</li>
+            </ul>
+            <p className="text-sm text-gray-700 mt-2">
+              If none of that is confirmed, plan around it: insulate or lightly heat the battery
+              enclosure, or size the bank so it can coast through the coldest stretch on stored
+              charge without needing to accept a charge while below freezing.
+            </p>
           </CardContent>
         </Card>
       </section>
@@ -194,9 +233,9 @@ export default function BatteriesGuidePage() {
         </div>
         <p className="text-gray-700 mb-4">
           AGM is a sealed lead-acid battery where the electrolyte is absorbed into fiberglass mats.
-          It doesn't spill, doesn't need water, and can be mounted in any orientation.
-          It's widely available, works with any charge controller, and requires no special settings beyond
-          selecting "AGM" on your charge controller.
+          It doesn&apos;t spill, doesn&apos;t need water, and can be mounted in any orientation.
+          It&apos;s widely available, works with any charge controller, and requires no special settings beyond
+          selecting &quot;AGM&quot; on your charge controller.
         </p>
         <p className="text-gray-700 mb-4">
           The biggest gotcha: <strong>you can only use 50% of the rated capacity</strong> before degradation
@@ -231,7 +270,7 @@ export default function BatteriesGuidePage() {
           <Badge variant="secondary">Niche use</Badge>
         </div>
         <p className="text-gray-700 mb-4">
-          Gel batteries suspend the electrolyte in silica gel. They're more tolerant of deep discharge
+          Gel batteries suspend the electrolyte in silica gel. They&apos;re more tolerant of deep discharge
           and partial state of charge than AGM, handle high temperatures slightly better, and have
           a longer cycle life. However, they have one critical limitation: they must be charged slowly.
           Charging too fast permanently damages the gel structure.
@@ -261,7 +300,7 @@ export default function BatteriesGuidePage() {
           <Badge variant="secondary">Large systems only</Badge>
         </div>
         <p className="text-gray-700 mb-4">
-          Flooded (or "wet cell") lead-acid is the oldest battery technology and still used in large
+          Flooded (or &quot;wet cell&quot;) lead-acid is the oldest battery technology and still used in large
           off-grid systems — think remote cabins, farms, telecom towers. The cells contain liquid
           electrolyte that you top up with distilled water every 1–3 months.
           They must be installed in a <strong>vented enclosure</strong> because charging produces hydrogen gas.
@@ -301,8 +340,8 @@ export default function BatteriesGuidePage() {
           degradation, and potentially fire.
         </p>
         <p className="text-gray-700">
-          The same applies to batteries of significantly different ages. If you're adding capacity,
-          buy a new matched bank and wire it separately — don't mix old and new.
+          The same applies to batteries of significantly different ages. If you&apos;re adding capacity,
+          buy a new matched bank and wire it separately — don&apos;t mix old and new.
         </p>
       </section>
 

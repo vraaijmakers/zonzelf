@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react'
+import type { LoadProfile } from './appliance-load'
 
 const listeners = new Map<string, Set<() => void>>()
 
@@ -115,16 +116,190 @@ export function usePersistentState<T>(key: string, initial: T) {
   return [value, setValue, meta, clear] as const
 }
 
+/**
+ * The appliance rows themselves, not a summary of them.
+ *
+ * Shared because the inverter step edits one field of them — the start-up
+ * multiple — and a surge factor belongs to the appliance, not to whichever
+ * page happens to be showing it. Both pages read and write the same key, and
+ * the store notifies listeners, so they stay in step.
+ */
+export interface StoredAppliance {
+  id: number
+  name: string
+  /** Draw while actually running, not the daily average. */
+  watts: number
+  /** Hours per day the appliance is in service. */
+  hours: number
+  qty: number
+  /** Fraction of those hours it actually draws power. Absent means 100%. */
+  duty?: number
+  /** When it runs — drives the battery scenarios. Absent means all day. */
+  profile?: LoadProfile
+  /** Multiple of `watts` drawn at start-up. Absent means 1x. */
+  surge?: number
+}
+
+export const LOAD_APPLIANCES_KEY = 'zonzelf:load:appliances'
+
+/**
+ * The starter list, shared by every page that reads the appliance rows.
+ *
+ * Shared rather than owned by the load page because a default that only one
+ * page knows about is a disagreement waiting to happen: nothing is written to
+ * storage until the user actually edits something, so a visitor who opens the
+ * load calculator, reads it and moves on has four appliances on one page and
+ * an empty list on the next. Same failure as rule 12b in CLAUDE.md — the seed
+ * data and the page have to agree.
+ *
+ * The surge factors here must match the presets of the same name in
+ * appliance-load.ts, or a fresh visit fires a correction chip against seed
+ * data we wrote ourselves.
+ */
+export const DEFAULT_APPLIANCES: StoredAppliance[] = [
+  { id: 1, name: 'LED light bulb', watts: 10, hours: 5, qty: 4, profile: 'evening' },
+  { id: 2, name: 'Ceiling fan',    watts: 60, hours: 8, qty: 1, surge: 2 },
+  { id: 3, name: 'Laptop',         watts: 65, hours: 6, qty: 1 },
+  { id: 4, name: 'Mini fridge',    watts: 80, hours: 24, qty: 1, duty: 0.30, surge: 3 },
+]
+
 export const LOAD_SUMMARY_KEY = 'zonzelf:load:summary'
 
 export interface LoadSummary {
-  /** Total appliance consumption, before system losses. */
+  /** Total appliance consumption at the socket, before any losses. */
   rawKwh: number
-  /** System efficiency the load calculator was set to (0.6–0.95). */
+  /**
+   * Inverter + wiring efficiency, DC to AC. Named `efficiency` for
+   * compatibility with summaries saved before the loss stages were separated;
+   * it has always been this stage in practice. See src/lib/system-efficiency.ts.
+   */
   efficiency: number
-  /** rawKwh / efficiency — what the system actually has to deliver. */
+  /** rawKwh / efficiency — what the battery has to deliver. */
   adjustedKwh: number
+  /**
+   * Daily kWh split by when each appliance runs. Absent on summaries saved
+   * before profiles existed; the battery page falls back to a flat assumption
+   * rather than pretending it knows.
+   */
+  breakdown?: {
+    always: number
+    daytime: number
+    evening: number
+    /** Added when cooling and heating became distinct classes; absent on older summaries. */
+    cooling?: number
+    heating?: number
+    total: number
+  }
+  /**
+   * Every load running at the same moment, watts. Absent on summaries saved
+   * before the inverter step existed — the inverter page recomputes from the
+   * appliance rows in that case rather than assuming a zero.
+   */
+  peakConcurrentW?: number
+  /** peakConcurrentW plus the single hardest start-up. Absent on older summaries. */
+  surgeW?: number
 }
+
+/**
+ * What the battery calculator publishes so panel sizing can use the real
+ * chemistry's round-trip efficiency instead of a generic default. Absent until
+ * the user has visited the battery calculator.
+ */
+export interface BatterySummary {
+  chemistry: string
+  /** Energy out divided by energy in, for the selected chemistry. */
+  roundTrip: number
+  /** Depth of discharge the bank was sized against. */
+  dod: number
+  /**
+   * The bank the user actually settled on, kWh. Absent on summaries saved
+   * before the system page existed — it published only what the PANEL step
+   * needed (chemistry and round trip), which meant nothing downstream could
+   * say how big the battery was. The system page needs the answer, not just
+   * the inputs to it.
+   */
+  bankKwh?: number
+  /** Amp-hours at the chosen system voltage. */
+  bankAh?: number
+  /** Days of autonomy the bank was sized for. */
+  autonomyDays?: number
+  /** Nominal DC voltage the bank runs at. */
+  systemVoltage?: number
+  /** Which scenario the figure came from, e.g. 'overnight' or 'sunless days'. */
+  scenarioLabel?: string
+  /** Low and high end of the scenario band, kWh — the honest spread. */
+  bandMinKwh?: number
+  bandMaxKwh?: number
+  /**
+   * Present when the pack came from BATTERY_PRESETS rather than chemistry
+   * alone. Summaries saved before the commissioning map existed omit this,
+   * and that is a real runtime case — the map stays hidden until a known
+   * id is published. See CLAUDE.md 12b.
+   */
+  presetId?: string
+  brand?: string
+  model?: string
+  sourceUrl?: string
+  /** Series cell count from the admitted row, e.g. 16 for a 51.2 V LiFePO4. */
+  seriesCount?: number
+}
+
+export const BATTERY_SUMMARY_KEY = 'zonzelf:battery:summary'
+
+/**
+ * What the panel calculator publishes so the battery page can check whether
+ * the array actually refills the bank. Absent until the user has visited
+ * the panel calculator.
+ */
+export interface PanelSummary {
+  peakSunHours: number
+  worstMonthHours: number
+  worstMonthName: string
+  /** Installed nameplate watts after rounding up to a whole number of panels. */
+  arrayWatts: number
+  arrayDerate: number
+  panelWatt: number
+  panels: number
+}
+
+export const PANEL_SUMMARY_KEY = 'zonzelf:panels:summary'
+
+/**
+ * The unit chosen at the inverter step, and every PV specification the array
+ * step needs to design a string against it.
+ *
+ * This is the summary that changed the order of the chain. A string cannot be
+ * designed without a tracker's voltage window, so the array step is blocked
+ * until this exists — and that is the honest answer to give, rather than
+ * sizing an arrangement against a default nobody chose.
+ */
+export interface InverterSummary {
+  /**
+   * Present when the unit came from INVERTER_PRESETS. Typed-in units have
+   * brand/model but no id, and the commissioning map stays hidden for those.
+   */
+  id?: string
+  /** Present when the unit came from the preset list rather than typed in. */
+  brand?: string
+  model?: string
+  acContinuousW: number
+  acSurgeW: number
+  dcSystemVoltage: number
+  /** The damage ceiling. A string's cold Voc is checked against this. */
+  pvMaxInputV: number
+  mpptMinV: number
+  mpptMaxV: number
+  mpptStartV?: number
+  mpptCount: number
+  pvMaxPowerW: number
+  pvMaxCurrentA: number
+  pvMaxIscA?: number
+  maxChargeCurrentA?: number
+  /** Manufacturer datasheet, when the unit came from the preset list. */
+  sourceUrl?: string
+}
+
+export const INVERTER_SUMMARY_KEY = 'zonzelf:inverter:summary'
 
 /** The result the load calculator last published, or null if it was never used. */
 export function useLoadSummary(): LoadSummary | null {
@@ -134,6 +309,137 @@ export function useLoadSummary(): LoadSummary | null {
 
 export function publishLoadSummary(summary: LoadSummary) {
   writeStored(LOAD_SUMMARY_KEY, summary)
+}
+
+/** The chemistry the battery calculator last used, or null if never visited. */
+export function useBatterySummary(): BatterySummary | null {
+  const [summary] = usePersistentState<BatterySummary | null>(BATTERY_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishBatterySummary(summary: BatterySummary) {
+  writeStored(BATTERY_SUMMARY_KEY, summary)
+}
+
+export function usePanelSummary(): PanelSummary | null {
+  const [summary] = usePersistentState<PanelSummary | null>(PANEL_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishPanelSummary(summary: PanelSummary) {
+  writeStored(PANEL_SUMMARY_KEY, summary)
+}
+
+/**
+ * The arrangement chosen at the array step. Published for the cable step,
+ * which needs the array's design current and can pre-set its circuit type.
+ */
+export interface ArraySummary {
+  series: number
+  parallel: number
+  panels: number
+  arrayWatts: number
+  /** String voltage at the design low. The number that destroys inverters. */
+  vocColdV: number
+  /** String working voltage at the design high. */
+  vmpHotV: number
+  /** Design current into the worst-loaded tracker, after NEC 690.8(A)(1)'s 125%. */
+  designIscA: number
+  /**
+   * ONE panel's short-circuit current, raw — no code factor applied.
+   *
+   * Carried separately from designIscA on purpose. The cable step applies its
+   * own 156% for a PV source circuit, so handing it the already-multiplied
+   * figure would apply the factor twice and oversize everything.
+   */
+  panelIscA: number
+  /** Strings on the worst-loaded tracker, for sizing the combiner run. */
+  stringsPerTracker: number
+  designLowC: number
+  designHighC: number
+  /** Null when the panel's max series fuse rating was not entered. */
+  stringFuseRequired: boolean | null
+}
+
+export const ARRAY_SUMMARY_KEY = 'zonzelf:array:summary'
+
+export function useArraySummary(): ArraySummary | null {
+  const [summary] = usePersistentState<ArraySummary | null>(ARRAY_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishArraySummary(summary: ArraySummary) {
+  writeStored(ARRAY_SUMMARY_KEY, summary)
+}
+
+/**
+ * One cable run the user has sized and settled on.
+ *
+ * The cable step is the only one in the chain that is a TOOL RUN REPEATEDLY
+ * rather than a step with a single answer — a system has four distinct runs
+ * and each needs its own gauge. That is why it published nothing for so long,
+ * and why the chain dead-ended there: every other step could be detected as
+ * done and this one never could.
+ *
+ * `awg` is the user's CHOICE among the gauges that passed, not a
+ * recommendation. The conductor output is a protection-register view: it shows
+ * the set that satisfies both limits and refuses to name one. Recording which
+ * one was picked is the honest way to remember a decision the calculator
+ * declined to make.
+ *
+ * `runId` is a plain string rather than the RunId union so this module does
+ * not have to import from circuit-runs.ts, which imports from here. `label`
+ * makes the record self-describing wherever it is read.
+ */
+export interface SizedRun {
+  runId: string
+  /** Human name of the run, e.g. "Battery → inverter". */
+  label: string
+  /** Operating current entered, before any code factor. */
+  amps: number
+  /** Circuit voltage the drop was measured against. */
+  volts: number
+  oneWayFeet: number
+  /** The gauge the user settled on, from the passing set. */
+  awg: number
+  awgLabel: string
+  /** Standard device ratings that may protect it, smallest first. */
+  ocpdOptionsA: number[]
+  /** Voltage drop at the chosen gauge, percent. */
+  dropPercent: number
+  /** 'general' or 'pv-source' — decides the 125% vs 156% factor. */
+  kind: string
+  /** Terminal temperature column used, degC. */
+  column: number
+}
+
+/**
+ * The runs sized so far. Keyed by run so re-sizing one replaces it rather
+ * than appending a second record for the same cable.
+ */
+export interface ProtectionSummary {
+  runs: SizedRun[]
+}
+
+export const PROTECTION_SUMMARY_KEY = 'zonzelf:protection:summary'
+
+export function useProtectionSummary(): ProtectionSummary | null {
+  const [summary] = usePersistentState<ProtectionSummary | null>(PROTECTION_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishProtectionSummary(summary: ProtectionSummary) {
+  writeStored(PROTECTION_SUMMARY_KEY, summary)
+}
+
+/** The inverter chosen at step 3, or null until that step has been used. */
+export function useInverterSummary(): InverterSummary | null {
+  const [summary] = usePersistentState<InverterSummary | null>(INVERTER_SUMMARY_KEY, null)
+  return summary
+}
+
+export function publishInverterSummary(summary: InverterSummary) {
+  writeStored(INVERTER_SUMMARY_KEY, summary)
 }
 
 export const round2 = (n: number) => Math.round(n * 100) / 100

@@ -1,0 +1,175 @@
+name: Scrape — batteries
+
+# The second half of roadmap item "Battery scraper: re-scrape scheduling +
+# published-row review gate". The gate shipped 2026-09-09; this is the schedule
+# it was waiting for.
+#
+# WHY THIS COULD NOT BE TURNED ON EARLIER. Until the gate, every scraper
+# upserted `on conflict (source_url)` — a re-run rewrote an already-published
+# row's specs and price, so a battery listed on /calculators/battery could
+# change with nobody in the loop, and every EG4 re-scrape wiped the affiliate
+# price scrape-signaturesolar.ts had filled in. A weekly job would have
+# automated that. Now a published row's change lands in battery_model_revisions
+# as a proposal and an admin applies it in /admin/batteries, so the worst a
+# scheduled run can do is queue something for review.
+#
+# WHAT MAKES A RUN FAIL. Nothing here reads the scraper output — each scraper
+# judges itself through src/lib/scrape-health.ts and exits non-zero when it
+# collected nothing it was supposed to collect, or when a write errored. A site
+# redesign therefore turns this job red instead of printing "Parsed 0/0" behind
+# a green tick. See that file for the reasoning.
+#
+# ONE-TIME SETUP (GitHub → Settings → Secrets and variables → Actions → New
+# repository secret). Both come from Supabase → Settings → API:
+#   NEXT_PUBLIC_SUPABASE_URL    the project URL
+#   SUPABASE_SERVICE_ROLE_KEY   the service_role key, labelled "secret"
+# zonzelf is a PUBLIC repo, so this is worth being precise about: repository
+# secrets are not exposed to workflows triggered by forks, and this workflow has
+# no pull_request trigger at all, so no untrusted code path can reach them. The
+# key stays out of the tree either way — rule 9, rule 14.
+#
+# WHICH DATABASE THIS WRITES TO. Whichever project those secrets name, which is
+# today the single hosted project shared by staging and local dev. Revisit when
+# the roadmap item "Separate staging and production Supabase projects" lands —
+# a scheduled writer pointed at production is a different risk than one pointed
+# at a shared dev project.
+
+on:
+  schedule:
+    # Weekly, Monday 06:17 UTC. Battery specs do not change daily, but price
+    # does, and price is the affiliate line. Weekly is also the cadence
+    # battery_model_revisions was designed for: its partial unique index allows
+    # one open proposal per battery, so a run replaces its own earlier proposal
+    # instead of stacking one per battery per week into a queue nobody reads.
+    # The odd minute is deliberate — GitHub delays scheduled jobs that pile up
+    # on the hour.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Run one scraper instead of all five'
+        type: choice
+        default: all
+        options: [all, eg4, victron, sungoldpower, a1solarstore, signaturesolar]
+
+# Never cancel a run half-way through writing. Two overlapping runs would race
+# each other's proposals; a queued one simply waits.
+concurrency:
+  group: scrape-batteries
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    name: Re-scrape battery models
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      ONLY: ${{ inputs.only || 'all' }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        # 22 rather than ci.yml's 20 for --env-file-if-exists, which the
+        # scrape:* scripts use so they need no .env.local here — the
+        # credentials arrive as env vars from secrets above, never as a file.
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check the secrets are set
+        # Without this, a missing secret shows up as five identical failures
+        # deep in five scraper logs. Fail once, at the top, saying what to do.
+        run: |
+          MISSING=""
+          [ -n "$NEXT_PUBLIC_SUPABASE_URL" ] || MISSING="$MISSING NEXT_PUBLIC_SUPABASE_URL"
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || MISSING="$MISSING SUPABASE_SERVICE_ROLE_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing repository secret(s):$MISSING — see the header of this workflow file."
+            exit 1
+          fi
+          echo "Both secrets present."
+
+      # ORDER MATTERS, and only in one place: scrape-signaturesolar.ts does not
+      # insert, it fills a reseller price in on rows a manufacturer scrape
+      # created (EG4's own site lists no price). Running it last means a model
+      # EG4 added this morning is priced in the same run rather than next week.
+      # The other four are independent sources.
+      #
+      # continue-on-error on each, aggregated at the end: one brand's site being
+      # down should not cost a week of the other four. The final step is what
+      # turns the run red.
+
+      - name: EG4
+        id: eg4
+        if: env.ONLY == 'all' || env.ONLY == 'eg4'
+        continue-on-error: true
+        run: npm run scrape:eg4
+
+      - name: Victron
+        id: victron
+        if: env.ONLY == 'all' || env.ONLY == 'victron'
+        continue-on-error: true
+        run: npm run scrape:victron
+
+      - name: SunGoldPower
+        id: sungoldpower
+        if: env.ONLY == 'all' || env.ONLY == 'sungoldpower'
+        continue-on-error: true
+        run: npm run scrape:sungoldpower
+
+      - name: A1 SolarStore
+        id: a1solarstore
+        if: env.ONLY == 'all' || env.ONLY == 'a1solarstore'
+        continue-on-error: true
+        run: npm run scrape:a1solarstore
+
+      - name: Signature Solar (prices EG4 rows — runs last)
+        id: signaturesolar
+        if: env.ONLY == 'all' || env.ONLY == 'signaturesolar'
+        continue-on-error: true
+        run: npm run scrape:signaturesolar
+
+      - name: Report
+        if: always()
+        env:
+          RESULTS: |
+            eg4=${{ steps.eg4.outcome }}
+            victron=${{ steps.victron.outcome }}
+            sungoldpower=${{ steps.sungoldpower.outcome }}
+            a1solarstore=${{ steps.a1solarstore.outcome }}
+            signaturesolar=${{ steps.signaturesolar.outcome }}
+        run: |
+          {
+            echo "### Battery re-scrape"
+            echo ""
+            echo "| Scraper | Result |"
+            echo "| --- | --- |"
+            echo "$RESULTS" | while IFS='=' read -r name outcome; do
+              [ -n "$name" ] || continue
+              case "$outcome" in
+                success) icon="✅ ok" ;;
+                failure) icon="❌ failed" ;;
+                skipped|"") icon="— not run" ;;
+                *) icon="$outcome" ;;
+              esac
+              echo "| $name | $icon |"
+            done
+            echo ""
+            echo "New and changed rows are unpublished or queued as proposals — nothing reaches"
+            echo "a visitor until an admin applies them in /admin/batteries."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if echo "$RESULTS" | grep -q '=failure'; then
+            echo "::error::One or more scrapers failed. A scraper fails when it collected nothing it should have, or a write errored — open its step log."
+            exit 1
+          fi
+          echo "All scrapers that ran, ran clean."
