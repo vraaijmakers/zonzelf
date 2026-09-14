@@ -23,7 +23,14 @@ on:
     # Thursday 08:23 UTC — a working day, so a nag has somewhere to go.
     - cron: '23 8 * * 4'
   push:
-    branches: [staging]
+    # BOTH branches, and main is the half that is easy to leave out. A push to
+    # staging is drift being CREATED; a push to main is drift being RESOLVED,
+    # and this workflow is the only thing that closes the issue it opened. With
+    # staging alone, the v0.13.0 release left issue #100 standing with nothing
+    # due to run until the Thursday cron, still saying main was behind when it
+    # no longer was -- contradicting the sentence in its own body that promises
+    # it closes itself. It took a workflow_dispatch by hand to clear.
+    branches: [main, staging]
   workflow_dispatch:
 
 permissions:
