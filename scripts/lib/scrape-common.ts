@@ -98,6 +98,20 @@ function summarize(changes: FieldChange[]): string {
   return changes.map(c => c.field).join(', ')
 }
 
+/**
+ * Did this scrape actually read a price off the page?
+ *
+ * Only then may price_scraped_at move. scrape-eg4.ts and the other
+ * manufacturer scrapers send `price_usd: null` because their sources state no
+ * price, and diffScrapedFields() drops nulls ("silence is not a correction") —
+ * so without this check every EG4 run would re-date a price it never looked
+ * at, which is the failure the column was added to prevent. See
+ * supabase/migrations/20260914000001_battery_models_price_scraped_at.sql.
+ */
+function assertsPrice(patch: ScrapedRecord): boolean {
+  return patch.price_usd != null
+}
+
 export function tallyOutcomes(outcomes: ScrapeOutcome[]): string {
   const counts = new Map<ScrapeOutcome, number>()
   for (const outcome of outcomes) counts.set(outcome, (counts.get(outcome) ?? 0) + 1)
@@ -123,7 +137,12 @@ async function gateWrite(
     // is worth recording — it's what makes a stale row visible later.
     const { error } = await supabase
       .from('battery_models')
-      .update({ scraped_at: now })
+      .update({
+        scraped_at: now,
+        // Nothing changed, so a price in this patch equals the live one: the
+        // reseller still quotes it today and the row can say so.
+        ...(assertsPrice(patch) ? { price_scraped_at: now } : {}),
+      })
       .eq('id', existing.id)
     if (error) {
       console.error(`  ✗ ${label}: touching scraped_at failed: ${error.message}`)
@@ -140,7 +159,13 @@ async function gateWrite(
     // so a second queue in front of it would just be a queue in front of a queue.
     const { error } = await supabase
       .from('battery_models')
-      .update({ ...proposed, scraped_at: now })
+      .update({
+        ...proposed,
+        scraped_at: now,
+        // Written in place, so whatever price this patch carries is the live
+        // one as of now — whether it changed or merely held.
+        ...(assertsPrice(patch) ? { price_scraped_at: now } : {}),
+      })
       .eq('id', existing.id)
     if (error) {
       console.error(`  ✗ ${label}: update failed: ${error.message}`)
@@ -201,6 +226,23 @@ async function gateWrite(
   // battery_models.scraped_at deliberately NOT touched here. It dates the live
   // values, and the live values were not re-confirmed — the source disagrees
   // with them. The revision carries its own scraped_at.
+  //
+  // price_scraped_at is the one exception, and only when the disagreement is
+  // about something else: if the source quoted a price and it MATCHED, the
+  // live price was re-confirmed even though the retailer_url (say) moved.
+  // Leaving it stale would age out a price a scrape just verified. When the
+  // price is itself what changed, it stays put — the new price is in the
+  // proposal, and applying that is what dates it.
+  if (assertsPrice(patch) && !changes.some(c => c.field === 'price_usd')) {
+    const { error: priceDateError } = await supabase
+      .from('battery_models')
+      .update({ price_scraped_at: now })
+      .eq('id', existing.id)
+    if (priceDateError) {
+      console.error(`  ! ${label}: re-dating the confirmed price failed: ${priceDateError.message}`)
+    }
+  }
+
   console.log(`  → ${label} — PUBLISHED row, change proposed for review (${summarize(changes)})`)
   return 'proposed'
 }
@@ -243,9 +285,17 @@ export async function upsertBatteries(
     }
 
     if (rows.length === 0) {
+      const insertedAt = new Date().toISOString()
       const { error: insertError } = await supabase
         .from('battery_models')
-        .insert({ ...battery, scraped_at: new Date().toISOString(), is_published: false })
+        .insert({
+          ...battery,
+          scraped_at: insertedAt,
+          // A brand-new row's price, where the source states one, is as fresh
+          // as the row itself. Manufacturer scrapes send null and stay undated.
+          ...(assertsPrice(battery) ? { price_scraped_at: insertedAt } : {}),
+          is_published: false,
+        })
       if (insertError) {
         console.error(`  ✗ ${label}: insert failed: ${insertError.message}`)
         outcomes.push('failed')

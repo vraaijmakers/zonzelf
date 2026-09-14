@@ -92,7 +92,16 @@ export async function applyBatteryRevision(revisionId: number) {
   // a duplicate click rather than a lost or half-applied change.
   const { error: updateError } = await supabase
     .from('battery_models')
-    .update({ ...patch, scraped_at: revision.scraped_at })
+    .update({
+      ...patch,
+      scraped_at: revision.scraped_at,
+      // Applying a proposed price is what dates it — the scraper deliberately
+      // left price_scraped_at alone when it raised the proposal, because the
+      // live price disagreed with the source. Dated to when the SCRAPER saw
+      // the price, not to this click: a review can sit for days, and stamping
+      // it now would conceal exactly the age the column exists to show.
+      ...(patch.price_usd != null ? { price_scraped_at: revision.scraped_at } : {}),
+    })
     .eq('id', revision.battery_model_id)
 
   if (updateError) {
