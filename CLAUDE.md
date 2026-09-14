@@ -353,7 +353,8 @@ dynamic route works — request it.**
 3. PR `feature/* → develop`. Merge after CI is green.
 4. Bump `VERSION` on `develop`, then PR `develop → staging`.
 5. Validate on staging (`0.2.0-rc`). Fixes go `bugfix/* → develop → staging`.
-6. PR `staging → main`. Tag it: `git tag v0.2.0 && git push origin v0.2.0`.
+6. PR `staging → main` with `npm run release:open`. **Do not tag by hand** — `release-tag.yml`
+   tags `main` from `VERSION` on merge, and a manual tag collides with it.
 
 ### Rules
 
