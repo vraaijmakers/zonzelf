@@ -7,7 +7,7 @@ import {
 export const metadata = {
   title: 'One Ground System, Not Two — ZonZelf Guide',
   description:
-    'Your array is a hundred feet from the cabin, with earth rods at both ends. Bond them into one grounding electrode system or leave them separate? Why a surge protector at the array makes the bond more urgent, not less — and why the ground-loop counter-argument inverts its own physics.',
+    'Your array is a hundred feet from the cabin, with earth rods at both ends. Bond them into one grounding electrode system or leave them separate? Why a surge protector at the array makes the bond more urgent, not less, where the SPDs actually go, and why the ground-loop counter-argument inverts its own physics.',
 }
 
 /**
@@ -41,6 +41,27 @@ export const metadata = {
  * remove the loop, it only removes the copper from it. The genuine
  * objectionable-current rule (250.6) is about a second NEUTRAL-GROUND bond,
  * which is the conflation that keeps the argument alive.
+ *
+ * SPD PLACEMENT IS ITS OWN QUESTION and got its own section after a reader asked
+ * it directly: they had put the SPD at the array "because that made sense". It
+ * does make sense, and the fix is not to correct the instinct but to name the
+ * rule it is missing -- AN SPD PROTECTS WHAT IS NEXT TO IT. It clamps at its
+ * own terminals against its own reference; it does not sanitise the circuit or
+ * reach down the wire. Everything else (the 10 m threshold, the 0.5 m rule,
+ * coordination, the common ground bar) falls out of that one sentence.
+ *
+ * THE MANUAL OFTEN SAYS THIS ALREADY. SunGold's requires a Type 2 at BOTH ends
+ * and states the inverter has no built-in SPD on either side. Citing the
+ * manufacturer beats citing IEC at a reader who owns the manual, so the page
+ * does both and leads with the standard.
+ *
+ * THE FLOATING-ARRAY ARGUMENT is the strongest form of the ground-loop answer
+ * and was missing from the first version, which only argued that the loop is
+ * worth having. Better: in normal operation IT IS NOT A CLOSED CIRCUIT. The PV
+ * conductors float (transformerless inverters require it and monitor it), the
+ * SPDs are open until they clamp, and the bonding copper carries nothing. No
+ * circuit, no circulating current. The clamp-meter test makes it checkable, and
+ * the PV-isolation warning turns a degraded SPD into a named suspect.
  *
  * CODE EDITION DRIFT IS REAL in this corner of the NEC — 690.47 has been
  * renumbered or rewritten in most cycles since 2011, and the array-electrode
@@ -247,13 +268,61 @@ function JobsTable() {
   )
 }
 
+function PlacementTable() {
+  const rows: [string, string, string][] = [
+    [
+      'At the array',
+      'Type 2 DC PV SPD, in an enclosure rated for outdoors',
+      'Where the surge gets in. Limits what is handed to the cable.',
+    ],
+    [
+      'At the inverter, within about 0.5 m of the DC terminals',
+      'Type 2 DC PV SPD, same voltage rating, usually a DIN-rail unit',
+      'Protects the inverter. The array unit is far too distant to do it.',
+    ],
+    [
+      'At the first AC distribution panel',
+      'Type 2 AC SPD — a different device, not a spare DC one',
+      'Different circuit, different surge path, commonly forgotten.',
+    ],
+  ]
+  return (
+    <div className="my-5 overflow-x-auto rounded-xl border border-zon-rule">
+      <table className="w-full text-sm">
+        <caption className="sr-only">Where surge protective devices go and which type belongs at each place</caption>
+        <thead>
+          <tr className="border-b border-zon-rule bg-zon-cream text-left text-zon-muted">
+            <th scope="col" className="px-4 py-2 font-medium">Where</th>
+            <th scope="col" className="px-4 py-2 font-medium">What</th>
+            <th scope="col" className="px-4 py-2 font-medium">Doing what</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([where, what, why]) => (
+            <tr key={where} className="border-b border-zon-rule-soft last:border-0">
+              <td className="px-4 py-3 font-medium text-zon-ink">{where}</td>
+              <td className="px-4 py-3 text-zon-body">{what}</td>
+              <td className="px-4 py-3 text-zon-body">{why}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="border-t border-zon-rule bg-zon-cream px-4 py-2 text-xs text-zon-muted">
+        Type 2 at both DC ends is the usual answer. A structure carrying an external lightning
+        protection system can push the array end up to Type 1 or Type 1+2 — the end that grows
+        is the array, never the inverter.
+      </p>
+    </div>
+  )
+}
+
 export default function OneGroundSystemPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
       <GuideBreadcrumb current="One ground system, not two" />
       <GuideHeader
         badges={['Safety', 'Wiring']}
-        minutes="16 min read"
+        minutes="20 min read"
         title="One Ground System, Not Two"
         lede="Your array sits a hundred feet from the cabin. There are earth rods at the array and an earth rod at the building. Do you join them, or keep them separate? Put a surge protector at the array and this stops being a tidiness question — it becomes the difference between a protected inverter and a dead one."
       />
@@ -271,6 +340,11 @@ export default function OneGroundSystemPage() {
           SPD clamps the PV conductors to <em>its own</em> ground reference. If that reference
           is not the inverter&apos;s, the SPD does its job perfectly and hands the array&apos;s
           full ground potential rise to the inverter&apos;s input.
+        </p>
+        <p>
+          <strong>And it does not protect the inverter from where it is.</strong> An SPD
+          protects what is next to it. Past about 10 m of DC cable you want one at each end —
+          your inverter manual may already require it.
         </p>
         <p>
           And separately: the rods at the array do <em>not</em> ground the array. An equipment
@@ -427,35 +501,136 @@ export default function OneGroundSystemPage() {
         A tell for spotting it in the wild: the people making it usually also plan to add an SPD
         out at the array, referenced to a rod there. That is a second electrode. It always was.
       </P>
+      <P>
+        For a PV array there is a sharper version of the answer, and it dissolves the worry
+        rather than merely outweighing it: <strong>in normal operation that loop is not a
+        closed circuit at all.</strong>
+      </P>
+      <P>
+        Most transformerless inverters require the array to <em>float</em> — neither PV+ nor
+        PV− bonded to earth — and monitor the isolation continuously, faulting if that ever
+        changes. Your manual almost certainly says so; SunGold&apos;s says &ldquo;Please do not
+        make PV positive or negative ground!&rdquo; twice on the same page. And an SPD is an
+        open circuit until it clamps: metal-oxide varistors and a gas discharge tube that
+        conduct on overvoltage and do nothing whatsoever the rest of the time.
+      </P>
+      <P>
+        So count the closed circuits in the loop you are worried about. The PV conductors
+        float. The SPDs at both ends are open. The inverter&apos;s PV input is galvanically
+        isolated. The bonding copper between the electrodes carries nothing. A circulating
+        current needs a circuit, and there is not one — the bond is a standby equaliser sitting
+        at zero until the day it has work to do.
+      </P>
+      <Note>
+        <p>
+          <strong>You can prove this with a clamp meter.</strong> Put a clamp around the
+          conductor running between the two electrodes. A healthy system reads essentially
+          zero. If it reads real current, you have found a genuine fault — a second
+          neutral-to-ground bond, or a ground fault — and that is diagnostic information, not a
+          reason to cut the wire.
+        </p>
+      </Note>
+      <Warn>
+        <p>
+          The corollary: <strong>do not ground PV+ or PV−.</strong> Bonding frames and
+          electrodes is not the same act as grounding a current-carrying conductor, and on an
+          isolation-monitored inverter the second one is a fault, not a precaution. If you ever
+          see a <em>PV isolation</em> alarm, the inverter is telling you something has grounded
+          the array — and a degraded SPD is a prime suspect, because varistors fail toward a
+          short. Check the SPD status windows before hunting for a pinched cable.
+        </p>
+      </Warn>
 
-      <H2 id="spd-count">One SPD or two?</H2>
+      <H2 id="spd-placement">Where the SPD goes</H2>
       <P>
-        Given the above, the follow-up question is whether the array SPD is enough. On a run
-        this long, no.
+        Almost everyone puts the surge protector at the array, and the reasoning is sound: that
+        is the part standing out in the weather, it is where the surge gets in, so protect it
+        there. That instinct is right. It is just not the whole job, and the reason why is the
+        single most useful thing to understand about these devices.
+      </P>
+      <Warn>
+        <p>
+          <strong>An SPD protects what is next to it.</strong> It clamps at its own terminals,
+          against its own ground reference. It does not sanitise the circuit it sits on, and it
+          does not reach down the wire. An SPD at the array protects the array and limits what
+          gets handed to the cable. It is not protecting an inverter thirty metres away, and it
+          was never able to.
+        </p>
+      </Warn>
+      <P>
+        Two things defeat it over that distance. The cable between develops its own induced
+        surge — at that length it behaves more like an antenna than a wire — and the array SPD
+        is referenced to a ground the inverter may not even share, which is the failure this
+        whole page is about.
       </P>
       <P>
-        The international PV standards (IEC 60364-7-712, and IEC 61643-32 for the devices
-        themselves) use roughly <strong>10 m of DC cable</strong> as the threshold. Under it,
-        a single SPD covers both ends — the run is short enough that both ends see much the
-        same event. Over it, the cable run is long enough to develop its own induced surge, it
-        behaves as an antenna rather than a wire, and both ends want their own protection.
+        So the international PV standards (IEC 60364-7-712, and IEC 61643-32 for the devices
+        themselves) put the threshold at roughly <strong>10 m of DC cable</strong>. Under it,
+        one SPD covers both ends, because both ends see much the same event. Over it, both ends
+        want their own.
       </P>
       <P>
-        A hundred feet is thirty metres: three times the threshold. So a DC SPD at the inverter
-        end is the design answer even though the array already has one. The NEC does not spell
+        A hundred feet is thirty metres — three times the threshold. The NEC does not spell
         this out for DC PV circuits, which is exactly why plenty of otherwise careful builds
-        have one SPD and stop there.
+        fit one SPD and stop. Your inverter manual may well be less coy: SunGold&apos;s says a
+        Type 2 SPD &ldquo;should be fitted at the inverter end of the DC cabling <em>and</em>{' '}
+        at the array,&rdquo; and notes in the same breath that the inverter &ldquo;is not
+        fitted with SPDs in both PV input side and MAINS side.&rdquo; Check yours before
+        assuming anything is built in.
       </P>
+      <PlacementTable />
+
+      <H2 id="spd-spec">Is it the same device at both ends?</H2>
+      <P>
+        Mostly, and the part that must match is the part people worry about least.
+      </P>
+      <P>
+        <strong>The voltage rating has to match, because the circuit is the same.</strong> Both
+        ends see the same DC voltage, so both need a maximum continuous operating voltage that
+        clears your temperature-corrected cold Voc with margin. If the array unit is correctly
+        rated, that same rating is correct at the inverter. Size it the way the string guide
+        sizes everything else: from cold Voc, not from the nominal number on the panel.
+      </P>
+      <P>
+        <strong>The enclosure usually differs.</strong> The array unit is outdoors and needs the
+        weather rating and UV tolerance to go with it. The inverter-end unit is typically a
+        DIN-rail device inside the DC disconnect. Same electrical class, different packaging.
+      </P>
+      <P>
+        <strong>The class can differ, but only upward and only at the array.</strong> Type 2 at
+        both ends is the normal answer where there is no external lightning protection system.
+        Where an LPS is present and separation distances are not maintained, the array end sits
+        on a lightning protection zone boundary and may need Type 1 or Type 1+2. The inverter
+        end stays Type 2 either way.
+      </P>
+      <Note>
+        <p>
+          <strong>Two SPDs on one circuit have to cooperate</strong>, or the downstream one
+          takes energy meant for the upstream one. They coordinate through the inductance of
+          the cable between them, and about 10 m is enough to do it — which is the same
+          threshold, arriving from the other direction. Below that you would be fitting a
+          decoupling inductor. On a hundred-foot run the cable does it for free.
+        </p>
+      </Note>
       <Note>
         <p>
           <strong>Lead length is not a detail.</strong> The voltage developed across any
           conductor during a surge is proportional to how fast the current changes, and a surge
           changes fast. A foot of ground lead with a sharp bend in it can add kilovolts to what
           the protected equipment actually sees, entirely defeating the SPD&apos;s clamping
-          voltage. Mount the SPD at the ground bar with the shortest, straightest lead the
-          enclosure allows — not at the end of a tidy-looking tail.
+          voltage. This is why the inverter-end device belongs within about half a metre of the
+          DC terminals, and why its ground lead wants to be short and straight rather than
+          tidy.
         </p>
       </Note>
+      <P>
+        One last placement rule, and it is the bridge back to the rest of this page: an SPD has
+        to share a ground reference with the equipment it is protecting. Land the inverter-end
+        SPD grounds and the inverter chassis ground on a <strong>common ground bar</strong>,
+        with one conductor from that bar to the electrode — not on separate journeys that
+        happen to end at the same rod. 250.70 rules out stacking conductors under one clamp
+        unless it is listed for it, so a bar is the tidy answer as well as the correct one.
+      </P>
 
       <H2 id="egc">The rods do not ground the array</H2>
       <P>
