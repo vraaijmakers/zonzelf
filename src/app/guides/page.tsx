@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, Footprints, ChevronRight } from 'lucide-react'
+import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, Footprints, Caravan, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -19,6 +19,14 @@ const GUIDES = [
     description: 'The calculators are seven steps, not seven tools. A stick-figure walk through why you start at your appliances, pick the inverter before the panels, and only then size the cables.',
     tags: ['fundamentals', 'beginner', 'calculators'],
     readTime: '5 min',
+  },
+  {
+    icon: Caravan,
+    slug: 'boats-and-rvs',
+    title: 'A Boat Is Not a Small Cabin',
+    description: 'Every number here is derived for a building that stays where you put it. What transfers to a boat, a van or an RV, what does not transfer at all, and the two mistakes \u2014 the alternator and the shore-power ground \u2014 that cost the most money.',
+    tags: ['scope', 'safety', 'beginner'],
+    readTime: '11 min',
   },
   {
     icon: Battery,
