@@ -3,6 +3,8 @@ import { Zap, Battery, Sun, Cable, Plug, PanelsTopLeft, ClipboardList, ChevronRi
 import type { LucideIcon } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CALC_STEPS, TOTAL_STEPS, type StepId } from '@/lib/calc-steps'
+import { SizingStoryTeaser } from '@/components/guides/SizingStory'
+import { SIZING_STORY_HREF } from '@/lib/sizing-story'
 
 /**
  * The index and the step spine read from the same list, so they cannot drift.
@@ -51,10 +53,15 @@ export default function CalculatorsPage() {
           feeds the next, so start at the top — the numbers carry forward on their own.
         </p>
         <p className="mt-2 text-sm text-zon-muted">
-          Steps marked <span className="font-medium">soon</span> are not built yet. They are
-          listed because a system needs them: the chain does not end at cable sizing.
+          New here?{' '}
+          <Link href={SIZING_STORY_HREF} className="font-medium text-zon-gold-deep hover:underline">
+            Why this order, in seven pictures
+          </Link>
+          .
         </p>
       </div>
+
+      <SizingStoryTeaser />
 
       <ol className="grid gap-5 md:grid-cols-2">
         {CALC_STEPS.map(step => {
