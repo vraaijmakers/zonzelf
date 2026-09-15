@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Battery, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { Battery, ChevronDown, ChevronUp, ExternalLink, ShoppingCart } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -29,6 +29,8 @@ import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { createClient } from '@/lib/supabase/client'
 import { priceDisplay, formatAsOf } from '@/lib/battery-price'
+import { buyLink, anyPaid, relFor } from '@/lib/affiliate'
+import AffiliateDisclosure from '@/components/AffiliateDisclosure'
 
 type BatteryModelMatch = {
   id: number
@@ -40,6 +42,13 @@ type BatteryModelMatch = {
   price_usd: number | null
   price_scraped_at: string | null
   source_url: string
+  /**
+   * The shop, when a reseller scrape found one. Not every priced row has one:
+   * SunGoldPower sells from its own site, so for those rows source_url is both
+   * the citation and the shop — buyLink() in src/lib/affiliate.ts is what
+   * reconciles the two shapes.
+   */
+  retailer_url: string | null
 }
 
 // Real battery packs are 12.8V/25.6V/51.2V nominal, not the rounded 12/24/48
@@ -292,7 +301,7 @@ export default function BatterySizingPage() {
     const supabase = createClient()
     supabase
       .from('battery_models')
-      .select('id, brand, model, voltage, capacity_ah, capacity_kwh, price_usd, price_scraped_at, source_url')
+      .select('id, brand, model, voltage, capacity_ah, capacity_kwh, price_usd, price_scraped_at, source_url, retailer_url')
       .eq('chemistry', battery.id)
       .order('capacity_kwh', { ascending: true })
       .then(({ data, error }) => {
@@ -308,6 +317,13 @@ export default function BatterySizingPage() {
   // React Compiler cannot preserve a manual memo over it. It memoizes this for
   // us, and the filter is a pass over a short list either way.
   const matchingModels = allModels.filter(m => voltageFamily(m.voltage) === effectiveVoltage)
+
+  // Each card paired with the shop link it carries, derived once so the
+  // disclosure and the buttons cannot disagree about what is paid — that is
+  // the whole FTC argument in src/lib/affiliate.ts. Plain derivation for the
+  // same reason as above.
+  const shelf = matchingModels.map(m => ({ model: m, link: buyLink(m) }))
+  const shelfIsPaid = anyPaid(shelf.map(s => s.link))
 
   // What the sticky strip shows once the answer card scrolls away. The rows
   // make the scenario switchable from anywhere on the page — that choice is
@@ -486,8 +502,13 @@ export default function BatterySizingPage() {
                 models are reviewed and published.
               </p>
             ) : (
+              <>
+                {/* Above the shelf, not below it: the disclosure has to be
+                    readable before the click, and it renders only when
+                    something here can actually earn a commission. */}
+                {shelfIsPaid && <AffiliateDisclosure />}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {matchingModels.map(m => {
+                {shelf.map(({ model: m, link }) => {
                   const units = Math.ceil(chosen.bankKwh / m.capacity_kwh)
                   // A price the site cannot still vouch for is not shown as a
                   // bank total — see src/lib/battery-price.ts.
@@ -551,19 +572,43 @@ export default function BatterySizingPage() {
                         </div>
                       </div>
 
-                      <a
-                        href={m.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold text-zon-gold-deep ring-1 ring-zon-gold-light transition-colors hover:bg-zon-gold-tint"
-                      >
-                        View the spec sheet
-                        <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-                      </a>
+                      <div className="flex flex-col gap-2">
+                        {link && (
+                          <a
+                            href={link.href}
+                            target="_blank"
+                            rel={relFor(link)}
+                            className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-zon-gold text-xs font-semibold text-zon-ink transition-colors hover:bg-zon-gold-deep"
+                          >
+                            <ShoppingCart className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            {/* When the shop page IS the datasheet — SunGoldPower
+                                sells from its own site — one honest button beats
+                                two pointing at the same URL. */}
+                            {link.isAlsoSpecSheet
+                              ? `Specs & price at ${link.retailer}`
+                              : `Buy at ${link.retailer}`}
+                          </a>
+                        )}
+                        {/* The citation, always present and never tagged. A
+                            spec sheet that quietly earned a commission would
+                            not be a spec sheet — see src/lib/affiliate.ts. */}
+                        {!link?.isAlsoSpecSheet && (
+                          <a
+                            href={m.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold text-zon-gold-deep ring-1 ring-zon-gold-light transition-colors hover:bg-zon-gold-tint"
+                          >
+                            View the spec sheet
+                            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
               </div>
+              </>
             )}
           </CardContent>
         </Card>

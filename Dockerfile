@@ -18,6 +18,19 @@ ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-anon-key
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+# Affiliate link templates (src/lib/affiliate.ts). Same build-time rule as
+# above, and worth spelling out because the failure is silent: putting one of
+# these in the server's .env only would leave it undefined in the browser
+# bundle, which is indistinguishable from "no programme signed up yet" — the
+# links would keep publishing untagged and nobody would see an error. Empty is
+# the correct default: no programme, no tag, no disclosure.
+ARG NEXT_PUBLIC_AFFILIATE_SIGNATURE_SOLAR=
+ARG NEXT_PUBLIC_AFFILIATE_SUNGOLDPOWER=
+ARG NEXT_PUBLIC_AFFILIATE_A1SOLARSTORE=
+ENV NEXT_PUBLIC_AFFILIATE_SIGNATURE_SOLAR=$NEXT_PUBLIC_AFFILIATE_SIGNATURE_SOLAR
+ENV NEXT_PUBLIC_AFFILIATE_SUNGOLDPOWER=$NEXT_PUBLIC_AFFILIATE_SUNGOLDPOWER
+ENV NEXT_PUBLIC_AFFILIATE_A1SOLARSTORE=$NEXT_PUBLIC_AFFILIATE_A1SOLARSTORE
+
 RUN npm run build
 
 FROM node:20-alpine AS runner

@@ -30,6 +30,11 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-placeholder-anon-key}
+        # Unset = no affiliate programme, which is the state today. These must
+        # be build args, not runtime environment — see the Dockerfile.
+        NEXT_PUBLIC_AFFILIATE_SIGNATURE_SOLAR: ${NEXT_PUBLIC_AFFILIATE_SIGNATURE_SOLAR:-}
+        NEXT_PUBLIC_AFFILIATE_SUNGOLDPOWER: ${NEXT_PUBLIC_AFFILIATE_SUNGOLDPOWER:-}
+        NEXT_PUBLIC_AFFILIATE_A1SOLARSTORE: ${NEXT_PUBLIC_AFFILIATE_A1SOLARSTORE:-}
     image: zonzelf:staging
     container_name: zonzelf
     restart: unless-stopped
