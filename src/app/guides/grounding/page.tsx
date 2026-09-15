@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Cable, Sun } from 'lucide-react'
+import { Cable, Sun, Waypoints } from 'lucide-react'
 import {
   GuideBreadcrumb, GuideDisclaimer, GuideHeader, Note, NextSteps, Tldr, Warn,
 } from '@/components/guides/GuideChrome'
@@ -102,6 +102,15 @@ export default function GroundingGuidePage() {
             “don’t invent this at 9pm” energy.
           </p>
         </Note>
+        <p className="text-zon-body mt-4">
+          And if the array is not on the building at all — a ground mount across the
+          yard, with its own rods — the question of whether those rods join the
+          building&rsquo;s has a specific answer, and it is the one most DIY builds get
+          wrong. See{' '}
+          <Link href="/guides/one-ground-system" className="text-zon-gold-deep hover:underline">
+            one ground system, not two
+          </Link>.
+        </p>
       </section>
 
       <section className="mb-10">
@@ -127,6 +136,7 @@ export default function GroundingGuidePage() {
       <div className="mt-10">
         <NextSteps
           items={[
+            { href: '/guides/one-ground-system', title: 'One ground system, not two', sub: 'Array over there, inverter over here \u2014 do the rods get joined?', Icon: Waypoints },
             { href: '/guides/wiring', title: 'Cables and thickness', sub: 'The other half of not starting a fire', Icon: Cable },
             { href: '/guides/how-it-works', title: 'How a solar system works', sub: 'Where each box sits in the chain', Icon: Sun },
           ]}

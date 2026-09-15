@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, ChevronRight } from 'lucide-react'
+import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -59,6 +59,14 @@ const GUIDES = [
     description: 'Where to ground your system, what devices to use (earth rods, bonding conductors, GFCIs), and why it matters for safety and surge protection.',
     tags: ['safety', 'wiring'],
     readTime: '7 min',
+  },
+  {
+    icon: Waypoints,
+    slug: 'one-ground-system',
+    title: 'One Ground System, Not Two',
+    description: 'Rods at the array, a rod at the cabin, a hundred feet between them \u2014 bond them or leave them separate? Why a surge protector at the array makes the bond more urgent, not less, and why the ground-loop counter-argument inverts its own physics.',
+    tags: ['safety', 'wiring', 'intermediate'],
+    readTime: '16 min',
   },
   {
     icon: Settings,
