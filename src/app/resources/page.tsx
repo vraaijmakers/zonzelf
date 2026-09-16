@@ -19,7 +19,8 @@ interface ResourceGroup {
   items: Resource[]
 }
 
-// A starting list, not exhaustive — verified as real and active as of 2026-08-20.
+// A starting list, not exhaustive — verified as real and active as of 2026-08-20;
+// Two Bit da Vinci added and checked 2026-09-15.
 // Grows over time; add entries here rather than building a CMS for this yet.
 const GROUPS: ResourceGroup[] = [
   {
@@ -35,6 +36,11 @@ const GROUPS: ResourceGroup[] = [
         title: 'Off-Grid Garage',
         description: 'Battery and BMS testing, real off-grid builds, and plain explanations of the electronics involved.',
         href: 'https://www.youtube.com/@OffGridGarageAustralia',
+      },
+      {
+        title: 'Two Bit da Vinci',
+        description: 'The economics rather than the electronics — what a system should cost, where the US price goes, and the policy shifts that move it.',
+        href: 'https://www.youtube.com/@TwoBitDaVinci',
       },
     ],
   },
