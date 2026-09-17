@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, Footprints, Caravan, ChevronRight } from 'lucide-react'
+import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, Footprints, Caravan, Receipt, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -91,6 +91,14 @@ const GUIDES = [
     description: 'A practical guide to configuring common inverters (Victron, Sun Gold, Growatt) — bulk/absorb/float voltages, generator input, and battery protection.',
     tags: ['inverter', 'intermediate'],
     readTime: '12 min',
+  },
+  {
+    icon: Receipt,
+    slug: 'what-solar-costs',
+    title: 'What a Solar System Should Cost',
+    description: 'Hardware is about an eighth of what a homeowner pays an installer. A real bill of materials, where the rest of the money goes, what the December 2026 import floor does to a pallet of panels, and why the 30% credit is gone.',
+    tags: ['buying', 'beginner'],
+    readTime: '9 min',
   },
   {
     icon: BookOpen,
