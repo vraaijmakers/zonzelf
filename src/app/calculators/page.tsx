@@ -1,8 +1,11 @@
 import Link from 'next/link'
-import { Zap, Battery, Sun, Cable, Plug, PanelsTopLeft, ClipboardList, ChevronRight } from 'lucide-react'
+import { Zap, Battery, Sun, Cable, Plug, PanelsTopLeft, ClipboardList, ChevronRight, Caravan } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CALC_STEPS, TOTAL_STEPS, type StepId } from '@/lib/calc-steps'
+import { SizingStoryTeaser } from '@/components/guides/SizingStory'
+import { SIZING_STORY_HREF } from '@/lib/sizing-story'
+import { BOAT_RV_GUIDE_HREF, DOES_NOT_TRANSFER } from '@/lib/mobile-scope'
 
 /**
  * The index and the step spine read from the same list, so they cannot drift.
@@ -51,9 +54,48 @@ export default function CalculatorsPage() {
           feeds the next, so start at the top — the numbers carry forward on their own.
         </p>
         <p className="mt-2 text-sm text-zon-muted">
-          Steps marked <span className="font-medium">soon</span> are not built yet. They are
-          listed because a system needs them: the chain does not end at cable sizing.
+          New here?{' '}
+          <Link href={SIZING_STORY_HREF} className="font-medium text-zon-gold-deep hover:underline">
+            Why this order, in seven pictures
+          </Link>
+          .
         </p>
+      </div>
+
+      <SizingStoryTeaser />
+
+      {/*
+        The fork in the road, placed before the step list rather than after it.
+        A visitor building for a van needs to learn that this chain is not for
+        them BEFORE they spend twenty minutes entering appliances — telling
+        them at step 6, next to the conductor gauge they came for, is telling
+        them too late to be kind about it.
+      */}
+      <div className="my-8 rounded-xl border border-zon-rule bg-zon-cream p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
+            <Caravan className="h-4 w-4 text-zon-muted" aria-hidden="true" />
+          </div>
+          <div className="text-sm">
+            <p className="mb-1 font-semibold text-zon-ink">
+              Building for a boat, a van or an RV?
+            </p>
+            <p className="mb-2 text-zon-body">
+              These steps assume a <strong>building that stays put</strong> — a fixed roof at a
+              fixed angle, an earth electrode in the ground, and wiring sized from the NEC. The
+              energy half still works for you. The{' '}
+              {DOES_NOT_TRANSFER.map(s => s.label).join(' and ')} step does not
+              transfer at all, because a boat answers to ABYC E-11 and an RV to NFPA 1192.
+            </p>
+            <Link
+              href={BOAT_RV_GUIDE_HREF}
+              className="font-medium text-zon-gold-deep hover:underline"
+            >
+              Read what transfers and what does not
+              <ChevronRight className="ml-0.5 inline h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
       </div>
 
       <ol className="grid gap-5 md:grid-cols-2">

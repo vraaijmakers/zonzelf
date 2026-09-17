@@ -5,6 +5,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react'
 import CalculatorDisclaimer from '@/components/CalculatorDisclaimer'
+import ScopeNotice from '@/components/calculators/ScopeNotice'
 import StepSpine, { type AnswerSummary } from '@/components/calculators/StepSpine'
 import StepActions from '@/components/calculators/StepActions'
 import { stepById, type StepId } from '@/lib/calc-steps'
@@ -109,6 +110,7 @@ export default function CalculatorChrome({
         </header>
 
         <CalculatorDisclaimer />
+        <ScopeNotice step={step} />
 
         {children}
       </div>

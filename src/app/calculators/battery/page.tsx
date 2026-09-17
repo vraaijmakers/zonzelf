@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Battery, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { Battery, ChevronDown, ChevronUp, ExternalLink, ShoppingCart } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -29,6 +29,9 @@ import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { createClient } from '@/lib/supabase/client'
 import { priceDisplay, formatAsOf } from '@/lib/battery-price'
+import { bankFit } from '@/lib/battery-bank-fit'
+import { buyLink, anyPaid, relFor } from '@/lib/affiliate'
+import AffiliateDisclosure from '@/components/AffiliateDisclosure'
 
 type BatteryModelMatch = {
   id: number
@@ -40,6 +43,13 @@ type BatteryModelMatch = {
   price_usd: number | null
   price_scraped_at: string | null
   source_url: string
+  /**
+   * The shop, when a reseller scrape found one. Not every priced row has one:
+   * SunGoldPower sells from its own site, so for those rows source_url is both
+   * the citation and the shop — buyLink() in src/lib/affiliate.ts is what
+   * reconciles the two shapes.
+   */
+  retailer_url: string | null
 }
 
 // Real battery packs are 12.8V/25.6V/51.2V nominal, not the rounded 12/24/48
@@ -292,7 +302,7 @@ export default function BatterySizingPage() {
     const supabase = createClient()
     supabase
       .from('battery_models')
-      .select('id, brand, model, voltage, capacity_ah, capacity_kwh, price_usd, price_scraped_at, source_url')
+      .select('id, brand, model, voltage, capacity_ah, capacity_kwh, price_usd, price_scraped_at, source_url, retailer_url')
       .eq('chemistry', battery.id)
       .order('capacity_kwh', { ascending: true })
       .then(({ data, error }) => {
@@ -308,6 +318,13 @@ export default function BatterySizingPage() {
   // React Compiler cannot preserve a manual memo over it. It memoizes this for
   // us, and the filter is a pass over a short list either way.
   const matchingModels = allModels.filter(m => voltageFamily(m.voltage) === effectiveVoltage)
+
+  // Each card paired with the shop link it carries, derived once so the
+  // disclosure and the buttons cannot disagree about what is paid — that is
+  // the whole FTC argument in src/lib/affiliate.ts. Plain derivation for the
+  // same reason as above.
+  const shelf = matchingModels.map(m => ({ model: m, link: buyLink(m) }))
+  const shelfIsPaid = anyPaid(shelf.map(s => s.link))
 
   // What the sticky strip shows once the answer card scrolls away. The rows
   // make the scenario switchable from anywhere on the page — that choice is
@@ -486,14 +503,23 @@ export default function BatterySizingPage() {
                 models are reviewed and published.
               </p>
             ) : (
+              <>
+                {/* Above the shelf, not below it: the disclosure has to be
+                    readable before the click, and it renders only when
+                    something here can actually earn a commission. */}
+                {shelfIsPaid && <AffiliateDisclosure />}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {matchingModels.map(m => {
-                  const units = Math.ceil(chosen.bankKwh / m.capacity_kwh)
+                {shelf.map(({ model: m, link }) => {
                   // A price the site cannot still vouch for is not shown as a
                   // bank total — see src/lib/battery-price.ts.
                   const price = priceDisplay(m.price_usd, m.price_scraped_at)
                   const unitPrice = price.kind === 'dated' || price.kind === 'undated' ? price.price : null
-                  const totalPrice = unitPrice != null ? units * unitPrice : null
+                  // The count, what it delivers, and what the storage costs per
+                  // kWh. The last two are why a bigger battery can show a
+                  // smaller total — see src/lib/battery-bank-fit.ts.
+                  const fit = bankFit(chosen.bankKwh, m.capacity_kwh, unitPrice)
+                  const units = fit?.units ?? 0
+                  const totalPrice = fit?.totalPrice ?? null
                   return (
                     <div
                       key={m.id}
@@ -524,6 +550,22 @@ export default function BatterySizingPage() {
                               {units === 1 ? 'unit' : 'units'}
                             </span>
                           </span>
+                          {/* Whole packs rarely land on the target, so the
+                              count alone does not say how much battery it is.
+                              Stated plainly, not as a warning: which autonomy
+                              scenario you picked moves the target about twice
+                              as far as this rounding ever does. */}
+                          {fit && (
+                            <span className="text-[11px] leading-tight text-zon-muted">
+                              <span className="tabular-nums">{fit.deliveredKwh}</span> kWh
+                              {fit.overshootPct > 0 && (
+                                <>
+                                  {' · '}
+                                  <span className="tabular-nums">{fit.overshootPct}%</span> over
+                                </>
+                              )}
+                            </span>
+                          )}
                         </div>
                         <div className="flex min-w-0 flex-col items-end text-right">
                           {totalPrice != null ? (
@@ -531,9 +573,28 @@ export default function BatterySizingPage() {
                               <span className="text-[11px] uppercase tracking-wide text-zon-muted">
                                 Together
                               </span>
+                              {/* Both decimals, always. A bare toLocaleString
+                                  rendered 2 x $1,683.40 as "$3,366.8", which
+                                  reads as a truncation bug in the one column
+                                  that has to look trustworthy. */}
                               <span className="text-lg font-bold leading-tight tabular-nums text-zon-gold-deep">
-                                ~${totalPrice.toLocaleString()}
+                                ~${totalPrice.toLocaleString('en-US', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
                               </span>
+                              {/* The comparable figure. The total above depends
+                                  on where the rounding landed; this one is a
+                                  property of the battery, so it is the same
+                                  number whatever target you typed. */}
+                              {fit?.costPerKwh != null && (
+                                <span className="text-[11px] leading-tight text-zon-muted">
+                                  <span className="tabular-nums">
+                                    ${fit.costPerKwh.toLocaleString()}
+                                  </span>{' '}
+                                  per kWh
+                                </span>
+                              )}
                               {price.kind === 'dated' && (
                                 <span className="text-[11px] leading-tight text-zon-muted">
                                   as of {formatAsOf(price.asOf)}
@@ -551,19 +612,55 @@ export default function BatterySizingPage() {
                         </div>
                       </div>
 
-                      <a
-                        href={m.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold text-zon-gold-deep ring-1 ring-zon-gold-light transition-colors hover:bg-zon-gold-tint"
-                      >
-                        View the spec sheet
-                        <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-                      </a>
+                      <div className="flex flex-col gap-2">
+                        {link && (
+                          <a
+                            href={link.href}
+                            target="_blank"
+                            rel={relFor(link)}
+                            className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-zon-gold text-xs font-semibold text-zon-ink transition-colors hover:bg-zon-gold-deep"
+                          >
+                            <ShoppingCart className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            {/* When the shop page IS the datasheet — SunGoldPower
+                                sells from its own site — one honest button beats
+                                two pointing at the same URL. */}
+                            {link.isAlsoSpecSheet
+                              ? `Specs & price at ${link.retailer}`
+                              : `Buy at ${link.retailer}`}
+                          </a>
+                        )}
+                        {/* The citation, always present and never tagged. A
+                            spec sheet that quietly earned a commission would
+                            not be a spec sheet — see src/lib/affiliate.ts. */}
+                        {!link?.isAlsoSpecSheet && (
+                          <a
+                            href={m.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold text-zon-gold-deep ring-1 ring-zon-gold-light transition-colors hover:bg-zon-gold-tint"
+                          >
+                            View the spec sheet
+                            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
               </div>
+              {/* Differentiator #1: the comparison is only obvious once someone
+                  explains why the total on its own is not one. Below the shelf
+                  rather than above it — a reader who has already spotted the
+                  odd ordering is the one looking for this. */}
+              <p className="mt-4 border-t border-zon-rule-soft pt-3 text-xs leading-relaxed text-zon-muted">
+                Batteries come in whole packs, and a pack rarely lands exactly on your
+                target — so a <em>larger</em> battery can show a <em>lower</em> total,
+                simply because one of it is enough where the smaller one needs two. The
+                kWh figure is how much storage you would actually be buying. The price per
+                kWh compares the batteries themselves, and stays the same whatever target
+                you typed.
+              </p>
+              </>
             )}
           </CardContent>
         </Card>
