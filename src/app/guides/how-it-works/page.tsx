@@ -426,6 +426,16 @@ export default function HowItWorksGuidePage() {
       <section className="border-t border-zon-rule pt-8">
         <h2 className="text-base font-semibold text-zon-muted uppercase tracking-wide mb-4">Next steps</h2>
         <div className="grid sm:grid-cols-2 gap-3">
+          <Link href="/guides/sizing-a-system" className="flex items-center gap-3 p-4 rounded-xl border border-zon-rule hover:border-zon-gold-light hover:bg-zon-gold-tint transition-colors group">
+            <div className="w-9 h-9 bg-zon-gold-tint rounded-lg flex items-center justify-center shrink-0">
+              <Calculator className="w-4 h-4 text-zon-gold-deep" />
+            </div>
+            <div>
+              <p className="text-sm font-medium group-hover:text-zon-gold-deep">From the kettle to the roof</p>
+              <p className="text-xs text-zon-muted">Why we size in this order, in seven pictures</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-zon-muted ml-auto group-hover:text-zon-gold" />
+          </Link>
           <Link href="/guides/batteries" className="flex items-center gap-3 p-4 rounded-xl border border-zon-rule hover:border-zon-gold-light hover:bg-zon-gold-tint transition-colors group">
             <div className="w-9 h-9 bg-zon-gold-tint rounded-lg flex items-center justify-center shrink-0">
               <Battery className="w-4 h-4 text-zon-gold-deep" />
@@ -433,16 +443,6 @@ export default function HowItWorksGuidePage() {
             <div>
               <p className="text-sm font-medium group-hover:text-zon-gold-deep">Battery Types guide</p>
               <p className="text-xs text-zon-muted">Which chemistry, and why</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-zon-muted ml-auto group-hover:text-zon-gold" />
-          </Link>
-          <Link href="/calculators/panels" className="flex items-center gap-3 p-4 rounded-xl border border-zon-rule hover:border-zon-gold-light hover:bg-zon-gold-tint transition-colors group">
-            <div className="w-9 h-9 bg-zon-gold-tint rounded-lg flex items-center justify-center shrink-0">
-              <Calculator className="w-4 h-4 text-zon-gold-deep" />
-            </div>
-            <div>
-              <p className="text-sm font-medium group-hover:text-zon-gold-deep">Panel sizing calculator</p>
-              <p className="text-xs text-zon-muted">How many panels do you need?</p>
             </div>
             <ChevronRight className="w-4 h-4 text-zon-muted ml-auto group-hover:text-zon-gold" />
           </Link>

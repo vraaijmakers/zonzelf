@@ -47,6 +47,10 @@ export default function Footer() {
             <li><Link href="/disclaimer" className="hover:underline">Disclaimer</Link></li>
             <li><Link href="/terms" className="hover:underline">Terms of Service</Link></li>
             <li><Link href="/privacy" className="hover:underline">Privacy Policy</Link></li>
+            {/* The FTC's standing requirement is a disclosure next to the link
+                itself (see components/AffiliateDisclosure.tsx); this is the
+                permanent policy page it points at, not a substitute for it. */}
+            <li><Link href="/affiliate-disclosure" className="hover:underline">Affiliate Disclosure</Link></li>
           </ul>
         </div>
       </div>

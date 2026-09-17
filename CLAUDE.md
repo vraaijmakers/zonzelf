@@ -71,6 +71,7 @@ that lets them close the gap.
 - Grid utility integrations
 - Anything requiring ZonZelf-branded hardware (this contradicts differentiator #2)
 - A general-purpose home-automation platform (that is Home Assistant's job)
+- Cost, payback, or financing calculators — cost belongs in the guides (added 2026-09-15)
 
 ### Monetization — revised 2026-08-22
 
@@ -119,6 +120,15 @@ the line:
 
 > **The rule: guides teach; calculators must show the derivation and cite the code. Never
 > emit a bare authoritative recommendation.**
+
+**Corollary, 2026-09-15 — why cost is a non-goal.** A payback or $/W calculator is the one
+output where the *Jeppesen* analogy bites hardest: it mechanically converts a user's inputs
+into a financial number acted on directly, with no code to cite and no derivation that ends
+in a standard — NEC 310.16 has nothing to say about money. It also depends on tariffs,
+export rates and tax law that change under the reader without the page changing. Prices,
+the Section 232 import floor and the expiry of 26 U.S.C. 25D belong in a dated, cited guide,
+where *Winter* protects them. This retires "cost estimate" from the sizing chain's remaining
+work; the printable bill of materials stays.
 
 "Recommended gauge: AWG 10" in large green type is the chart, not the book. Show the code
 table, show the arithmetic, cite the source, teach the user to derive the answer. This is

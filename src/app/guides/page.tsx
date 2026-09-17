@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, ChevronRight } from 'lucide-react'
+import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, Footprints, Caravan, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -11,6 +11,22 @@ const GUIDES = [
     description: 'Start from a single panel and a light bulb and build up: why you need a charge controller, why you need a battery, and what "charging" vs. "supplying the house" actually means.',
     tags: ['fundamentals', 'beginner'],
     readTime: '14 min',
+  },
+  {
+    icon: Footprints,
+    slug: 'sizing-a-system',
+    title: 'From the Kettle to the Roof',
+    description: 'The calculators are seven steps, not seven tools. A stick-figure walk through why you start at your appliances, pick the inverter before the panels, and only then size the cables.',
+    tags: ['fundamentals', 'beginner', 'calculators'],
+    readTime: '5 min',
+  },
+  {
+    icon: Caravan,
+    slug: 'boats-and-rvs',
+    title: 'A Boat Is Not a Small Cabin',
+    description: 'Every number here is derived for a building that stays where you put it. What transfers to a boat, a van or an RV, what does not transfer at all, and the two mistakes \u2014 the alternator and the shore-power ground \u2014 that cost the most money.',
+    tags: ['scope', 'safety', 'beginner'],
+    readTime: '11 min',
   },
   {
     icon: Battery,
@@ -91,7 +107,7 @@ export default function GuidesPage() {
     <div className="max-w-5xl mx-auto px-4 py-12">
       <div className="mb-10">
         <h1 className="text-3xl font-bold mb-2">Guides</h1>
-        <p className="text-gray-600">
+        <p className="text-zon-body">
           Everything you need to understand, plan, and maintain a DIY solar system — explained clearly.
         </p>
       </div>
@@ -102,12 +118,12 @@ export default function GuidesPage() {
             <Card className="h-full hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-yellow-100 flex items-center justify-center shrink-0">
-                    <Icon className="w-4 h-4 text-yellow-700" />
+                  <div className="w-9 h-9 rounded-lg bg-zon-gold-tint flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 text-zon-gold-deep" />
                   </div>
-                  <span className="text-xs text-gray-400">{readTime}</span>
+                  <span className="text-xs text-zon-muted">{readTime}</span>
                 </div>
-                <CardTitle className="text-base mt-2 group-hover:text-yellow-700 transition-colors flex items-center gap-1">
+                <CardTitle className="text-base mt-2 group-hover:text-zon-gold-deep transition-colors flex items-center gap-1">
                   {title} <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </CardTitle>
               </CardHeader>
