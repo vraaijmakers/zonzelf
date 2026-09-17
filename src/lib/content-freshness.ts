@@ -124,7 +124,16 @@ export interface Claim {
 }
 
 export type ClaimFreshness =
-  /** Confirmed recently enough that the page may state it plainly. */
+  /**
+   * Confirmed recently enough that the page may state it plainly.
+   *
+   * `dueInDays` counts to whichever comes FIRST: the review interval lapsing,
+   * or a published change date arriving. Reporting only the interval would
+   * have understated every claim carrying a changesOn — the Section 232 floor
+   * lands 4 Dec 2026 but its 90-day policy interval does not lapse until the
+   * 14th, so a report quoting the interval alone tells you to look ten days
+   * after the thing has already happened.
+   */
   | { kind: 'current'; ageDays: number; dueInDays: number }
   /** CI should ask, but the page says nothing different yet. */
   | { kind: 'due'; ageDays: number; overdueDays: number }
@@ -175,7 +184,13 @@ export function claimFreshness(claim: Claim, now: Date = new Date()): ClaimFresh
   if (ageDays > cadence.warn) {
     return { kind: 'due', ageDays, overdueDays: ageDays - cadence.warn }
   }
-  return { kind: 'current', ageDays, dueInDays: cadence.warn - ageDays }
+
+  const untilInterval = cadence.warn - ageDays
+  const untilChange =
+    changesOn === null
+      ? Number.POSITIVE_INFINITY
+      : Math.ceil((changesOn.getTime() - now.getTime()) / MS_PER_DAY)
+  return { kind: 'current', ageDays, dueInDays: Math.max(0, Math.min(untilInterval, untilChange)) }
 }
 
 /** Does this need a human before the page can go on asserting it plainly? */
