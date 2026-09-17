@@ -29,6 +29,7 @@ import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { createClient } from '@/lib/supabase/client'
 import { priceDisplay, formatAsOf } from '@/lib/battery-price'
+import { bankFit } from '@/lib/battery-bank-fit'
 import { buyLink, anyPaid, relFor } from '@/lib/affiliate'
 import AffiliateDisclosure from '@/components/AffiliateDisclosure'
 
@@ -509,12 +510,16 @@ export default function BatterySizingPage() {
                 {shelfIsPaid && <AffiliateDisclosure />}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {shelf.map(({ model: m, link }) => {
-                  const units = Math.ceil(chosen.bankKwh / m.capacity_kwh)
                   // A price the site cannot still vouch for is not shown as a
                   // bank total — see src/lib/battery-price.ts.
                   const price = priceDisplay(m.price_usd, m.price_scraped_at)
                   const unitPrice = price.kind === 'dated' || price.kind === 'undated' ? price.price : null
-                  const totalPrice = unitPrice != null ? units * unitPrice : null
+                  // The count, what it delivers, and what the storage costs per
+                  // kWh. The last two are why a bigger battery can show a
+                  // smaller total — see src/lib/battery-bank-fit.ts.
+                  const fit = bankFit(chosen.bankKwh, m.capacity_kwh, unitPrice)
+                  const units = fit?.units ?? 0
+                  const totalPrice = fit?.totalPrice ?? null
                   return (
                     <div
                       key={m.id}
@@ -545,6 +550,22 @@ export default function BatterySizingPage() {
                               {units === 1 ? 'unit' : 'units'}
                             </span>
                           </span>
+                          {/* Whole packs rarely land on the target, so the
+                              count alone does not say how much battery it is.
+                              Stated plainly, not as a warning: which autonomy
+                              scenario you picked moves the target about twice
+                              as far as this rounding ever does. */}
+                          {fit && (
+                            <span className="text-[11px] leading-tight text-zon-muted">
+                              <span className="tabular-nums">{fit.deliveredKwh}</span> kWh
+                              {fit.overshootPct > 0 && (
+                                <>
+                                  {' · '}
+                                  <span className="tabular-nums">{fit.overshootPct}%</span> over
+                                </>
+                              )}
+                            </span>
+                          )}
                         </div>
                         <div className="flex min-w-0 flex-col items-end text-right">
                           {totalPrice != null ? (
@@ -552,9 +573,28 @@ export default function BatterySizingPage() {
                               <span className="text-[11px] uppercase tracking-wide text-zon-muted">
                                 Together
                               </span>
+                              {/* Both decimals, always. A bare toLocaleString
+                                  rendered 2 x $1,683.40 as "$3,366.8", which
+                                  reads as a truncation bug in the one column
+                                  that has to look trustworthy. */}
                               <span className="text-lg font-bold leading-tight tabular-nums text-zon-gold-deep">
-                                ~${totalPrice.toLocaleString()}
+                                ~${totalPrice.toLocaleString('en-US', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
                               </span>
+                              {/* The comparable figure. The total above depends
+                                  on where the rounding landed; this one is a
+                                  property of the battery, so it is the same
+                                  number whatever target you typed. */}
+                              {fit?.costPerKwh != null && (
+                                <span className="text-[11px] leading-tight text-zon-muted">
+                                  <span className="tabular-nums">
+                                    ${fit.costPerKwh.toLocaleString()}
+                                  </span>{' '}
+                                  per kWh
+                                </span>
+                              )}
                               {price.kind === 'dated' && (
                                 <span className="text-[11px] leading-tight text-zon-muted">
                                   as of {formatAsOf(price.asOf)}
@@ -608,6 +648,18 @@ export default function BatterySizingPage() {
                   )
                 })}
               </div>
+              {/* Differentiator #1: the comparison is only obvious once someone
+                  explains why the total on its own is not one. Below the shelf
+                  rather than above it — a reader who has already spotted the
+                  odd ordering is the one looking for this. */}
+              <p className="mt-4 border-t border-zon-rule-soft pt-3 text-xs leading-relaxed text-zon-muted">
+                Batteries come in whole packs, and a pack rarely lands exactly on your
+                target — so a <em>larger</em> battery can show a <em>lower</em> total,
+                simply because one of it is enough where the smaller one needs two. The
+                kWh figure is how much storage you would actually be buying. The price per
+                kWh compares the batteries themselves, and stays the same whatever target
+                you typed.
+              </p>
               </>
             )}
           </CardContent>
