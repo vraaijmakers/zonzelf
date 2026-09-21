@@ -94,7 +94,7 @@ export default function TermsPage() {
           for the specific terms covering guides, calculators, and DIY installations — those
           terms are incorporated into this agreement. To the maximum extent permitted by law,
           ZonZelf&apos;s total liability for any claim arising from your use of the service is
-          limited to the amount you paid ZonZelf in the twelve months before the claim, or €100
+          limited to the amount you paid ZonZelf in the twelve months before the claim, or $100
           if you have not paid ZonZelf anything.
         </p>
       </Section>
