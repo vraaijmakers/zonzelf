@@ -102,12 +102,6 @@ export default function WhatSolarCostsGuide() {
           buying an installed system and a real number for you, because you are buying the part
           it applies to and nothing else.
         </p>
-        <p className="text-sm">
-          <strong>Every figure on this page is in US dollars.</strong> This page is about American
-          tariff and tax law — a Section 232 proclamation and a repealed federal credit — so the
-          prices are the ones an American supplier quotes. Australia appears below only as a
-          ratio, which does not depend on either currency.
-        </p>
       </Tldr>
 
       <GuideDisclaimer />
@@ -171,8 +165,8 @@ export default function WhatSolarCostsGuide() {
             <tr>
               <th className="px-4 py-2 font-semibold text-zon-ink">Item</th>
               <th className="px-4 py-2 font-semibold text-zon-ink">Qty</th>
-              <th className="px-4 py-2 font-semibold text-zon-ink">Each (USD)</th>
-              <th className="px-4 py-2 text-right font-semibold text-zon-ink">Line (USD)</th>
+              <th className="px-4 py-2 font-semibold text-zon-ink">Each</th>
+              <th className="px-4 py-2 text-right font-semibold text-zon-ink">Line</th>
             </tr>
           </thead>
           <tbody>
@@ -209,8 +203,8 @@ export default function WhatSolarCostsGuide() {
           <thead className="bg-zon-cream text-left">
             <tr>
               <th className="px-4 py-2 font-semibold text-zon-ink">What you are counting</th>
-              <th className="px-4 py-2 font-semibold text-zon-ink">Total (USD)</th>
-              <th className="px-4 py-2 font-semibold text-zon-ink">Per watt (USD)</th>
+              <th className="px-4 py-2 font-semibold text-zon-ink">Total</th>
+              <th className="px-4 py-2 font-semibold text-zon-ink">Per watt</th>
             </tr>
           </thead>
           <tbody>
