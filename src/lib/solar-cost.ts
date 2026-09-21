@@ -215,7 +215,21 @@ export const CREDIT_25D = {
   rate: 0.3,
 }
 
-/** USD, no cents — every figure on this page is an estimate, not an invoice. */
+/**
+ * US dollars, no cents — every figure on this page is an estimate, not an invoice.
+ *
+ * WHICH DOLLARS, and why the page says so out loud rather than leaving "$" to
+ * stand on its own. This site formats dates by hand (formatAsOf) because it
+ * has both US and EU readers and 15/09 is ambiguous to half of them; a bare
+ * "$" is the same problem, and it is sharper here because the page's headline
+ * comparison is against AUSTRALIA, which also writes "$". The currency is
+ * stated once at the top of the guide and again in every money column header.
+ *
+ * It is USD because the subject is: a Section 232 proclamation and a repealed
+ * federal credit have no euro denomination, and the audience is US-first with
+ * NEC 310.16 as the governing code. Converting these would produce a page
+ * about American tariff law priced in a currency no American supplier quotes.
+ */
 export function usd(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`
 }
