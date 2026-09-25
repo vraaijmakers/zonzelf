@@ -173,3 +173,77 @@ export function findLikelyDuplicates<T extends { id: number; brand: string; volt
   }
   return result
 }
+
+/**
+ * How two rows that findLikelyDuplicates() grouped together actually relate.
+ *
+ * The grouping above is deliberately loose — same brand, same voltage family,
+ * capacity within 5Ah — because a duplicate that slips through is worse than
+ * one the reviewer dismisses. The cost of that looseness is that its warning
+ * reads identically in two cases that could not be more different:
+ *
+ *   2026-09-14/21, the real thing: the EG4 WallMount 280Ah All Weather scraped
+ *   a second time under a second URL EG4 now serves for it. Same SKU, same
+ *   everything. Approving it publishes the same battery twice.
+ *
+ *   The same week, a false positive: WallMount 280Ah Indoor next to WallMount
+ *   280Ah All Weather. Same brand, same 51.2V/280Ah, genuinely two products.
+ *
+ * SKU is what separates them, and neither the message nor the card was using
+ * it. A matching SKU is a manufacturer asserting these are one product; two
+ * different SKUs is the manufacturer asserting they are not.
+ */
+export type DuplicateRelation = {
+  severity: ReviewSeverity
+  message: string
+}
+
+function sameSku(a: string | null, b: string | null): boolean {
+  if (!a || !b) return false
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+type BatteryForComparison = {
+  model: string
+  sku: string | null
+  chemistry: string
+  voltage: number
+  capacity_ah: number
+  capacity_kwh: number
+  dod_rated: number | null
+  price_usd: number | null
+}
+
+export function relateDuplicate(
+  candidate: BatteryForComparison,
+  other: BatteryForComparison & { is_published?: boolean },
+): DuplicateRelation {
+  const where = other.is_published ? 'a row that is already live' : 'another row waiting here'
+
+  if (sameSku(candidate.sku, other.sku)) {
+    return {
+      severity: 'fail',
+      message: `Same SKU (${other.sku}) as ${where} — the manufacturer says these are one product, so this is almost certainly the same battery listed twice. Approving it would list it twice on the calculator.`,
+    }
+  }
+
+  if (candidate.sku && other.sku) {
+    return {
+      severity: 'ok',
+      message: `Same brand and size as ${where}, but a different SKU (${candidate.sku} vs ${other.sku}) — normally two variants of one product line, not a duplicate. Compare the photos below.`,
+    }
+  }
+
+  const specsMatch =
+    candidate.voltage === other.voltage &&
+    candidate.capacity_ah === other.capacity_ah &&
+    candidate.capacity_kwh === other.capacity_kwh &&
+    candidate.dod_rated === other.dod_rated
+
+  return {
+    severity: 'warn',
+    message: specsMatch
+      ? `Every spec matches ${where} and neither row has a SKU to tell them apart — compare the photos and the two source pages before approving.`
+      : `Close in size to ${where}, and there's no SKU on both sides to settle it — compare the specs below.`,
+  }
+}

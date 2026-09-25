@@ -23,6 +23,7 @@
 // changes and A1 SolarStore is the priced retailer, not the spec source.
 
 import { fetchHtml, getServiceRoleClient, upsertBatteries, reportScrapeHealth, type ParsedBattery } from './lib/scrape-common'
+import { extractOgImage } from '../src/lib/product-image'
 
 const RETAILER = 'A1 SolarStore'
 
@@ -51,22 +52,25 @@ const PRODUCTS: Product[] = [
   },
 ]
 
-async function fetchPrice(url: string): Promise<number | null> {
+// The reseller page is the only page this scraper fetches, so it is also the
+// only place a product photo can come from. That is the right place anyway:
+// source_url here is a manufacturer PDF datasheet, which has no image to read.
+async function fetchListing(url: string): Promise<{ price_usd: number; image_url: string | null } | null> {
   const html = await fetchHtml(url)
   const match = html.match(/property="product:price:amount"\s*content="([\d.]+)"/)
   if (!match) {
     console.warn(`  skip (no price found): ${url}`)
     return null
   }
-  return parseFloat(match[1])
+  return { price_usd: parseFloat(match[1]), image_url: extractOgImage(html, url) }
 }
 
 async function main() {
   const parsed: ParsedBattery[] = []
   for (const [i, product] of PRODUCTS.entries()) {
     console.log(`[${i + 1}/${PRODUCTS.length}] ${product.brand} ${product.model}`)
-    const price_usd = await fetchPrice(product.retailer_url)
-    if (price_usd !== null) parsed.push({ ...product, price_usd })
+    const listing = await fetchListing(product.retailer_url)
+    if (listing !== null) parsed.push({ ...product, ...listing })
   }
 
   console.log(`\nPriced ${parsed.length}/${PRODUCTS.length} products.`)
