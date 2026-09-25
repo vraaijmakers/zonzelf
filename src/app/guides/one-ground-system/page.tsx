@@ -3,6 +3,7 @@ import { Cable, Ruler, Sun, BookOpen } from 'lucide-react'
 import {
   GuideBreadcrumb, GuideDisclaimer, GuideHeader, Note, NextSteps, Tldr, Warn,
 } from '@/components/guides/GuideChrome'
+import { GuideClaims } from '@/components/guides/ClaimStamp'
 
 export const metadata = {
   title: 'One Ground System, Not Two — ZonZelf Guide',
@@ -856,6 +857,8 @@ export default function OneGroundSystemPage() {
           having before the trench is closed, not after.
         </p>
       </Warn>
+
+      <GuideClaims slug="one-ground-system" />
 
       <div className="mt-10">
         <NextSteps

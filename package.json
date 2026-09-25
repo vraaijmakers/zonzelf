@@ -12,6 +12,7 @@
     "release:open": "bash scripts/open-release-pr.sh",
     "check:roadmap-migrations": "tsx scripts/check-roadmap-migrations.ts",
     "check:roadmap-sync": "tsx --env-file=.env.local scripts/check-roadmap-sync.ts",
+    "check:content-freshness": "tsx scripts/check-content-freshness.ts",
     "scrape:eg4": "tsx --env-file-if-exists=.env.local scripts/scrape-eg4.ts",
     "scrape:victron": "tsx --env-file-if-exists=.env.local scripts/scrape-victron.ts",
     "scrape:sungoldpower": "tsx --env-file-if-exists=.env.local scripts/scrape-sungoldpower.ts",

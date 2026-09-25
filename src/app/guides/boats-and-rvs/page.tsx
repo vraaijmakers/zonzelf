@@ -3,6 +3,7 @@ import { Anchor, Cable, Sun, Waypoints } from 'lucide-react'
 import {
   GuideBreadcrumb, GuideDisclaimer, GuideHeader, Note, NextSteps, Tldr, Warn,
 } from '@/components/guides/GuideChrome'
+import { GuideClaims } from '@/components/guides/ClaimStamp'
 import { BOAT_RV_GUIDE_HREF, STEP_TRANSFER } from '@/lib/mobile-scope'
 
 export const metadata = {
@@ -461,6 +462,8 @@ export default function BoatsAndRvsGuide() {
         the load and battery numbers with you. Doing the capacity homework first is the part
         that saves you their hourly rate.
       </P>
+
+      <GuideClaims slug="boats-and-rvs" />
 
       <div className="mt-10">
         <NextSteps

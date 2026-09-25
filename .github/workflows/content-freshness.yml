@@ -1,0 +1,114 @@
+name: Content — freshness alarm
+
+# THE GAP THIS CLOSES. The guides assert things that can stop being true with
+# no commit here: which NEC edition deleted 690.47(B), what a 400 W module
+# weighs, which standards this site has and has not opened. On 2026-09-16 a
+# grep across twelve guides found exactly ONE dated claim, and no mechanism
+# anywhere that could notice prose had gone stale. Scraped prices already have
+# this — src/lib/battery-price.ts expires one at 45 days and the weekly scrape
+# refreshes it. Sentences had nothing.
+#
+# WHY A SCHEDULE AND NOT A CI GATE. Nothing here can tell whether a claim is
+# still TRUE; it knows when a human last read the source. That must never fail
+# a pull request — a claim quietly ageing past a threshold is not a reason to
+# block an unrelated bugfix, and a red X people learn to merge through is worse
+# than no check. So this nags on its own clock, exactly like release-drift.yml,
+# and CI stays for things a machine can actually decide.
+#
+# WHY IT RAISES AN ISSUE RATHER THAN OPENING A PR. Answering it means re-reading
+# an NEC section or a datasheet and deciding whether the sentence still holds.
+# No workflow can do that. What it can do is make sure the question is sitting
+# somewhere a person will see it, and close itself once it is answered.
+#
+# SINGLE-MAINTAINER ASSUMPTION, same as the drift alarm: one standing issue,
+# edited in place rather than a new one each week, so a quiet month does not
+# produce four duplicates nobody reads.
+
+on:
+  schedule:
+    # Monday 07:11 UTC. Start of the week, and deliberately not Thursday —
+    # release-drift.yml already nags then, and two alarms on one morning is how
+    # both get ignored.
+    - cron: '11 7 * * 1'
+  # Claims are registered in the same commit that writes the prose, so a push
+  # that lands one should report immediately rather than waiting for Monday.
+  push:
+    branches: [develop, main]
+    paths:
+      - 'src/lib/guide-claims.ts'
+      - 'src/lib/content-freshness.ts'
+      - 'scripts/check-content-freshness.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ISSUE_TITLE: 'Content: claims are due for re-reading'
+
+jobs:
+  freshness:
+    name: Which claims are overdue?
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Check freshness and report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+
+          # Exit code carries the verdict: 0 clean, 1 something is due or
+          # stale, 2 the registry itself is broken. `set -e` is deliberately
+          # NOT on for this line — a non-zero exit is the expected signal, not
+          # a failure, and swallowing it with `|| true` would lose the 2.
+          REPORT=$(npx tsx scripts/check-content-freshness.ts)
+          CODE=$?
+
+          echo "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+
+          NUM=$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title \
+                --jq "[.[] | select(.title == \"$ISSUE_TITLE\")][0].number // empty")
+
+          if [ "$CODE" -eq 0 ]; then
+            echo "Nothing overdue."
+            if [ -n "$NUM" ]; then
+              gh issue close "$NUM" --comment "Every registered claim is back inside its review interval. Closing automatically."
+              echo "Closed the standing freshness issue (#$NUM)."
+            fi
+            exit 0
+          fi
+
+          if [ "$CODE" -ne 1 ] && [ "$CODE" -ne 2 ]; then
+            echo "::error::check-content-freshness.ts exited $CODE — that is a crash, not a verdict."
+            echo "$REPORT"
+            exit "$CODE"
+          fi
+
+          BODY=$(printf '%s\n\n%s\n' "$REPORT" "<sub>Raised by \`.github/workflows/content-freshness.yml\`. Dates live in \`src/lib/guide-claims.ts\`; this issue closes itself once nothing is overdue.</sub>")
+
+          if [ -n "$NUM" ]; then
+            gh issue edit "$NUM" --body "$BODY"
+            echo "Updated the standing freshness issue (#$NUM)."
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$BODY" >/dev/null
+            echo "Opened a freshness issue."
+          fi
+
+          if [ "$CODE" -eq 2 ]; then
+            echo "::error::A registry entry has an unparseable date — the page is showing it as unverified."
+            exit 1
+          fi
+          echo "::warning::Registered claims are overdue for re-reading."
