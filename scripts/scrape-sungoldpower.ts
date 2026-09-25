@@ -18,7 +18,7 @@
 // filtered out at discovery.
 
 import { type ParsedBattery, fetchHtml, sleep, getServiceRoleClient, upsertBatteries, reportScrapeHealth } from './lib/scrape-common'
-import { parseSungoldProduct, type ShopifyProduct } from '../src/lib/sungoldpower-listing'
+import { parseSungoldProduct, oneRowPerSku, type ShopifyProduct, type ListingWithUrl } from '../src/lib/sungoldpower-listing'
 import { toAbsoluteImageUrl } from '../src/lib/product-image'
 
 const SITE = 'https://sungoldpower.com'
@@ -43,18 +43,46 @@ async function fetchProduct(url: string): Promise<ShopifyProduct> {
   return JSON.parse(raw) as ShopifyProduct
 }
 
-export function toBattery(product: ShopifyProduct, url: string): ParsedBattery | null {
+/**
+ * Every battery one product page sells, each with the URL it will be stored
+ * under. Usually one; two where the page covers two capacities.
+ */
+export function toListings(product: ShopifyProduct, url: string): ListingWithUrl[] {
   const result = parseSungoldProduct(product)
   if (!result.ok) {
     console.warn(`  skip (${result.reason}): ${url}`)
-    return null
+    return []
   }
+  return result.listings.map(listing => ({
+    listing,
+    // A variant id only appears where one page sells several batteries, and it
+    // is what gives each of them a source_url of its own. Everywhere else the
+    // page URL is the row's identity and must not change — a changed
+    // source_url forks a row rather than updating it.
+    source_url: listing.variant_id === null ? url : `${url}?variant=${listing.variant_id}`,
+  }))
+}
+
+/**
+ * The database record. variant_id and from_multi_capacity_page are parsing
+ * bookkeeping, not columns — they are dropped here rather than spread into an
+ * insert, which would fail on a column battery_models does not have.
+ */
+function toBattery({ listing, source_url }: ListingWithUrl): ParsedBattery {
   return {
-    ...result.listing,
-    source_url: url,
+    brand: listing.brand,
+    model: listing.model,
+    sku: listing.sku,
+    chemistry: listing.chemistry,
+    voltage: listing.voltage,
+    capacity_ah: listing.capacity_ah,
+    capacity_kwh: listing.capacity_kwh,
+    dod_rated: listing.dod_rated,
+    price_usd: listing.price_usd,
+    source_url,
     // Shopify serves featured_image protocol-relative ("//cdn.shopify.com/…")
-    // and with a ?v= cache-buster that moves on its own; both are handled here.
-    image_url: toAbsoluteImageUrl(result.listing.image_url ?? '', url),
+    // and with a ?v= cache-buster that moves on its own; both handled here.
+    image_url: toAbsoluteImageUrl(listing.image_url ?? '', source_url),
   }
 }
 
@@ -64,25 +92,33 @@ async function main() {
   console.log(`Found ${productUrls.length} candidate product pages (bundles filtered out).`)
   await sleep(CRAWL_DELAY_MS)
 
-  const parsed: ParsedBattery[] = []
+  const found: ListingWithUrl[] = []
   for (const [i, url] of productUrls.entries()) {
     console.log(`[${i + 1}/${productUrls.length}] ${url}`)
     try {
-      const battery = toBattery(await fetchProduct(url), url)
-      if (battery) parsed.push(battery)
+      found.push(...toListings(await fetchProduct(url), url))
     } catch (err) {
       console.warn(`  fetch failed: ${(err as Error).message}`)
     }
     if (i < productUrls.length - 1) await sleep(CRAWL_DELAY_MS)
   }
 
-  console.log(`\nParsed ${parsed.length}/${productUrls.length} products.`)
+  const { kept, dropped } = oneRowPerSku(found)
+  for (const { row, inFavourOf } of dropped) {
+    console.log(`  – ${row.listing.sku} also sold at ${row.source_url} — keeping ${inFavourOf}`)
+  }
+  const parsed = kept.map(toBattery)
+  // `parsed` counts batteries, `productUrls` counts pages, and one page can
+  // hold two batteries — so this can read 7/10. That is the honest pair: the
+  // health check asks whether the catalogue still parses, not whether the two
+  // numbers match.
+  console.log(`\nParsed ${parsed.length} batteries from ${productUrls.length} product pages.`)
   const supabase = getServiceRoleClient()
   const outcomes = await upsertBatteries(supabase, parsed, 'sungoldpower')
   reportScrapeHealth({ source: 'sungoldpower', discovered: productUrls.length, parsed: parsed.length, outcomes })
 }
 
-// Only run when executed directly — importing this file for toBattery
+// Only run when executed directly — importing this file for toListings
 // (e.g. from a test) must not trigger a live scrape.
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch(err => {

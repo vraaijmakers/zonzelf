@@ -36,7 +36,7 @@ export type ShopifyProduct = {
   title: string
   tags: string[]
   featured_image: string | null
-  variants: { title: string; sku: string | null; price: number; available?: boolean }[]
+  variants: { id: number; title: string; sku: string | null; price: number; available?: boolean }[]
 }
 
 export type ParsedListing = {
@@ -50,10 +50,21 @@ export type ParsedListing = {
   dod_rated: null
   price_usd: number
   image_url: string | null
+  /**
+   * Set only when one product page sells more than one battery, and then it is
+   * the Shopify variant id that makes each row's source_url unique
+   * (`…?variant=43342854193289`). Null everywhere else, deliberately: adding a
+   * variant id to a URL that already identifies one battery would change the
+   * source_url of every existing row, and a changed source_url forks a row
+   * rather than updating it.
+   */
+  variant_id: number | null
+  /** True when this came from a page that sells several batteries. Used to break SKU ties. */
+  from_multi_capacity_page: boolean
 }
 
 export type ListingResult =
-  | { ok: true; listing: ParsedListing }
+  | { ok: true; listings: ParsedListing[] }
   | { ok: false; reason: string }
 
 // A variant is one physical battery only if it says so. "2 units"/"4 Unit" are
@@ -117,6 +128,40 @@ export function chemistryFor(title: string, voltage: number): 'lifepo4' | null {
   return isCellMultiple && !isRoundPackName ? 'lifepo4' : null
 }
 
+const KWH_IN_TITLE = /(\d+(?:\.\d+)?)\s*kWh\b/i
+
+/**
+ * The real pack voltage behind a round nominal name.
+ *
+ * "48V" is what a 16S LiFePO4 pack is called; 51.2V is what it is. The
+ * difference is 6.7%, which is exactly the error in row #20 — stored as
+ * 48V/100Ah/4.8kWh while its own title says 5.12kWh.
+ */
+const LFP_PACK_VOLTAGE: Record<number, number> = { 12: 12.8, 24: 25.6, 48: 51.2 }
+
+/**
+ * Capacity from a title that states kWh and no Ah — the 5.12kWh wall-mount.
+ *
+ * Only for LFP packs, and only when the arithmetic lands on a whole number of
+ * amp-hours, which is what keeps this from being a guess: 5120Wh ÷ 51.2V is
+ * exactly 100Ah, while ÷ the marketing 48V is 106.67Ah and gets refused. A
+ * battery whose energy and voltage do not produce a round capacity is one this
+ * rule does not understand, and it says so rather than rounding.
+ */
+export function capacityFromEnergy(title: string, nominalVoltage: number): { voltage: number; capacity_ah: number } | null {
+  const kwh = title.match(KWH_IN_TITLE)
+  if (!kwh) return null
+  const voltage = LFP_PACK_VOLTAGE[nominalVoltage] ?? nominalVoltage
+  const ah = (parseFloat(kwh[1]) * 1000) / voltage
+  if (Math.abs(ah - Math.round(ah)) > 0.02) return null
+  return { voltage, capacity_ah: Math.round(ah) }
+}
+
+/** "12V 100Ah/ 200Ah LiFePo4 Deep Cycle …" → "12V 200Ah LiFePo4 Deep Cycle …" */
+function modelForCapacity(title: string, capacity: number): string {
+  return title.replace(/\d+(?:\.\d+)?\s*Ah\s*\/\s*\d+(?:\.\d+)?\s*Ah/i, `${capacity}Ah`)
+}
+
 export function parseSungoldProduct(product: ShopifyProduct): ListingResult {
   // Trimmed but not tidied. Several titles carry double spaces ("LiFePO4
   // Lithium  Battery") and the published rows carry them too, so collapsing
@@ -124,37 +169,67 @@ export function parseSungoldProduct(product: ShopifyProduct): ListingResult {
   // content is a space — churn in the queue, for nothing a reader would notice.
   const title = product.title.trim()
 
-  const capacities = capacitiesInTitle(title)
-  if (capacities.length > 1) {
-    return {
-      ok: false,
-      reason: `one listing covering ${capacities.join('Ah and ')}Ah — needs a row per capacity, ` +
-        'and both would share this URL (roadmap: key row identity on SKU)',
-    }
-  }
-
   const voltageMatch = title.match(VOLTAGE_IN_TITLE)
   const voltageTag = product.tags.find(t => VOLTAGE_TAG.test(t))
-  const voltage = voltageMatch
+  const nominal = voltageMatch
     ? parseFloat(voltageMatch[1])
     : voltageTag
       ? parseFloat(voltageTag)
       : null
-  if (voltage === null) return { ok: false, reason: 'no voltage in the title or the tags' }
+  if (nominal === null) return { ok: false, reason: 'no voltage in the title or the tags' }
 
-  const capacityTag = product.tags.find(t => CAPACITY_TAG.test(t))
-  const capacity_ah = capacities[0] ?? (capacityTag ? parseFloat(capacityTag) : null)
-  if (capacity_ah === null) {
-    // The 5.12kWh wall-mount is the live example: the title states kWh only,
-    // and kWh ÷ 48V is 106.7Ah, not the 100Ah it actually is — the marketing
-    // "48V" and the real 51.2V pack differ by exactly the error. Dividing would
-    // invent a number that looks parsed.
-    return { ok: false, reason: 'no Ah in the title or the tags (a kWh figure alone cannot give one)' }
+  const chemistry = chemistryFor(title, nominal)
+  if (chemistry === null) {
+    return { ok: false, reason: `the page states no chemistry, and ${nominal}V alone does not imply one` }
   }
 
-  const chemistry = chemistryFor(title, voltage)
-  if (chemistry === null) {
-    return { ok: false, reason: `the page states no chemistry, and ${voltage}V alone does not imply one` }
+  const base = {
+    brand: 'SunGoldPower',
+    chemistry,
+    dod_rated: null,
+    image_url: product.featured_image,
+  } as const
+
+  const capacities = capacitiesInTitle(title)
+
+  // ONE PAGE, SEVERAL BATTERIES. "12V 100Ah/ 200Ah" sells LFP12-100A at $295
+  // and LFP12-200A at $589 under one URL. Taking the first of each built row
+  // #21: the 100Ah capacity and price with the 200Ah SKU bolted on. Each
+  // capacity gets its own row and its own ?variant= URL instead — Shopify
+  // serves those and they are the only stable per-battery URL the site has.
+  if (capacities.length > 1) {
+    const listings: ParsedListing[] = []
+    for (const capacity of capacities) {
+      const forCapacity = product.variants.filter(v =>
+        new RegExp(`\\b${capacity}\\s*ah\\b`, 'i').test(v.title))
+      const variant = pickUnitVariant(forCapacity)
+      if (!variant) continue
+      listings.push({
+        ...base,
+        model: modelForCapacity(title, capacity),
+        sku: variant.sku ?? null,
+        voltage: nominal,
+        capacity_ah: capacity,
+        capacity_kwh: Math.round((nominal * capacity / 1000) * 100) / 100,
+        price_usd: Math.round(variant.price) / 100,
+        variant_id: variant.id,
+        from_multi_capacity_page: true,
+      })
+    }
+    return listings.length > 0
+      ? { ok: true, listings }
+      : { ok: false, reason: `covers ${capacities.join('Ah and ')}Ah but no single new unit for either` }
+  }
+
+  const capacityTag = product.tags.find(t => CAPACITY_TAG.test(t))
+  const stated = capacities[0] ?? (capacityTag ? parseFloat(capacityTag) : null)
+  // Nothing states Ah: the 5.12kWh wall-mount. Its energy and an LFP pack
+  // voltage give a whole number of amp-hours or nothing at all.
+  const derived = stated === null ? capacityFromEnergy(title, nominal) : null
+  const voltage = derived?.voltage ?? nominal
+  const capacity_ah = stated ?? derived?.capacity_ah ?? null
+  if (capacity_ah === null) {
+    return { ok: false, reason: 'no Ah in the title or the tags, and no kWh figure that divides into whole amp-hours' }
   }
 
   const variant = pickUnitVariant(product.variants)
@@ -167,17 +242,52 @@ export function parseSungoldProduct(product: ShopifyProduct): ListingResult {
 
   return {
     ok: true,
-    listing: {
-      brand: 'SunGoldPower',
+    listings: [{
+      ...base,
       model: title.replace(/^SunGoldPower\s*/i, '').trim(),
       sku: variant.sku ?? null,
-      chemistry,
       voltage,
       capacity_ah,
       capacity_kwh: Math.round((voltage * capacity_ah / 1000) * 100) / 100,
-      dod_rated: null,
       price_usd: Math.round(variant.price) / 100,
-      image_url: product.featured_image,
-    },
+      variant_id: null,
+      from_multi_capacity_page: false,
+    }],
   }
+}
+
+/** A parsed battery paired with the URL it would be stored under. */
+export type ListingWithUrl = { listing: ParsedListing; source_url: string }
+
+/**
+ * One battery per SKU per run.
+ *
+ * SunGoldPower sells the 12V 100Ah on its own page AND as a variant of the
+ * "12V 100Ah/ 200Ah" page, so a run that reads both offers LFP12-100A twice.
+ * The dedicated page wins: its URL is stable, its title describes one battery,
+ * and the published row already points at it. Without this, every weekly run
+ * would hand the review queue a second copy of a battery the catalogue already
+ * has — the exact noise the review gate exists to keep out of it.
+ */
+export function oneRowPerSku(rows: ListingWithUrl[]): {
+  kept: ListingWithUrl[]
+  dropped: { row: ListingWithUrl; inFavourOf: string }[]
+} {
+  const bySku = new Map<string, ListingWithUrl>()
+  const kept: ListingWithUrl[] = []
+  const dropped: { row: ListingWithUrl; inFavourOf: string }[] = []
+
+  // Dedicated pages first, so they are the ones that win a tie.
+  const ordered = [...rows].sort((a, b) =>
+    Number(a.listing.from_multi_capacity_page) - Number(b.listing.from_multi_capacity_page))
+
+  for (const row of ordered) {
+    const key = row.listing.sku?.trim().toLowerCase()
+    if (!key) { kept.push(row); continue }
+    const seen = bySku.get(key)
+    if (seen) { dropped.push({ row, inFavourOf: seen.source_url }); continue }
+    bySku.set(key, row)
+    kept.push(row)
+  }
+  return { kept, dropped }
 }
