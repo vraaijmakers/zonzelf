@@ -5,6 +5,7 @@ import BatteryReviewActions from '@/components/admin/BatteryReviewActions'
 import BatteryRevisionActions from '@/components/admin/BatteryRevisionActions'
 import BatteryComparison from '@/components/admin/BatteryComparison'
 import ProductPhoto from '@/components/admin/ProductPhoto'
+import RowId from '@/components/admin/RowId'
 
 type BatteryModelRow = {
   id: number
@@ -141,12 +142,13 @@ export default async function AdminBatteriesPage() {
             {proposals.map(({ revision, row, changed, flags }) => {
               const severity = worstSeverity(flags)
               return (
-                <div key={revision.id} className="bg-zon-paper border border-zon-amber/40 rounded-lg px-4 py-3">
+                <div key={revision.id} id={`row-${row.id}`} className="bg-zon-paper border border-zon-amber/40 rounded-lg px-4 py-3 scroll-mt-4">
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div className="flex items-start gap-3 min-w-0">
                       <ProductPhoto src={row.image_url} alt={`${row.brand} ${row.model}`} size="sm" />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
+                          <RowId id={row.id} />
                           <span className="font-medium text-sm">{row.brand} {row.model}</span>
                           <span className="text-[10px] uppercase tracking-wide bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">
                             live
@@ -223,12 +225,13 @@ export default async function AdminBatteriesPage() {
           const dupes = duplicates.get(row.id)
           const perKwh = row.price_usd != null ? row.price_usd / row.capacity_kwh : null
           return (
-            <div key={row.id} className="bg-zon-paper border border-zon-rule rounded-lg px-4 py-3">
+            <div key={row.id} id={`row-${row.id}`} className="bg-zon-paper border border-zon-rule rounded-lg px-4 py-3 scroll-mt-4">
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div className="flex items-start gap-3 min-w-0">
                   <ProductPhoto src={row.image_url} alt={`${row.brand} ${row.model}`} />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
+                      <RowId id={row.id} />
                       <span className="font-medium text-sm">{row.brand} {row.model}</span>
                       <span className="text-[10px] uppercase tracking-wide bg-zon-rule-soft text-zon-muted rounded px-1.5 py-0.5">
                         {row.chemistry}
@@ -281,10 +284,11 @@ export default async function AdminBatteriesPage() {
       </h2>
       <div className="space-y-2">
         {published.map(row => (
-          <div key={row.id} className="bg-zon-paper border border-zon-rule rounded-lg px-4 py-2.5 flex items-center justify-between gap-4">
+          <div key={row.id} id={`row-${row.id}`} className="bg-zon-paper border border-zon-rule rounded-lg px-4 py-2.5 flex items-center justify-between gap-4 scroll-mt-4">
             <div className="flex items-center gap-3 text-sm min-w-0">
               <ProductPhoto src={row.image_url} alt={`${row.brand} ${row.model}`} size="sm" />
               <div className="min-w-0">
+                <RowId id={row.id} />{' '}
                 <span className="font-medium">{row.brand} {row.model}</span>
                 <span className="text-zon-muted ml-2">{row.voltage}V · {row.capacity_ah}Ah · {row.chemistry}</span>
                 {proposedFor.has(row.id) && (
