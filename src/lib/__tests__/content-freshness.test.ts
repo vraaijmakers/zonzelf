@@ -139,3 +139,20 @@ test('allClaims and claimsFor agree with the registry', () => {
   assert.deepEqual(claimsFor('one-ground-system'), GUIDE_CLAIMS[0].claims)
   assert.deepEqual(claimsFor('a-guide-that-does-not-exist'), [])
 })
+
+// Reporting the review interval alone understates every claim with a change
+// date: the Section 232 floor lands 4 Dec 2026 while its 90-day policy
+// interval runs to the 14th, so the interval alone says "look" ten days after
+// the event.
+test('dueInDays counts to the change date when that comes first', () => {
+  const soon = new Date(NOW.getTime() + 10 * MS_PER_DAY).toISOString().slice(0, 10)
+  const f = claimFreshness(claim({ checkedOn: isoDaysAgo(1), changesOn: soon }), NOW)
+  assert.equal(f.kind, 'current')
+  assert.equal(f.kind === 'current' && f.dueInDays, 10)
+})
+
+test('a far-off change date does not shorten the ordinary interval', () => {
+  const far = new Date(NOW.getTime() + 900 * MS_PER_DAY).toISOString().slice(0, 10)
+  const f = claimFreshness(claim({ checkedOn: isoDaysAgo(1), changesOn: far }), NOW)
+  assert.equal(f.kind === 'current' && f.dueInDays, CADENCE_POLICY.warn - 1)
+})
