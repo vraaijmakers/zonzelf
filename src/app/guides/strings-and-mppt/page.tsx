@@ -5,6 +5,7 @@ import { fieldsFor, type DatasheetField } from '@/lib/datasheet-vocabulary'
 import {
   GuideBreadcrumb, GuideHeader, Tldr, Note, Warn, GuideDisclaimer, NextSteps,
 } from '@/components/guides/GuideChrome'
+import { GuideClaims } from '@/components/guides/ClaimStamp'
 
 export const metadata = {
   title: 'Strings, Voc and the MPPT Window — ZonZelf Guide',
@@ -701,6 +702,8 @@ export default function StringsAndMpptGuide() {
           Open the array wiring calculator →
         </Link>
       </div>
+
+      <GuideClaims slug="strings-and-mppt" />
 
       <NextSteps
         items={[

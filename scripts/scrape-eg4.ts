@@ -13,6 +13,7 @@
 
 import * as cheerio from 'cheerio'
 import { type ParsedBattery, fetchHtml, sleep, getServiceRoleClient, upsertBatteries, reportScrapeHealth } from './lib/scrape-common'
+import { extractOgImage } from '../src/lib/product-image'
 
 const SITE = 'https://eg4electronics.com'
 const CATEGORY_URL = `${SITE}/categories/batteries`
@@ -91,6 +92,7 @@ export function parseProduct(html: string, url: string): ParsedBattery | null {
     dod_rated,
     price_usd: null,
     source_url: url,
+    image_url: extractOgImage(html, url),
   }
 }
 

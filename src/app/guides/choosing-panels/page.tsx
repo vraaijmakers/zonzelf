@@ -3,6 +3,7 @@ import { Sun, Cable, Zap, Ruler, Calculator } from 'lucide-react'
 import {
   GuideBreadcrumb, GuideHeader, Tldr, Note, Warn, GuideDisclaimer, NextSteps,
 } from '@/components/guides/GuideChrome'
+import { GuideClaims } from '@/components/guides/ClaimStamp'
 import {
   EXAMPLE_PANEL, EXAMPLE_PANEL_LARGE, PV_IRRADIANCE_FACTOR,
 } from '@/lib/pv-string'
@@ -573,6 +574,8 @@ export default function ChoosingPanelsGuide() {
           </Link>
         </div>
       </div>
+
+      <GuideClaims slug="choosing-panels" />
 
       <NextSteps
         items={[
