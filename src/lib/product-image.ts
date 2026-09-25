@@ -32,18 +32,26 @@ export function extractOgImage(html: string, pageUrl: string): string | null {
     if (!tag) continue
     const content = /content\s*=\s*["']([^"']+)["']/i.exec(tag[0])
     if (!content) continue
-    const absolute = absolutise(content[1].trim(), pageUrl)
-    if (absolute) return normalizeImageUrl(absolute)
+    const absolute = toAbsoluteImageUrl(content[1].trim(), pageUrl)
+    if (absolute) return absolute
   }
   return null
 }
 
-function absolutise(value: string, pageUrl: string): string | null {
+/**
+ * An image reference from a page, as a storable absolute URL — or null if it
+ * is not one. Exported because a scraper reading a platform API rather than
+ * markup (scrape-sungoldpower.ts, which gets `featured_image` from Shopify's
+ * product JSON) needs the same resolving and the same cache-buster stripping
+ * without any meta tag to extract it from.
+ */
+export function toAbsoluteImageUrl(value: string, pageUrl: string): string | null {
   if (!value) return null
   try {
     // Handles absolute URLs, protocol-relative //cdn/… and site-root /img/….
     const url = new URL(value, pageUrl)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return normalizeImageUrl(url.toString())
   } catch {
     return null
   }

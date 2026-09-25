@@ -68,6 +68,17 @@ export type ScrapeHealth = {
  * Partial loss is a warning, not a failure: one product page 404ing is a thing
  * to look at, not a reason to redden a weekly run and bury the week it means
  * something.
+ *
+ * COLLAPSE IS DIFFERENT, and this is the 2026-09-24 addition. Between
+ * 2026-08-21 and 2026-09-24, scrape-sungoldpower.ts parsed 1 of 10 products
+ * every week — the vendor had moved capacity out of the tags it read — and
+ * every run was green, because "9 of 10 skipped" was only ever a warning. Six
+ * published rows stopped being re-priced in that silence. A run that loses most
+ * of its catalogue has not partially lost anything; its parser no longer
+ * matches the source, which is the same failure as parsing none and deserves
+ * the same red. The line sits at a third rather than at a half so that a
+ * catalogue with a normal amount of non-battery noise in it does not redden a
+ * run for being what it always was.
  */
 export function assessScrape(run: ScrapeRun): ScrapeHealth {
   const discovered = run.discovered ?? run.parsed
@@ -82,6 +93,11 @@ export function assessScrape(run: ScrapeRun): ScrapeHealth {
   } else if (run.parsed === 0) {
     failures.push(
       `found ${discovered} candidate(s) and parsed none — the page markup no longer matches`,
+    )
+  } else if (run.parsed * 3 < discovered) {
+    failures.push(
+      `parsed only ${run.parsed} of ${discovered} — most of the catalogue no longer parses, ` +
+      'which is a source change, not a skip',
     )
   } else if (run.parsed < discovered) {
     warnings.push(

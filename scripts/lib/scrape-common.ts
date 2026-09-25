@@ -61,10 +61,32 @@ export function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Transient upstream failures, and how long to wait before trying again.
+// SunGoldPower returned 503 on two of ten product endpoints on 2026-09-24 and
+// 200 on a retry seconds later; without a retry that is a battery missing from
+// the catalogue for a week, logged as one line nobody reads. 404 and 403 are
+// NOT in here on purpose — a page that is gone should fail the run promptly
+// (scrape-signaturesolar.ts and its retired EG4 entry), not three times slowly.
+const RETRY_STATUSES = new Set([429, 500, 502, 503, 504])
+const RETRY_BACKOFF_MS = [5_000, 15_000, 45_000]
+
 export async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
-  if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`)
-  return res.text()
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
+    if (res.ok) return res.text()
+
+    const backoff = RETRY_BACKOFF_MS[attempt]
+    if (backoff === undefined || !RETRY_STATUSES.has(res.status)) {
+      throw new Error(`${url} → HTTP ${res.status}`)
+    }
+    // A server that says how long to wait is obeyed, within reason.
+    const retryAfter = Number(res.headers.get('retry-after'))
+    const wait = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 120_000)
+      : backoff
+    console.warn(`  … ${url} → HTTP ${res.status}, retrying in ${Math.round(wait / 1000)}s`)
+    await sleep(wait)
+  }
 }
 
 export function getServiceRoleClient(): SupabaseClient {
