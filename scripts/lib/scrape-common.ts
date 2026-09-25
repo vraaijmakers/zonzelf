@@ -52,16 +52,41 @@ export type ParsedBattery = {
   // instead of setting them at insert time.
   retailer?: string
   retailer_url?: string
+  // The vendor's own product photo, for the admin review screen. Outside the
+  // review gate — see syncImageUrl() below and migration 20260924000001.
+  image_url?: string | null
 }
 
 export function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Transient upstream failures, and how long to wait before trying again.
+// SunGoldPower returned 503 on two of ten product endpoints on 2026-09-24 and
+// 200 on a retry seconds later; without a retry that is a battery missing from
+// the catalogue for a week, logged as one line nobody reads. 404 and 403 are
+// NOT in here on purpose — a page that is gone should fail the run promptly
+// (scrape-signaturesolar.ts and its retired EG4 entry), not three times slowly.
+const RETRY_STATUSES = new Set([429, 500, 502, 503, 504])
+const RETRY_BACKOFF_MS = [5_000, 15_000, 45_000]
+
 export async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
-  if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`)
-  return res.text()
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
+    if (res.ok) return res.text()
+
+    const backoff = RETRY_BACKOFF_MS[attempt]
+    if (backoff === undefined || !RETRY_STATUSES.has(res.status)) {
+      throw new Error(`${url} → HTTP ${res.status}`)
+    }
+    // A server that says how long to wait is obeyed, within reason.
+    const retryAfter = Number(res.headers.get('retry-after'))
+    const wait = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 120_000)
+      : backoff
+    console.warn(`  … ${url} → HTTP ${res.status}, retrying in ${Math.round(wait / 1000)}s`)
+    await sleep(wait)
+  }
 }
 
 export function getServiceRoleClient(): SupabaseClient {
@@ -90,9 +115,11 @@ export function reportScrapeHealth(run: ScrapeRun): ScrapeHealth {
   return health
 }
 
-type ExistingRow = ScrapedRecord & { id: number; is_published: boolean }
+type ExistingRow = ScrapedRecord & { id: number; is_published: boolean; image_url: string | null }
 
-const EXISTING_COLUMNS = ['id', 'is_published', ...SCRAPED_FIELDS].join(', ')
+// image_url is selected alongside the gated fields but is not one of them:
+// syncImageUrl() needs to know what is stored to avoid a pointless write.
+const EXISTING_COLUMNS = ['id', 'is_published', 'image_url', ...SCRAPED_FIELDS].join(', ')
 
 function summarize(changes: FieldChange[]): string {
   return changes.map(c => c.field).join(', ')
@@ -247,6 +274,40 @@ async function gateWrite(
   return 'proposed'
 }
 
+/**
+ * Writes the product photo straight onto the row, live or not.
+ *
+ * THE ONE FIELD THAT BYPASSES THE GATE, and the reasoning is in migration
+ * 20260924000001: image_url is admin-only decoration that cannot misinform a
+ * visitor, and gating it would have opened an image-only proposal against
+ * every published row the first time this ran — noise on top of the queue this
+ * column exists to make readable. Everything a visitor actually sees still
+ * goes through gateWrite().
+ *
+ * Null is silence, not a correction, exactly as in diffScrapedFields(): a
+ * vendor page that stopped emitting og:image has not withdrawn the photo.
+ */
+async function syncImageUrl(
+  supabase: SupabaseClient,
+  existing: { id: number; image_url: string | null; brand: string; model: string },
+  image_url: string | null | undefined,
+): Promise<void> {
+  if (!image_url || image_url === existing.image_url) return
+  const { error } = await supabase
+    .from('battery_models')
+    .update({ image_url })
+    .eq('id', existing.id)
+  if (error) {
+    // Rule 7 — say so, but a missing thumbnail must never fail a scrape that
+    // got the specs right.
+    console.error(`  ! ${existing.brand} ${existing.model}: storing the product photo failed: ${error.message}`)
+    return
+  }
+  // Deliberately not one of the outcome markers (= + ✓ → – ✗): this write is
+  // outside the gate, so it is not one of the outcomes the tally counts.
+  console.log(`  · ${existing.brand} ${existing.model} — product photo ${existing.image_url ? 'updated' : 'added'}`)
+}
+
 async function findRows(
   supabase: SupabaseClient,
   match: { column: 'source_url' | 'sku'; value: string },
@@ -308,6 +369,7 @@ export async function upsertBatteries(
 
     for (const row of rows) {
       outcomes.push(await gateWrite(supabase, row, battery, source))
+      await syncImageUrl(supabase, { ...row, brand: battery.brand, model: battery.model }, battery.image_url)
     }
   }
 

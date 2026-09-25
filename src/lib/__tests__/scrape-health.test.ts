@@ -70,6 +70,31 @@ test('one product skipped warns and still passes', () => {
   assert.match(health.warnings.join(' '), /parsed 2 of 3/)
 })
 
+test('losing most of the catalogue fails, where losing one product does not', () => {
+  // scrape-sungoldpower.ts, every Monday from 2026-08-21 to 2026-09-24: ten
+  // products discovered, one parsed, green tick, six published rows quietly
+  // going stale. Under the old rule this was a warning.
+  const collapsed = assessScrape({ source: 'sungoldpower', discovered: 10, parsed: 1, outcomes: ['unchanged'] })
+  assert.equal(collapsed.ok, false)
+  assert.match(collapsed.failures.join(' '), /parsed only 1 of 10/)
+
+  // Where it sits after the parser fix: four products refused for reasons the
+  // log names (two state no chemistry, one has no Ah, one covers two
+  // capacities). That is a catalogue with noise in it, not a broken parser.
+  const healthy = assessScrape({
+    source: 'sungoldpower',
+    discovered: 10,
+    parsed: 6,
+    outcomes: ['unchanged', 'unchanged', 'unchanged', 'proposed', 'proposed', 'inserted'],
+  })
+  assert.equal(healthy.ok, true)
+  assert.match(healthy.warnings.join(' '), /parsed 6 of 10/)
+
+  // The boundary itself: a third parses, which passes; a hair under does not.
+  assert.equal(assessScrape({ source: 'x', discovered: 9, parsed: 3, outcomes: ['unchanged'] }).ok, true)
+  assert.equal(assessScrape({ source: 'x', discovered: 10, parsed: 3, outcomes: ['unchanged'] }).ok, false)
+})
+
 // scrape-victron.ts parses records straight off one page — there is no
 // discovery stage to report, so `parsed` has to stand for both.
 test('omitting discovered falls back to parsed', () => {

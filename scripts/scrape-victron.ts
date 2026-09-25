@@ -26,6 +26,13 @@ import { type ParsedBattery, fetchHtml, getServiceRoleClient, upsertBatteries, r
 
 const URL_ = 'https://www.victronenergy.com/batteries/lithium-battery-12-8v'
 const LABEL_PATTERN = /^LiFePO4\s+[Bb]attery\s+(\d+,\d+)V[\s-]*(\d+)\s*Ah/
+// The same accordion entry that holds each model's PDFs also holds its product
+// photos — "… Smart (front-top).png", "(front).png", "(right-top).png". There
+// is no og:image to read here (this is one page for the whole line, so the
+// page-level image would be the same render on all ten rows), which is why
+// this scraper picks its photo out of the markup instead of using
+// extractOgImage() like the ecommerce scrapers do.
+const IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i
 
 export function parseVictronPage(html: string): ParsedBattery[] {
   const $ = cheerio.load(html)
@@ -41,16 +48,25 @@ export function parseVictronPage(html: string): ParsedBattery[] {
     const key = `${voltage}|${capacity_ah}`
 
     let href = $(li).find('a[href]').first().attr('href') ?? ''
+    let image: string | null = null
     $(li).find('a[href]').each((_, a) => {
       const h = $(a).attr('href')
-      if (h && /\.pdf$/i.test(h)) href = h
+      if (!h) return
+      if (/\.pdf$/i.test(h)) href = h
+      if (!image && IMAGE_PATTERN.test(h)) image = h
     })
     if (!href) return
 
     const existing = models.get(key)
     const existingIsPdf = existing ? /\.pdf$/i.test(existing.source_url) : false
     const isPdf = /\.pdf$/i.test(href)
-    if (existing && (existingIsPdf || !isPdf)) return // keep what we have unless this is a PDF upgrade
+    if (existing && (existingIsPdf || !isPdf)) {
+      // Keeping the better source_url, but this entry may still be the only
+      // place this model's photo appears — a datasheet <li> and a 3D-files
+      // <li> carry different links for the same battery.
+      if (!existing.image_url && image) existing.image_url = image
+      return // otherwise keep what we have unless this is a PDF upgrade
+    }
 
     models.set(key, {
       brand: 'Victron',
@@ -63,6 +79,9 @@ export function parseVictronPage(html: string): ParsedBattery[] {
       dod_rated: null,
       price_usd: null,
       source_url: href,
+      // A photo found in an earlier <li> for this same model outlives the
+      // source_url being upgraded to a PDF.
+      image_url: image ?? existing?.image_url ?? null,
     })
   })
 
