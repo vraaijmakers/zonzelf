@@ -14,6 +14,7 @@
 // script still sleeps 10s between requests to be a respectful crawler.
 
 import { type ParsedBattery, fetchHtml, sleep, getServiceRoleClient, upsertBatteries, reportScrapeHealth } from './lib/scrape-common'
+import { extractOgImage } from '../src/lib/product-image'
 
 const SITE = 'https://sungoldpower.com'
 const CATEGORY_URL = `${SITE}/collections/battery`
@@ -68,6 +69,7 @@ export function parseProduct(html: string, url: string): ParsedBattery | null {
     dod_rated: null,
     price_usd,
     source_url: url,
+    image_url: extractOgImage(html, url),
   }
 }
 
