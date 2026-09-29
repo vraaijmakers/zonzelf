@@ -118,6 +118,8 @@ export default function Routes() {
               {first && (
                 <Link
                   href={first}
+                  data-umami-event="route-start"
+                  data-umami-event-grade={route.grade}
                   className={cn(
                     'mt-auto inline-flex items-center gap-1 text-sm font-semibold',
                     route.featured
