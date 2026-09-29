@@ -159,6 +159,28 @@ The EU Product Liability Directive (2024/2853, software-as-product, strict liabi
 transposition due 9 Dec 2026) is out of scope for a US entity, but would return if EU users
 were ever commercially *targeted*.
 
+### Cookie consent — why there is no banner, and what adds one
+
+ZonZelf shows no cookie banner because it needs none: the only cookies are Supabase's sign-in
+session (strictly necessary), `localStorage` holds only what the reader asked the calculators
+and accessibility menu to remember, and analytics is **Umami**, which is cookieless
+(`src/components/Analytics.tsx`, loaded only when `NEXT_PUBLIC_UMAMI_WEBSITE_ID` is set —
+production only). Affiliate links are plain rewritten URLs (`src/lib/affiliate.ts`); the
+tracking cookie is set by the shop or network on *its* domain after the click.
+
+**A banner becomes required the moment any of these ships**, and it ships in the same PR,
+with `/privacy` updated alongside:
+
+- analytics that sets a cookie or device identifier (Google Analytics, Meta/ads pixels,
+  Hotjar, Clarity)
+- an affiliate network's on-page JavaScript — Awin MasterTag, "Convert-a-Link", Amazon
+  OneLink or anything that auto-rewrites links. **Decline it at signup; plain links earn the
+  same.**
+- display advertising (the second revenue line — ad networks set cookies)
+- embedded third-party media (YouTube, maps); use a link or a click-to-load placeholder
+
+Tracked clicks are `data-umami-event` attributes — grep for it to find them all.
+
 ---
 
 ## Tech Stack & Environment
