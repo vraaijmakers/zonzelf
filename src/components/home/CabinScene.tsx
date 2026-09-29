@@ -6,7 +6,9 @@
  * Two pieces, because they scale differently. The sun keeps the old sun-ring
  * pattern's motif, now radiating from an actual sun; it sits top right and is
  * dropped on narrow screens where it would land behind the headline. The
- * landscape is anchored to the bottom edge and slices at its sides. Below md
+ * landscape is anchored to the bottom edge and drawn 2.5x wider than a laptop
+ * screen, so `slice` only ever trims its sides: a wide window shows more
+ * valley instead of zooming in and cutting off the mountains. Below md
  * it is drawn twice as wide and pulled left so the crop lands on the cabin and
  * its array rather than the empty middle of the valley.
  *
@@ -36,7 +38,7 @@ export function CabinScene() {
   return (
     <svg
       className="pointer-events-none absolute bottom-0 -left-[87%] h-[200px] w-[200%] md:left-0 md:h-[320px] md:w-full"
-      viewBox="0 320 1280 320"
+      viewBox="-960 320 3200 320"
       preserveAspectRatio="xMidYMax slice"
       aria-hidden="true"
     >
@@ -47,8 +49,8 @@ export function CabinScene() {
         </g>
       </defs>
 
-      <path d="M0 420 L110 360 L200 395 L330 318 L450 388 L560 345 L680 402 L800 330 L930 392 L1050 322 L1170 380 L1280 350 L1280 640 L0 640 Z" className="fill-zon-land-far" />
-      <path d="M0 470 C200 425 360 455 520 445 C700 432 860 405 1040 430 C1150 444 1220 434 1280 426 L1280 640 L0 640 Z" className="fill-zon-land-hills" />
+      <path d="M-960 380 L-840 340 L-720 385 L-600 330 L-480 392 L-360 350 L-240 400 L-120 345 L0 420 L110 360 L200 395 L330 318 L450 388 L560 345 L680 402 L800 330 L930 392 L1050 322 L1170 380 L1280 350 L1400 395 L1520 335 L1640 390 L1760 340 L1880 400 L2000 350 L2120 385 L2240 360 L2240 640 L-960 640 Z" className="fill-zon-land-far" />
+      <path d="M-960 450 C-700 420 -400 470 -200 455 C-100 448 -50 478 0 470 C200 425 360 455 520 445 C700 432 860 405 1040 430 C1150 444 1220 434 1280 426 C1500 410 1700 450 1900 440 C2050 432 2150 420 2240 430 L2240 640 L-960 640 Z" className="fill-zon-land-hills" />
       <g className="fill-zon-pine-far">
         <use href="#zz-pine" transform="translate(70 402) scale(0.7)" />
         <use href="#zz-pine" transform="translate(100 408) scale(0.55)" />
@@ -56,8 +58,12 @@ export function CabinScene() {
         <use href="#zz-pine" transform="translate(628 398) scale(0.5)" />
         <use href="#zz-pine" transform="translate(1180 380) scale(0.65)" />
         <use href="#zz-pine" transform="translate(1210 388) scale(0.5)" />
+        <use href="#zz-pine" transform="translate(-300 395) scale(0.65)" />
+        <use href="#zz-pine" transform="translate(-270 402) scale(0.5)" />
+        <use href="#zz-pine" transform="translate(1520 386) scale(0.6)" />
+        <use href="#zz-pine" transform="translate(1900 392) scale(0.55)" />
       </g>
-      <path d="M0 540 C300 512 700 522 1280 500 L1280 640 L0 640 Z" className="fill-zon-land-meadow" />
+      <path d="M-960 530 C-500 545 -200 520 0 540 C300 512 700 522 1280 500 C1600 490 1900 515 2240 505 L2240 640 L-960 640 Z" className="fill-zon-land-meadow" />
 
       {/* Cabin, with the array as its roof */}
       <rect x="838" y="444" width="10" height="34" className="fill-zon-wood-dark" />
@@ -86,8 +92,13 @@ export function CabinScene() {
         <use href="#zz-pine" transform="translate(1255 480) scale(0.9)" />
         <use href="#zz-pine" transform="translate(30 488) scale(1.1)" />
         <use href="#zz-pine" transform="translate(360 500) scale(0.9)" />
+        <use href="#zz-pine" transform="translate(-180 488) scale(1.1)" />
+        <use href="#zz-pine" transform="translate(-600 500) scale(0.9)" />
+        <use href="#zz-pine" transform="translate(1520 470)" />
+        <use href="#zz-pine" transform="translate(1850 480) scale(1.1)" />
+        <use href="#zz-pine" transform="translate(2100 492) scale(0.9)" />
       </g>
-      <path d="M0 600 C400 585 900 592 1280 578 L1280 640 L0 640 Z" className="fill-zon-land-ground" />
+      <path d="M-960 598 C-500 605 -200 596 0 600 C400 585 900 592 1280 578 C1700 570 2000 585 2240 580 L2240 640 L-960 640 Z" className="fill-zon-land-ground" />
     </svg>
   )
 }
