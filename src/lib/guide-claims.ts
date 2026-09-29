@@ -129,6 +129,69 @@ export const GUIDE_CLAIMS: GuideClaims[] = [
       },
     ],
   },
+  {
+    slug: 'what-solar-costs',
+    title: 'What a Solar System Should Cost',
+    claims: [
+      {
+        id: 'section-232-import-floor',
+        statement:
+          'A Section 232 proclamation of 6 August 2026 sets a minimum import price of $0.38/W on modules and $0.22/W on cells, plus a 15% ad valorem duty, effective 12:01 a.m. ET on 4 December 2026.',
+        kind: 'policy',
+        // THE REASON changesOn EXISTS. Age alone cannot catch this: the review
+        // must come due on 4 Dec 2026 even if somebody re-read the
+        // proclamation the day before, because what changes that morning is
+        // the world, not our memory of it.
+        checkedOn: '2026-09-15',
+        changesOn: '2026-12-04',
+        source: 'Presidential proclamation of 6 August 2026 under Section 232; figures confirmed against pv magazine USA and Anza',
+      },
+      {
+        id: 'module-median-transacted-price',
+        statement:
+          'Modules were transacting at a median near $0.271/W, which is what puts the import floor about 40% above the market.',
+        kind: 'policy',
+        // The fastest-decaying figure on the site, and the one closest to the
+        // line this project drew: a live price may not be typed into prose.
+        // It is admitted here as a DATED MARKET OBSERVATION feeding a shown
+        // division, not as a price a reader would pay — the page prints the
+        // arithmetic so a reader can redo it with this week's number. When
+        // panel_models exists it should render from there and this entry goes.
+        checkedOn: '2026-09-15',
+        source: 'Median transacted module price, September 2026, via Anza',
+      },
+      {
+        id: 'section-25d-terminated',
+        statement:
+          'P.L. 119-21 section 70506 terminated 26 U.S.C. 25D, the 30% residential clean energy credit, for expenditures made after 31 December 2025 — and 25D treats an expenditure as made when the original installation is completed.',
+        kind: 'policy',
+        // No changesOn: this one has already happened. A repealed credit does
+        // not un-repeal, so only the ordinary policy cadence applies, and it
+        // is registered mainly so a successor credit does not go unnoticed.
+        checkedOn: '2026-09-15',
+        source: 'P.L. 119-21 section 70506; 26 U.S.C. 25D',
+      },
+      {
+        id: 'us-installed-cost-share',
+        statement:
+          'Customer acquisition was about 23% of a residential system price in H1 2021 at roughly $0.75/W; marketing, profit and labour together are around 43% of an American installed system, while the modules are about 12% of what a homeowner pays.',
+        kind: 'technical',
+        // Technical rather than policy on purpose: these are benchmark
+        // statistics revised on an annual cycle, not law that can change
+        // overnight. The 365-day interval lines up with that cycle.
+        checkedOn: '2026-09-15',
+        source: 'US residential solar cost benchmarks, H1 2021 customer-acquisition share',
+      },
+      {
+        id: 'us-installed-price-per-watt',
+        statement:
+          'A typical American installed residential price is around $3.00/W, roughly three times what the same hardware installs for in Australia.',
+        kind: 'technical',
+        checkedOn: '2026-09-15',
+        source: 'US vs Australia installed residential price comparison',
+      },
+    ],
+  },
 ]
 
 /** All claims, flattened, each paired with the guide that carries it. */
