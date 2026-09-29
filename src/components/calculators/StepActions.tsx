@@ -62,6 +62,10 @@ export default function StepActions({
         {next ? (
           <Link
             href={next.href!}
+            // How far readers get through the sizing chain — see
+            // src/components/Analytics.tsx.
+            data-umami-event="calc-next"
+            data-umami-event-from={current}
             className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-zon-gold px-4 text-[15px] font-semibold text-zon-ink transition-colors hover:bg-zon-gold-deep md:flex-none md:px-6"
           >
             Next: {next.short}

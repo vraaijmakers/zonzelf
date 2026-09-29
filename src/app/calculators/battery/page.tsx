@@ -618,6 +618,13 @@ export default function BatterySizingPage() {
                             href={link.href}
                             target="_blank"
                             rel={relFor(link)}
+                            // Our half of the affiliate funnel: the network
+                            // reports sales, only we can count clicks. `paid`
+                            // separates tagged links from ones that earn nothing.
+                            data-umami-event="shop-click"
+                            data-umami-event-retailer={link.retailer}
+                            data-umami-event-paid={String(link.paid)}
+                            data-umami-event-model={`${m.brand} ${m.model}`}
                             className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-zon-gold text-xs font-semibold text-zon-ink transition-colors hover:bg-zon-gold-deep"
                           >
                             <ShoppingCart className="h-3 w-3 shrink-0" aria-hidden="true" />

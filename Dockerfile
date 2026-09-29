@@ -31,6 +31,13 @@ ENV NEXT_PUBLIC_AFFILIATE_SIGNATURE_SOLAR=$NEXT_PUBLIC_AFFILIATE_SIGNATURE_SOLAR
 ENV NEXT_PUBLIC_AFFILIATE_SUNGOLDPOWER=$NEXT_PUBLIC_AFFILIATE_SUNGOLDPOWER
 ENV NEXT_PUBLIC_AFFILIATE_A1SOLARSTORE=$NEXT_PUBLIC_AFFILIATE_A1SOLARSTORE
 
+# Umami analytics site ID (src/components/Analytics.tsx). Same build-time rule.
+# Empty is the default on purpose, and docker-compose.staging.yml does not
+# pass it: only the production build should count visits, or staging test
+# clicks end up in the numbers. The production value is in .env.example.
+ARG NEXT_PUBLIC_UMAMI_WEBSITE_ID=
+ENV NEXT_PUBLIC_UMAMI_WEBSITE_ID=$NEXT_PUBLIC_UMAMI_WEBSITE_ID
+
 RUN npm run build
 
 FROM node:20-alpine AS runner
