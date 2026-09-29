@@ -1,9 +1,11 @@
 import Link from 'next/link'
-import { Calculator, BookOpen, Wifi, ChevronRight, Battery } from 'lucide-react'
+import { Calculator, BookOpen, ChevronRight, Battery } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { CabinScene, HeroSun } from '@/components/home/CabinScene'
+import Routes from '@/components/home/Routes'
 
 const FEATURES = [
   {
@@ -30,14 +32,6 @@ const FEATURES = [
     badge: 'Free',
     enabled: true,
   },
-  {
-    icon: Wifi,
-    title: 'Live Monitoring',
-    description: 'Connect your inverter (Victron, Sun Gold, Growatt) and watch solar, load, and battery in real time.',
-    href: '/dashboard/monitoring',
-    badge: 'Soon',
-    enabled: false,
-  },
 ]
 
 // Only guides that actually have a page live here. Add an entry back once
@@ -50,45 +44,37 @@ export default function HomePage() {
   return (
     <div>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-zon-cream to-zon-gold-tint border-b">
-        <svg
-          className="pointer-events-none absolute inset-0 h-full w-full text-zon-gold"
-          aria-hidden="true"
-        >
-          <defs>
-            <pattern id="sun-rays" width="120" height="120" patternUnits="userSpaceOnUse">
-              <circle cx="0" cy="0" r="70" fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="1.5" />
-              <circle cx="0" cy="0" r="45" fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="1.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#sun-rays)" />
-        </svg>
-        <div className="relative max-w-6xl mx-auto px-4 py-20 text-center">
+      <section className="relative overflow-hidden bg-zon-cream border-b min-h-[600px] md:min-h-[640px]">
+        <HeroSun />
+        <CabinScene />
+        <div className="relative max-w-6xl mx-auto px-4 pt-16 pb-[220px] md:pt-24 md:pb-[300px] text-center md:text-left">
           <Badge className="mb-4 bg-zon-gold-tint text-zon-gold-deep border-zon-gold-light">
             Zon = sun · Zelf = self · Your energy, your way
           </Badge>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 text-zon-ink">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4 text-zon-ink">
             Your solar system,<br className="hidden md:block" /> built by you
           </h1>
-          <p className="text-lg text-zon-body max-w-2xl mx-auto mb-8">
-            Free calculators and plain-English guides for anyone setting up an off-grid
-            or hybrid solar system — no engineering degree required.
+          <p className="text-lg text-zon-body max-w-xl mx-auto md:mx-0 mb-8">
+            Free calculators and plain-English guides for the cabin, the homestead, the van
+            or the boat — no engineering degree required.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
             <Link href="/guides" className={cn(buttonVariants({ size: 'lg' }), 'bg-zon-gold hover:bg-zon-gold-deep text-zon-ink')}>
               Start learning
             </Link>
-            <Link href="/calculators" className={buttonVariants({ size: 'lg', variant: 'outline' })}>
+            <Link href="/calculators" className={cn(buttonVariants({ size: 'lg', variant: 'outline' }), 'bg-zon-paper')}>
               Open calculators
             </Link>
           </div>
         </div>
       </section>
 
+      <Routes />
+
       {/* Feature cards */}
       <section className="max-w-6xl mx-auto px-4 py-16">
         <h2 className="text-2xl font-bold mb-8 text-center text-zon-ink">Everything you need in one place</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid md:grid-cols-3 gap-5">
           {FEATURES.map(({ icon: Icon, title, description, href, badge, enabled }) => {
             const card = (
               <Card className={`h-full transition-shadow ${enabled ? 'hover:shadow-md' : 'opacity-60'}`}>
