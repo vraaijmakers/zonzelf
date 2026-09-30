@@ -6,6 +6,7 @@ import SignOutButton from '@/components/admin/SignOutButton'
 const NAV = [
   { href: '/admin/roadmap', label: 'Roadmap', enabled: true },
   { href: '/admin/batteries', label: 'Battery Review', enabled: true },
+  { href: '/admin/catalog', label: 'Catalogue', enabled: true },
   { href: '#', label: 'SEO', enabled: false },
   { href: '#', label: 'Memberships', enabled: false },
   { href: '#', label: 'Payments', enabled: false },
