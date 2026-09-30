@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import ProductPhoto from '@/components/admin/ProductPhoto'
 import {
-  STATUS_LABEL, catalogStatus, cheapestUnitPrice, dollarsPerWatt,
+  CEC_EXPLAINED, STATUS_HELP, STATUS_LABEL, catalogStatus, cheapestUnitPrice, dollarsPerWatt,
   type CatalogStatus, type ListingRow,
 } from '@/lib/catalog-view'
 
@@ -24,7 +24,7 @@ type ModelRow = {
 const TABS: { key: CatalogStatus | 'all'; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'verified', label: 'Ready to publish' },
-  { key: 'candidate', label: 'CEC candidates' },
+  { key: 'candidate', label: 'Pre-filled from CEC' },
   { key: 'unspecced', label: 'No specs yet' },
   { key: 'published', label: 'Published' },
   { key: 'hidden', label: 'Hidden' },
@@ -95,6 +95,20 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
         open a model, check its specs against the <strong>manufacturer&apos;s datasheet</strong>,
         verify them, and publish. The database refuses to publish anything unverified.
       </p>
+
+      <details className="text-sm bg-zon-paper border border-zon-rule rounded-lg px-4 py-2 mb-4 max-w-2xl">
+        <summary className="cursor-pointer font-medium text-zon-ink">What do the statuses mean, and what do I do?</summary>
+        <p className="text-zon-body mt-2">{CEC_EXPLAINED}</p>
+        <dl className="mt-3 space-y-3">
+          {(['candidate', 'unspecced', 'verified', 'published', 'hidden'] as const).map(s => (
+            <div key={s}>
+              <dt className="font-medium text-zon-ink">{STATUS_LABEL[s]}</dt>
+              <dd className="text-zon-body">{STATUS_HELP[s].meaning}</dd>
+              <dd className="text-zon-body mt-0.5"><span className="font-medium">What to do:</span> {STATUS_HELP[s].action}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
 
       {heldTotal > 0 && (
         <p className="text-sm bg-zon-amber-tint border border-zon-amber/40 rounded-lg px-4 py-2 mb-4 max-w-2xl">

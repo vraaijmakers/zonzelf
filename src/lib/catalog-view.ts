@@ -97,8 +97,54 @@ export const STATUS_LABEL: Record<CatalogStatus, string> = {
   hidden: 'Hidden',
   published: 'Published',
   verified: 'Verified — ready to publish',
-  candidate: 'CEC candidate',
+  candidate: 'Pre-filled from CEC — check datasheet',
   unspecced: 'No specs yet',
+}
+
+/**
+ * What each status means and what to do about it, in plain English — shown as
+ * the legend on /admin/catalog and as the note on a model page. "CEC" is
+ * explained wherever it appears (CLAUDE.md: explain jargon the first time).
+ */
+export const CEC_EXPLAINED =
+  'CEC is the California Energy Commission. Its Solar Equipment List is a free public register of ' +
+  'about 22,000 panels whose makers submitted independent lab-test results — power, voltages, ' +
+  'currents and temperature coefficients — to qualify for California incentive programmes.'
+
+export const STATUS_HELP: Record<CatalogStatus, { meaning: string; action: string }> = {
+  candidate: {
+    meaning:
+      'The scraper matched this panel to the CEC list by part number and copied the lab figures in. ' +
+      'Probably close, not yet checked. They are not the manufacturer’s datasheet, and the two can ' +
+      'differ: for the SG550WM the CEC list says the voltage rises less in the cold than the datasheet ' +
+      'does, which would let a string hold more panels than is safe.',
+    action:
+      'Open the spec sheet and type the figures in from it, comparing against the CEC column. They agree: ' +
+      'verify, then publish. They differ a little: the datasheet wins — enter its figures and verify. ' +
+      'They differ a lot, or the sheet names a different panel: the match is wrong — hide it or leave it. ' +
+      'No trustworthy sheet: leave it; nothing breaks, it just is not offered to visitors.',
+  },
+  unspecced: {
+    meaning:
+      'Nothing electrical is known yet. Every inverter starts here — shops do not publish inverter specs ' +
+      'and the CEC inverter list does not cover off-grid units — and so does a panel with no CEC match.',
+    action:
+      'Worth doing only for products people will actually pick. Open the spec sheet and fill in the whole ' +
+      'form from it; watch the PV damage ceiling against the top of the MPPT window, and usable against ' +
+      'short-circuit current per tracker. Anything that is not a real unit (a cable, a kit): hide it.',
+  },
+  verified: {
+    meaning: 'Specs were typed in from the manufacturer’s datasheet and passed the physics checks.',
+    action: 'Publish it when you want the calculators to offer it. To correct a figure, change it and verify again.',
+  },
+  published: {
+    meaning: 'Live: the calculators can offer it, with its shop listings as buy links.',
+    action: 'Nothing, unless a price is held. To change its specs, unpublish first — the database insists.',
+  },
+  hidden: {
+    meaning: 'Rejected. Kept rather than deleted, so next week’s scrape finds it and leaves it alone.',
+    action: 'Nothing. Unhide it if it was hidden by mistake.',
+  },
 }
 
 export function catalogStatus(

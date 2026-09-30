@@ -7,7 +7,7 @@ import CatalogModelActions, { HeldPriceActions } from '@/components/admin/Catalo
 import { mergeInto } from '../actions'
 import { priceDisplay, formatAsOf } from '@/lib/battery-price'
 import {
-  INVERTER_FIELDS, PANEL_FIELDS, STATUS_LABEL, catalogStatus, cecDisagreements, dollarsPerWatt, unitPrice,
+  CEC_EXPLAINED, INVERTER_FIELDS, PANEL_FIELDS, STATUS_HELP, STATUS_LABEL, catalogStatus, cecDisagreements, dollarsPerWatt, unitPrice,
   type InverterSpecRow, type ListingRow, type PanelSpecRow,
 } from '@/lib/catalog-view'
 
@@ -186,21 +186,14 @@ export default async function CatalogModelPage(props: PageProps<'/admin/catalog/
 
       <section>
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zon-muted mb-2">Specs</h2>
-        {verified ? (
-          <p className="text-sm text-zon-body mb-3">
-            Verified from the datasheet on {new Date(spec!.verified_at!).toLocaleDateString()}.
-            {m.is_published ? ' Unpublish to correct them.' : ' Change a figure below and verify again to correct it.'}
+        <div className="text-sm text-zon-body mb-3 bg-zon-blue-tint border border-zon-blue/20 rounded-lg px-4 py-3 max-w-2xl space-y-1">
+          <p>
+            <span className="font-medium text-zon-ink">{STATUS_LABEL[status]}.</span>{' '}
+            {STATUS_HELP[status].meaning}
+            {verified && ` Verified on ${new Date(spec!.verified_at!).toLocaleDateString()}.`}
           </p>
-        ) : (
-          <div className="text-sm text-zon-body mb-3 bg-zon-blue-tint border border-zon-blue/20 rounded-lg px-4 py-3 max-w-2xl">
-            Open the spec sheet and type each figure in <strong>from the manufacturer&apos;s document</strong>.
-            {cec
-              ? ' The CEC figures on the right are there to compare against, not to copy: they are lab-tested values that can differ from the datasheet — for the SG550WM the Voc temperature coefficient is −0.259 on the CEC list and −0.35 on the sheet, and the sheet is what a string is sized on.'
-              : m.category === 'inverter'
-                ? ' Shops don’t publish inverter specs, so everything comes from the sheet. Watch the difference between the PV damage ceiling and the top of the MPPT window, and between usable and short-circuit current per tracker.'
-                : ' No CEC match was found for this panel, so there is nothing to compare against.'}
-          </div>
-        )}
+          <p><span className="font-medium text-zon-ink">What to do:</span> {STATUS_HELP[status].action}</p>
+        </div>
 
         {gaps.length > 0 && (
           <div className="text-xs bg-zon-amber-tint border border-zon-amber/40 rounded px-3 py-2 mb-3 max-w-2xl">
@@ -227,6 +220,7 @@ export default async function CatalogModelPage(props: PageProps<'/admin/catalog/
           {cec && (
             <aside className="text-xs bg-zon-paper border border-zon-rule rounded-lg px-3 py-2 self-start">
               <p className="font-medium text-zon-ink mb-1">CEC list — reference only</p>
+              <p className="text-zon-muted mb-2">{CEC_EXPLAINED} Compare, don&apos;t copy: the datasheet wins where they differ.</p>
               <p className="text-zon-muted mb-2">{cec.manufacturer} {cec.model_number}{cec.listed_on ? `, listed ${cec.listed_on}` : ''}</p>
               <dl className="grid grid-cols-2 gap-y-0.5">
                 <dt className="text-zon-muted">Pmax</dt><dd>{cec.pmax_w ?? '—'} W</dd>
