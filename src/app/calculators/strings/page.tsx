@@ -11,7 +11,7 @@ import {
   vocAtTemperature, vmpAtTemperature, cellTempHot, vmpCoefficient,
   maxSeries, minSeries, evaluateArrangements,
   stringVocProtectionView, stringCurrentProtectionView, stringFuseProtectionView,
-  EXAMPLE_PANEL, EXAMPLE_TRACKER, PANEL_PRESETS,
+  EXAMPLE_PANEL, EXAMPLE_TRACKER,
   DEFAULT_CELL_RISE_C, DEFAULT_MPPT_HEADROOM,
   type PanelSpec, type TrackerSpec, type SiteConditions,
 } from '@/lib/pv-string'
@@ -25,6 +25,9 @@ import {
   formatTemp, formatDelta, formatBoth, COEFFICIENT_UNIT_NOTE, type TempUnit,
 } from '@/lib/temperature'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
+import { PanelShelf } from '@/components/calculators/CatalogPicker'
+import { panelOptions, type PanelOption } from '@/lib/catalog-picker'
+import { usePanelCatalog } from '@/lib/use-catalog'
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import MpptWindowBar, { type WindowMarker } from '@/components/calculators/MpptWindowBar'
 import CountGranularity from '@/components/calculators/CountGranularity'
@@ -249,11 +252,15 @@ export default function ArrayWiringPage() {
   }
 
   const [panelBrand, setPanelBrand] = usePersistentState<string>('zonzelf:array:panelModel', '')
-  const activePanel = PANEL_PRESETS.find(p => `${p.brand} ${p.model}` === panelBrand)
+  // Published catalogue panels (the hand-verified presets if it can't load).
+  const panelCatalog = usePanelCatalog()
+  const panelChoices = panelOptions(panelCatalog.rows)
+  const activePanel = panelChoices.find(p => `${p.brand} ${p.model}` === panelBrand)
 
-  const applyPanelPreset = (preset: (typeof PANEL_PRESETS)[number]) => {
+  const applyPanelPreset = (option: PanelOption) => {
+    const preset = option.spec
     setUseExample(false)
-    setPanelBrand(`${preset.brand} ${preset.model}`)
+    setPanelBrand(`${option.brand} ${option.model}`)
     setPanelDraft({
       wattsStc: preset.wattsStc,
       vocStc: preset.vocStc,
@@ -899,49 +906,29 @@ export default function ArrayWiringPage() {
               <CardTitle className="text-sm font-medium text-zon-body">Your panel</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-1">
-              {PANEL_PRESETS.length > 0 && (
-                <div className="rounded-lg bg-zon-rule-soft p-3">
-                  <p className="mb-2 text-xs font-medium text-zon-muted">
-                    Panels we have already read the datasheet for
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {PANEL_PRESETS.map(preset => {
-                      const active = activePanel?.id === preset.id
-                      return (
-                        <button
-                          key={preset.id}
-                          onClick={() => applyPanelPreset(preset)}
-                          aria-pressed={active}
-                          className={`rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
-                            active
-                              ? 'border-zon-gold bg-zon-gold text-zon-ink'
-                              : 'border-zon-rule hover:border-zon-gold-light'
-                          }`}
-                        >
-                          <span className="font-medium">{preset.model}</span>
-                          <span className="ml-1.5 text-xs text-zon-muted">
-                            {preset.brand} · {preset.wattsStc}W
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  {activePanel && (
-                    <p className="mt-2 text-xs text-zon-muted">
-                      From{' '}
-                      <a
-                        href={activePanel.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-zon-gold-deep hover:underline"
-                      >
-                        {activePanel.brand}&apos;s own datasheet
-                      </a>
-                      . Check it against your copy — panel revisions change these numbers, and the
-                      Voc coefficient in particular decides how many you may put in a string.
-                    </p>
-                  )}
-                </div>
+              <PanelShelf
+                options={panelChoices}
+                loading={panelCatalog.loading}
+                fromPresets={panelCatalog.fromPresets}
+                activeId={activePanel?.id ?? null}
+                onPick={applyPanelPreset}
+              />
+              {activePanel && (
+                <p className="text-xs text-zon-muted">
+                  Filled in from{' '}
+                  <a
+                    href={activePanel.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-zon-gold-deep hover:underline"
+                  >
+                    {activePanel.brand}&apos;s own datasheet
+                  </a>
+                  , which we read and checked before listing it. Check it against your copy — panel
+                  revisions change these numbers, and the Voc coefficient in particular decides how
+                  many you may put in a string. Whether this panel wires safely to your unit is worked
+                  out below, with the arithmetic shown.
+                </p>
               )}
 
               <p className="text-xs text-zon-muted">
