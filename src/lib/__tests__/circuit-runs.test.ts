@@ -218,3 +218,22 @@ test('a battery voltage on a PV run is caught by value, not by guesswork', () =>
     assert.equal(looksLikeBatteryVoltage('general', v), false)
   }
 })
+
+// 6S2P on two trackers read "One panel string → combiner", and the obvious
+// question was where the second string's wires had gone. There is no combiner
+// on that layout, and both pairs take the same size.
+test('the string run is labelled for the array actually designed', () => {
+  const label = (a: ArraySummary) => resolveRuns({ array: a }).find(r => r.id === 'pv-string')!
+  const twoTrackers = label(ARRAY)
+  assert.equal(twoTrackers.label, 'Each of your 2 strings → inverter')
+  assert.match(twoTrackers.where, /2 pairs and no combiner/)
+  assert.match(twoTrackers.where, /longest run/)
+
+  assert.equal(label({ ...ARRAY, parallel: 1, panels: 7 }).label, 'Your string → inverter')
+
+  const shared = label({ ...ARRAY, parallel: 4, panels: 28, stringsPerTracker: 2 })
+  assert.equal(shared.label, 'Each of your 4 strings → combiner')
+
+  // Without an array the generic wording stays, since the layout is unknown.
+  assert.equal(resolveRuns({}).find(r => r.id === 'pv-string')!.label, runById('pv-string').label)
+})
