@@ -1,0 +1,117 @@
+name: Scrape — component catalogue
+
+# Panels and inverters, weekly. The battery equivalent is scrape-batteries.yml,
+# and everything its header says about secrets, which database this writes to
+# and how a run fails applies here unchanged — read it first.
+#
+# WHAT A RUN CAN DO. Insert unpublished models and listings, refresh listing
+# prices, and pre-fill CANDIDATE panel specs from the CEC list. It cannot
+# publish anything, and cannot write a spec row an admin has verified — the
+# database refuses the first (component_models_publish_gate) and
+# scripts/lib/catalog-write.ts never attempts the second. A price that moves
+# more than 30% on a published model is held beside the live one, not written.
+# See supabase/migrations/20260930000001_component_catalog.sql.
+#
+# WHY A SEPARATE WORKFLOW. The Signature Solar crawl reads ~200 pages at the
+# 10-second crawl delay its robots.txt sets — over half an hour, which would
+# blow scrape-batteries.yml's 30-minute budget and hold five quick battery
+# scrapers hostage to one slow one.
+
+on:
+  schedule:
+    # Monday 07:47 UTC — an hour and a half after scrape-batteries.yml, which
+    # also fetches from signaturesolar.com. The crawl delay is per site, not
+    # per process, so the two must not overlap.
+    - cron: '47 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Run one step instead of both'
+        type: choice
+        default: all
+        options: [all, cec-pv, signaturesolar-catalog]
+
+concurrency:
+  group: scrape-catalog
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    name: Re-scrape panels and inverters
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    env:
+      ONLY: ${{ inputs.only || 'all' }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check the secrets are set
+        run: |
+          MISSING=""
+          [ -n "$NEXT_PUBLIC_SUPABASE_URL" ] || MISSING="$MISSING NEXT_PUBLIC_SUPABASE_URL"
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || MISSING="$MISSING SUPABASE_SERVICE_ROLE_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing repository secret(s):$MISSING — see the header of scrape-batteries.yml."
+            exit 1
+          fi
+
+      # ORDER MATTERS: the catalogue scrape looks panels up in cec_pv_modules,
+      # so the list is refreshed first. A failed CEC import does not stop the
+      # scrape — last week's list is still a good list.
+      - name: CEC PV module list
+        id: cec
+        if: env.ONLY == 'all' || env.ONLY == 'cec-pv'
+        continue-on-error: true
+        run: npm run import:cec-pv
+
+      - name: Signature Solar — panels and inverters
+        id: signaturesolar
+        if: env.ONLY == 'all' || env.ONLY == 'signaturesolar-catalog'
+        continue-on-error: true
+        run: npm run scrape:signaturesolar-catalog
+
+      - name: Report
+        if: always()
+        env:
+          RESULTS: |
+            cec-pv=${{ steps.cec.outcome }}
+            signaturesolar-catalog=${{ steps.signaturesolar.outcome }}
+        run: |
+          {
+            echo "### Component catalogue re-scrape"
+            echo ""
+            echo "| Step | Result |"
+            echo "| --- | --- |"
+            echo "$RESULTS" | while IFS='=' read -r name outcome; do
+              [ -n "$name" ] || continue
+              case "$outcome" in
+                success) icon="✅ ok" ;;
+                failure) icon="❌ failed" ;;
+                skipped|"") icon="— not run" ;;
+                *) icon="$outcome" ;;
+              esac
+              echo "| $name | $icon |"
+            done
+            echo ""
+            echo "New models are unpublished. Nothing is published until an admin verifies"
+            echo "its specs against the manufacturer datasheet."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if echo "$RESULTS" | grep -q '=failure'; then
+            echo "::error::A step failed — open its log. Scrapers fail when they collect nothing they should have, or a write errors."
+            exit 1
+          fi
