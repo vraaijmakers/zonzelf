@@ -21,7 +21,7 @@ export default function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm text-gray-500 mb-6">Last updated: 8 September 2026</p>
+      <p className="text-sm text-gray-500 mb-6">Last updated: 28 September 2026</p>
 
       <p className="text-gray-700 leading-relaxed">
         This page explains what data ZonZelf collects when you use the site, why, and what
@@ -39,12 +39,36 @@ export default function PrivacyPage() {
         </ul>
       </Section>
 
-      <Section title="Cookies">
+      <Section title="Cookies, browser storage, and analytics">
         <p>
-          We use strictly necessary cookies set by our authentication provider to keep you
-          signed in. We do not currently use advertising or third-party tracking cookies. If
-          that changes, this page — and, where required, an on-site consent banner — will be
-          updated first.
+          <strong>Cookies.</strong> We use strictly necessary cookies set by our authentication
+          provider to keep you signed in. We do not use advertising or third-party tracking
+          cookies.
+        </p>
+        <p>
+          <strong>Browser storage.</strong> The calculators save your inputs, and the
+          accessibility menu saves your display settings, in your browser&apos;s local storage so
+          they are still there when you come back. This stays on your device and is never sent
+          to us. Clearing your browser&apos;s site data removes it.
+        </p>
+        <p>
+          <strong>Analytics.</strong> We count page visits and a few clicks (such as moving to the
+          next calculator step or following a shop link) with Umami, a privacy-focused analytics
+          service. It sets no cookies, stores nothing on your device, and does not identify you
+          or follow you across other websites.
+        </p>
+        <p>
+          <strong>Shop links.</strong> Some links to retailers may be affiliate links (see our{' '}
+          <Link href="/affiliate-disclosure" className="text-yellow-700 hover:underline">
+            affiliate disclosure
+          </Link>
+          ). When you follow one, the retailer or its affiliate network may set its own cookies on
+          its own website so that a purchase can be credited to ZonZelf. Those cookies are
+          governed by that retailer&apos;s privacy policy, not this one.
+        </p>
+        <p>
+          If any of this changes, this page — and, where required, an on-site consent banner —
+          will be updated first.
         </p>
       </Section>
 

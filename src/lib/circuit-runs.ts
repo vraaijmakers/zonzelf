@@ -182,6 +182,41 @@ const round1 = (n: number) => Math.round(n * 10) / 10
  * A run whose inputs are missing comes back with nulls rather than a guess —
  * the page then asks for the number instead of inventing one.
  */
+/**
+ * The string run's label, fitted to the array actually designed.
+ *
+ * The generic label says "→ combiner", and on the common layout of one string
+ * per tracker there is no combiner: each string runs straight to its own
+ * input. Someone with 6S2P then reads "one panel string" and asks where the
+ * second pair of wires went. It went nowhere — both pairs carry one string's
+ * current and take the same size — but the label has to say so.
+ */
+function pvStringWording(arr: ArraySummary): Pick<CircuitRun, 'label' | 'where'> {
+  const strings = Math.max(1, arr.parallel)
+  const combined = Math.max(1, arr.stringsPerTracker ?? 1) > 1
+  const sameSize =
+    'Each string carries only its own current, so one size covers every pair — size it on ' +
+    'the longest run.'
+  if (combined) {
+    return {
+      label: `Each of your ${strings} strings → combiner`,
+      where: `From the last panel in each string to the combiner box. ${sameSize}`,
+    }
+  }
+  if (strings === 1) {
+    return {
+      label: 'Your string → inverter',
+      where: 'From the last panel straight to the inverter PV input. One string, so no combiner.',
+    }
+  }
+  return {
+    label: `Each of your ${strings} strings → inverter`,
+    where:
+      `Every string gets its own + and − pair straight to its own tracker, so ${strings} pairs ` +
+      `and no combiner. ${sameSize}`,
+  }
+}
+
 export function resolveRuns(s: ChainSummaries): ResolvedRun[] {
   const inv = s.inverter ?? null
   const arr = s.array ?? null
@@ -192,6 +227,7 @@ export function resolveRuns(s: ChainSummaries): ResolvedRun[] {
         if (!arr || !(arr.panelIscA > 0)) return { ...run, amps: null, volts: null, derivation: null, applies: true }
         return {
           ...run,
+          ...pvStringWording(arr),
           amps: arr.panelIscA,
           volts: Math.round(arr.vmpHotV),
           derivation:
