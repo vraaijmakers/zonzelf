@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { panelCountMap, windowAround } from '../panel-granularity'
-import { PANEL_PRESETS, EXAMPLE_PANEL, EXAMPLE_TRACKER, type SiteConditions, type TrackerSpec } from '../pv-string'
+import { panelCountMap, windowAround, ratingsThatWouldFit } from '../panel-granularity'
+import { PANEL_PRESETS, EXAMPLE_PANEL, EXAMPLE_TRACKER, evaluateArrangements, type SiteConditions, type TrackerSpec } from '../pv-string'
 import { INVERTER_PRESETS } from '../inverter-sizing'
 
 // The pairing the whole sizing chain is argued from: the site's only admitted
@@ -147,4 +147,28 @@ test('the same pairing wires different counts at different design lows', () => {
   assert.ok(warm.wirableCounts.includes(9), 'nine wires on a mild morning')
   assert.ok(!cold.wirableCounts.includes(9), 'and does not on a -25.9 degC one')
   assert.ok(warm.ceiling! > cold.ceiling!, 'a warmer site allows a taller string, so a bigger array')
+})
+
+// Twenty on this pairing is the dead end that prompted ratingsThatWouldFit:
+// nothing wires, and "a different inverter" was all the page could say.
+test('twenty panels names the ratings a replacement inverter would need', () => {
+  const map = panelCountMap(SG550WM, TRACKER, COLD, { target: 20 })
+  assert.equal(map.targetWirable, false)
+  assert.equal(map.nearestAtOrAbove, null)
+
+  const { inputV, trackerA } = ratingsThatWouldFit(evaluateArrangements(SG550WM, TRACKER, COLD, 20))
+  // Two strings of ten: one per tracker, so current is fine and only volts fail.
+  assert.equal(`${inputV!.arrangement.series}S${inputV!.arrangement.parallel}P`, '10S2P')
+  assert.ok(inputV!.needs > TRACKER.pvMaxInputV)
+  // Four strings of five: two per tracker, so volts are fine and only amps fail.
+  assert.equal(`${trackerA!.arrangement.series}S${trackerA!.arrangement.parallel}P`, '5S4P')
+  assert.ok(trackerA!.needs > (TRACKER.pvMaxIscA ?? TRACKER.pvMaxCurrentA))
+})
+
+test('an arrangement over two limits at once does not count as a one-rating fix', () => {
+  const { inputV, trackerA } = ratingsThatWouldFit(
+    evaluateArrangements(SG550WM, TRACKER, COLD, 20).map(a => ({ ...a, exceedsDamageCeiling: true, exceedsCurrent: true })),
+  )
+  assert.equal(inputV, null)
+  assert.equal(trackerA, null)
 })

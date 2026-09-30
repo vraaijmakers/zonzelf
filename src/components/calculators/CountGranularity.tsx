@@ -27,10 +27,16 @@ export default function CountGranularity({
   map,
   tracker,
   panelWatts,
+  current,
+  onChoose,
 }: {
   map: GranularityMap
   tracker: TrackerSpec
   panelWatts: number
+  /** The count the page is wiring right now, if it differs from the target. */
+  current?: number
+  /** Wire a different count. Omitted where a choice would not be kept. */
+  onChoose?: (panels: number) => void
 }) {
   const target = map.target
   const shown = windowAround(map, target)
@@ -113,6 +119,7 @@ export default function CountGranularity({
             <tbody>
               {shown.map(o => {
                 const isTarget = o.panels === target
+                const isCurrent = o.panels === (current ?? target)
                 return (
                   <tr
                     key={o.panels}
@@ -122,6 +129,9 @@ export default function CountGranularity({
                       {o.panels}
                       {isTarget && (
                         <span className="ml-2 font-sans text-zon-muted">target</span>
+                      )}
+                      {isCurrent && !isTarget && (
+                        <span className="ml-2 font-sans font-medium text-zon-gold-deep">wiring</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-zon-body">
@@ -143,6 +153,15 @@ export default function CountGranularity({
                             {o.best!.series}S{o.best!.parallel}P
                           </span>
                           {!o.clean && <span className="text-zon-muted">— works, with a caveat</span>}
+                          {onChoose && !isCurrent && (
+                            <button
+                              onClick={() => onChoose(o.panels)}
+                              className="ml-auto shrink-0 rounded-md border border-zon-gold-light bg-zon-gold-tint px-2 py-0.5 font-medium text-zon-gold-deep hover:border-zon-gold"
+                              aria-label={`Wire ${o.panels} panels`}
+                            >
+                              Use
+                            </button>
+                          )}
                         </span>
                       ) : (
                         <span className="flex items-center gap-1.5">
