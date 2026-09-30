@@ -198,3 +198,40 @@ export function windowAround(map: GranularityMap, target: number | null, span = 
   const upTo = Math.max(target + span, map.nearestAtOrAbove ?? target)
   return map.options.filter(o => o.panels >= Math.max(1, target - span) && o.panels <= upTo)
 }
+
+/** The one inverter rating that, raised, would let an arrangement through. */
+export interface RatingNeeded {
+  arrangement: ArrangementCheck
+  /** Volts of maximum PV input, or amps per tracker, the arrangement needs. */
+  needs: number
+}
+
+/**
+ * What a DIFFERENT inverter would have to be rated for, so a count that fails
+ * on this one can be shopped for rather than guessed at.
+ *
+ * Only arrangements held back by exactly one limit count: one that is over the
+ * input voltage AND over the tracker current needs two things changed, and one
+ * under the tracking floor is not fixed by a bigger rating at all. The answer
+ * is a floor to look for on a datasheet, not a verdict on any unit — a
+ * replacement brings its own window, which step 5 then has to check again.
+ */
+export function ratingsThatWouldFit(arrangements: ArrangementCheck[]): {
+  inputV: RatingNeeded | null
+  trackerA: RatingNeeded | null
+} {
+  let inputV: RatingNeeded | null = null
+  let trackerA: RatingNeeded | null = null
+  for (const a of arrangements) {
+    if (a.belowWindow) continue
+    if (a.exceedsDamageCeiling && !a.exceedsCurrent) {
+      const needs = Math.ceil(a.vocColdV)
+      if (!inputV || needs < inputV.needs) inputV = { arrangement: a, needs }
+    }
+    if (a.exceedsCurrent && !a.exceedsDamageCeiling) {
+      const needs = Math.ceil(a.designIscA)
+      if (!trackerA || needs < trackerA.needs) trackerA = { arrangement: a, needs }
+    }
+  }
+  return { inputV, trackerA }
+}

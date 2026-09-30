@@ -28,7 +28,7 @@ import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/Calcula
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import MpptWindowBar, { type WindowMarker } from '@/components/calculators/MpptWindowBar'
 import CountGranularity from '@/components/calculators/CountGranularity'
-import { panelCountMap } from '@/lib/panel-granularity'
+import { panelCountMap, ratingsThatWouldFit } from '@/lib/panel-granularity'
 
 /**
  * Step 5 — the arrangement.
@@ -134,6 +134,12 @@ export default function ArrayWiringPage() {
   const [unit, setUnit] = usePersistentState<TempUnit>('zonzelf:tempUnit', DEFAULT_TEMP_UNIT)
   const [placeQuery, setPlaceQuery] = usePersistentState<string>('zonzelf:array:placeQuery', '')
   const [count, setCount, countMeta] = usePersistentState<number>('zonzelf:array:panelCount', 8)
+  // A count picked on this page to get out of a dead end. Kept with the step-4
+  // target it was picked against, so changing step 4 retires it instead of
+  // leaving a stale count silently overriding the new one.
+  const [countChoice, setCountChoice] = usePersistentState<{ panels: number; target: number } | null>(
+    'zonzelf:array:countChoice', null,
+  )
 
   const chosenSite = siteId ? siteById(siteId) : undefined
   const matches = searchSites(placeQuery)
@@ -150,7 +156,13 @@ export default function ArrayWiringPage() {
   const panelSummary = usePanelSummary()
 
   // Follow the panel step's count until this page has one of its own.
-  const panelCount = !countMeta.restored && panelSummary?.panels ? panelSummary.panels : count
+  const stepTarget = panelSummary?.panels ?? null
+  const chosenCount = countChoice && countChoice.target === stepTarget ? countChoice.panels : null
+  const panelCount = chosenCount ?? (!countMeta.restored && stepTarget ? stepTarget : count)
+  const chooseCount = (n: number) => {
+    if (stepTarget === null) return setCount(n)
+    setCountChoice(n === stepTarget ? null : { panels: n, target: stepTarget })
+  }
 
   const panelReady = REQUIRED.every(k => panelDraft[k] !== null)
   const panel: PanelSpec | null = useExample
@@ -200,6 +212,7 @@ export default function ArrayWiringPage() {
   const countMap = ready
     ? panelCountMap(panel!, tracker!, site, { target: panelSummary?.panels ?? panelCount })
     : null
+  const fixes = ratingsThatWouldFit(arrangements)
   const best = arrangements.find(a => a.ideal) ?? arrangements.find(a => a.safe) ?? arrangements[0]
   // Nothing passing is a real answer and has to look like one. The card must
   // not headline a destroying arrangement in gold as though it were a result.
@@ -413,33 +426,111 @@ export default function ArrayWiringPage() {
                     </div>
 
                     {!anySafe && (
-                      <p className="flex gap-2 border-t border-zon-gold-light pt-3 text-xs text-zon-body">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-zon-red" aria-hidden="true" />
-                        <span>
-                          <strong className="text-zon-ink">No arrangement of {panelCount} panels
-                          works with this inverter.</strong> Every option runs into one of its
-                          limits — {tracker.pvMaxInputV}V in, {tracker.pvMaxCurrentA}A per
-                          tracker, or the {tracker.mpptMinV}V tracking floor. The table shows
-                          which one each hits.{' '}
-                          {countMap?.nearestAtOrAbove || countMap?.nearestBelow ? (
-                            <>
-                              <strong className="text-zon-ink">
-                                Changing the count is usually the fix, and it does not need a
-                                different inverter
-                              </strong>{' '}
-                              — {[countMap.nearestBelow, countMap.nearestAtOrAbove]
-                                .filter((n): n is number => n !== null)
-                                .join(' or ')}{' '}
-                              panels wires on this same unit. The counts table below shows what
-                              each one costs you against the energy target.
-                            </>
-                          ) : (
-                            <>
-                              No count in range wires on this unit, so this one needs a different
-                              panel or a different inverter — not more modules.
-                            </>
-                          )}
-                        </span>
+                      <div className="space-y-3 border-t border-zon-gold-light pt-3 text-xs text-zon-body">
+                        <p className="flex gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-zon-red" aria-hidden="true" />
+                          <span>
+                            <strong className="text-zon-ink">No arrangement of {panelCount} panels
+                            works with this inverter.</strong> Every option runs into one of its
+                            limits — {tracker.pvMaxInputV}V in, {tracker.pvMaxCurrentA}A per
+                            tracker, or the {tracker.mpptMinV}V tracking floor. The table shows
+                            which one each hits.
+                          </span>
+                        </p>
+
+                        {/* The way out, as things to press — not a paragraph that
+                            names the fix and leaves the reader to go and find it. */}
+                        <p className="text-xs font-medium uppercase tracking-wide text-zon-muted">
+                          Ways out
+                        </p>
+                        <ul className="space-y-2">
+                          {[countMap?.nearestBelow, countMap?.nearestAtOrAbove]
+                            .filter((n): n is number => n != null)
+                            .map(n => {
+                              const pct = stepTarget ? Math.round((n / stepTarget - 1) * 100) : null
+                              return (
+                                <li key={n}>
+                                  <button
+                                    onClick={() => chooseCount(n)}
+                                    className="w-full rounded-lg border border-zon-gold bg-zon-gold px-3 py-2 text-left text-zon-ink transition-colors hover:bg-zon-gold-light"
+                                  >
+                                    <span className="block text-sm font-semibold">
+                                      Wire {n} panels instead
+                                    </span>
+                                    <span className="block text-xs">
+                                      Same panel, same inverter
+                                      {panel ? ` · ${((n * panel.wattsStc) / 1000).toFixed(1)} kW` : ''}
+                                      {pct !== null && pct !== 0 ? ` · ${pct > 0 ? '+' : ''}${pct}% against the energy target` : ''}
+                                    </span>
+                                  </button>
+                                </li>
+                              )
+                            })}
+                          <li>
+                            <Link
+                              href="/calculators/inverter"
+                              className="block rounded-lg border border-zon-rule bg-zon-paper px-3 py-2 transition-colors hover:border-zon-gold-light"
+                            >
+                              <span className="block text-sm font-semibold text-zon-ink">
+                                Pick a different inverter →
+                              </span>
+                              <span className="block text-xs text-zon-body">
+                                {fixes.inputV || fixes.trackerA ? (
+                                  <>
+                                    For {panelCount} panels, look for{' '}
+                                    {fixes.inputV && (
+                                      <>
+                                        a maximum PV input of at least{' '}
+                                        <strong className="text-zon-ink">{fixes.inputV.needs}V</strong>{' '}
+                                        (as {fixes.inputV.arrangement.series}S{fixes.inputV.arrangement.parallel}P)
+                                      </>
+                                    )}
+                                    {fixes.inputV && fixes.trackerA && ', or '}
+                                    {fixes.trackerA && (
+                                      <>
+                                        at least{' '}
+                                        <strong className="text-zon-ink">{fixes.trackerA.needs}A</strong>{' '}
+                                        per tracker (as {fixes.trackerA.arrangement.series}S{fixes.trackerA.arrangement.parallel}P)
+                                      </>
+                                    )}
+                                    . A replacement brings its own window, so check it here again.
+                                  </>
+                                ) : (
+                                  <>One with a wider voltage window or more trackers.</>
+                                )}
+                              </span>
+                            </Link>
+                          </li>
+                          <li>
+                            <a
+                              href="#your-panel"
+                              className="block rounded-lg border border-zon-rule bg-zon-paper px-3 py-2 transition-colors hover:border-zon-gold-light"
+                            >
+                              <span className="block text-sm font-semibold text-zon-ink">
+                                Try a different panel ↓
+                              </span>
+                              <span className="block text-xs text-zon-body">
+                                Lower current lets two strings share one tracker; lower voltage
+                                lets more go in series.
+                              </span>
+                            </a>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                    {anySafe && chosenCount !== null && stepTarget !== null && (
+                      <p className="border-t border-zon-gold-light pt-3 text-xs text-zon-body">
+                        <strong className="text-zon-ink">
+                          Wiring {chosenCount} of the {stepTarget} panels step 4 sized for
+                        </strong>{' '}
+                        — {Math.abs(Math.round((chosenCount / stepTarget - 1) * 100))}%{' '}
+                        {chosenCount < stepTarget ? 'under' : 'over'} the energy target.{' '}
+                        <button
+                          onClick={() => chooseCount(stepTarget)}
+                          className="font-medium text-zon-gold-deep underline"
+                        >
+                          Back to {stepTarget}
+                        </button>
                       </p>
                     )}
                     {!best.exceedsDamageCeiling && best.thinHeadroom && (
@@ -568,7 +659,13 @@ export default function ArrayWiringPage() {
           {/* Which COUNTS wire at all — the cross-count view the table above
               cannot give, because it only ever looks at one count. */}
           {countMap && tracker && panel && (
-            <CountGranularity map={countMap} tracker={tracker} panelWatts={panel.wattsStc} />
+            <CountGranularity
+              map={countMap}
+              tracker={tracker}
+              panelWatts={panel.wattsStc}
+              current={panelCount}
+              onChoose={useExample ? undefined : chooseCount}
+            />
           )}
 
           {/* Temperature — the input that decides everything. */}
@@ -797,7 +894,7 @@ export default function ArrayWiringPage() {
           </Card>
 
           {/* The panel's own label. */}
-          <Card>
+          <Card id="your-panel" className="scroll-mt-36">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-zon-body">Your panel</CardTitle>
             </CardHeader>
