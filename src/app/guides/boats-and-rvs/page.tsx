@@ -295,7 +295,9 @@ export default function BoatsAndRvsGuide() {
         is what breaks that path while leaving the safety ground intact for fault current.
       </P>
       <P>
-        The neutral-to-ground bond follows the same one-bond logic as the cabin guide and
+        The neutral-to-ground bond follows the same one-bond logic as{' '}
+        <Link href="/guides/ac-output-ground" className="text-zon-gold-deep hover:underline">the cabin guide</Link>{' '}
+        and
         arrives at the opposite answer: on shore power the bond is ashore, so the boat must not
         make a second one, and when the inverter or generator becomes the source the bond has to
         transfer to it. An RV is a simpler version of the same idea — no electrode, chassis as

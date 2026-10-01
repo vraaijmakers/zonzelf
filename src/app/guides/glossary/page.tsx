@@ -82,6 +82,16 @@ const ENTRIES = [
     html: 'A device that watches whether the current going out on the live wire all comes back on neutral. If some is leaking — possibly through a person — it trips in milliseconds. A second layer of protection on top of, not instead of, earthing. See <a href="/guides/grounding">earth grounding</a>.',
   },
   {
+    term: 'EGC',
+    aka: 'equipment grounding conductor',
+    html: 'The safety wire that runs <em>with</em> a circuit — green, or bare — so a fault can get back to the source and trip a breaker. It is not the battery negative, and it is not a substitute for an earth rod. On a long AC run from the inverter to a cabin panel, the EGC has to be in that AC cable. The copper that came with the PV pair is a different circuit. See <a href="/guides/ac-output-ground">the AC ground wire</a>.',
+  },
+  {
+    term: 'Neutral-to-ground bond',
+    aka: 'N-G bond, system bonding jumper',
+    html: 'The single point where the AC neutral is tied to the equipment ground, so a fault has a way home and a breaker can open. An off-grid system gets exactly one, at the inverter end — not a second one in a cabin panel downstream. A second bond puts ordinary load current onto the ground wire. See <a href="/guides/ac-output-ground">the AC ground wire</a>.',
+  },
+  {
     term: 'Earth rod',
     aka: 'earth electrode, ground rod',
     html: 'A conductive rod driven into the soil (or an equivalent your local code allows) that is the system\'s actual physical connection to the earth. Not the same thing as the battery\'s negative terminal. See <a href="/guides/grounding">earth grounding</a>.',

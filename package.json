@@ -17,7 +17,9 @@
     "scrape:victron": "tsx --env-file-if-exists=.env.local scripts/scrape-victron.ts",
     "scrape:sungoldpower": "tsx --env-file-if-exists=.env.local scripts/scrape-sungoldpower.ts",
     "scrape:signaturesolar": "tsx --env-file-if-exists=.env.local scripts/scrape-signaturesolar.ts",
-    "scrape:a1solarstore": "tsx --env-file-if-exists=.env.local scripts/scrape-a1solarstore.ts"
+    "scrape:a1solarstore": "tsx --env-file-if-exists=.env.local scripts/scrape-a1solarstore.ts",
+    "scrape:signaturesolar-catalog": "tsx --env-file-if-exists=.env.local scripts/scrape-signaturesolar-catalog.ts",
+    "import:cec-pv": "tsx --env-file-if-exists=.env.local scripts/import-cec-pv.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
@@ -42,6 +44,7 @@
     "cheerio": "^1.2.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "fflate": "^0.8.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "^5"

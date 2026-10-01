@@ -53,6 +53,7 @@ const ROUTES: Route[] = [
       { label: 'Cable AWG & Wiring', href: '/guides/wiring' },
       { label: 'Earth Grounding', href: '/guides/grounding' },
       { label: 'One Ground System, Not Two', href: '/guides/one-ground-system' },
+      { label: 'The AC Ground Wire', href: '/guides/ac-output-ground' },
       { label: 'Inverter Settings', href: '/guides/inverter-settings' },
     ],
   },

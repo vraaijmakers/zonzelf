@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Cable, Sun, Waypoints } from 'lucide-react'
+import { Cable, House, Sun, Waypoints } from 'lucide-react'
 import {
   GuideBreadcrumb, GuideDisclaimer, GuideHeader, Note, NextSteps, Tldr, Warn,
 } from '@/components/guides/GuideChrome'
@@ -109,6 +109,10 @@ export default function GroundingGuidePage() {
           wrong. See{' '}
           <Link href="/guides/one-ground-system" className="text-zon-gold-deep hover:underline">
             one ground system, not two
+          </Link>
+          . If the inverter is not in the cabin, the AC run is a second hop, with its own ground wire:{' '}
+          <Link href="/guides/ac-output-ground" className="text-zon-gold-deep hover:underline">
+            the AC ground wire is not the PV ground wire
           </Link>.
         </p>
       </section>
@@ -137,6 +141,7 @@ export default function GroundingGuidePage() {
         <NextSteps
           items={[
             { href: '/guides/one-ground-system', title: 'One ground system, not two', sub: 'Array over there, inverter over here \u2014 do the rods get joined?', Icon: Waypoints },
+            { href: '/guides/ac-output-ground', title: 'The AC ground wire', sub: 'Cabin panel another hundred feet past the inverter', Icon: House },
             { href: '/guides/wiring', title: 'Cables and thickness', sub: 'The other half of not starting a fire', Icon: Cable },
             { href: '/guides/how-it-works', title: 'How a solar system works', sub: 'Where each box sits in the chain', Icon: Sun },
           ]}

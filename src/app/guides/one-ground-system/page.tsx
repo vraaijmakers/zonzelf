@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Cable, Ruler, Sun, BookOpen } from 'lucide-react'
+import { Cable, House, Ruler, Sun, BookOpen } from 'lucide-react'
 import {
   GuideBreadcrumb, GuideDisclaimer, GuideHeader, Note, NextSteps, Tldr, Warn,
 } from '@/components/guides/GuideChrome'
@@ -579,6 +579,15 @@ export default function OneGroundSystemPage() {
         fitted with SPDs in both PV input side and MAINS side.&rdquo; Check yours before
         assuming anything is built in.
       </P>
+      <P>
+        That sentence is about the DC cabling and the mains terminals on the inverter
+        itself. When the cabin panel is a second hundred feet past the inverter, the
+        AC side has two ends of its own, and the ground wire in that cable is not the
+        copper you already ran with the PV pair. That case is{' '}
+        <Link href="/guides/ac-output-ground" className="text-zon-gold-deep hover:underline">
+          the AC ground wire
+        </Link>.
+      </P>
       <PlacementTable />
 
       <H2 id="spd-spec">Is it the same device at both ends?</H2>
@@ -785,8 +794,15 @@ export default function OneGroundSystemPage() {
         Everything above is about <em>electrodes</em> — joining the places where the system
         touches earth. The other one is the <strong>neutral-to-ground bond</strong>: the single
         point where the AC neutral is tied to the grounding system. An off-grid system gets
-        exactly one, usually at the first distribution panel, sometimes inside the inverter —
-        never both. A second bond puts everyday working neutral current onto the grounding
+        exactly one. When the inverter and the panel share a building, that point is either
+        inside the inverter or at the first disconnect next to it — never both. When the
+        panel is another building, the bond stays at the inverter end and the far panel
+        does not get a second one; the ground wire still runs the whole way. That geometry
+        is{' '}
+        <Link href="/guides/ac-output-ground" className="text-zon-gold-deep hover:underline">
+          the AC ground wire
+        </Link>
+        . A second bond puts everyday working neutral current onto the grounding
         conductors, which is both a shock path and a reliable source of nuisance trips. This,
         not a second electrode, is the thing 250.6 is written about.
       </P>
@@ -863,6 +879,12 @@ export default function OneGroundSystemPage() {
       <div className="mt-10">
         <NextSteps
           items={[
+            {
+              href: '/guides/ac-output-ground',
+              title: 'The AC ground wire',
+              sub: 'Cabin panel a hundred feet past the inverter',
+              Icon: House,
+            },
             {
               href: '/guides/grounding',
               title: 'Earth grounding, in plain English',
