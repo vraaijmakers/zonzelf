@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, Footprints, Caravan, Receipt, ChevronRight } from 'lucide-react'
+import { Battery, Cable, Zap, Sun, BookOpen, Settings, Workflow, Ruler, Waypoints, Footprints, Caravan, Receipt, House, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -83,6 +83,14 @@ const GUIDES = [
     description: 'Rods at the array, a rod at the cabin, a hundred feet between them \u2014 bond them or leave them separate? Why a surge protector at the array makes the bond more urgent, not less, and why the ground-loop counter-argument inverts its own physics.',
     tags: ['safety', 'wiring', 'intermediate'],
     readTime: '16 min',
+  },
+  {
+    icon: House,
+    slug: 'ac-output-ground',
+    title: 'The AC Ground Wire Is Not the PV Ground Wire',
+    description: 'The array copper lands on the inverter. The cabin panel is another hundred feet of AC away. The AC cable needs its own ground wire, and the neutral bonds to ground once \u2014 at the inverter, not again in the cabin.',
+    tags: ['safety', 'wiring', 'intermediate'],
+    readTime: '12 min',
   },
   {
     icon: Settings,

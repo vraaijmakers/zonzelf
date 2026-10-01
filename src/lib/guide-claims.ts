@@ -43,6 +43,45 @@ export interface GuideClaims {
 
 export const GUIDE_CLAIMS: GuideClaims[] = [
   {
+    slug: 'ac-output-ground',
+    title: 'The AC Ground Wire Is Not the PV Ground Wire',
+    claims: [
+      {
+        id: 'nec-250-32-separate-structure',
+        statement:
+          'For a new feeder to a separate building, NEC 250.32(B)(1) requires an equipment grounding conductor run with the supply conductors and connected to that building’s disconnect and grounding electrode, and prohibits connecting the grounded neutral to the equipment grounding conductor or to the grounding electrodes there. The exception is for existing premises wiring only; the 2008 NEC removed it for new work. 300.3(B) is the general rule that a circuit’s conductors, including the equipment grounding conductor, share a cable or raceway. 250.32(A) requires a grounding electrode at the separate building.',
+        kind: 'technical',
+        checkedOn: '2026-09-30',
+        source: 'NFPA 70 (NEC) 2023, 250.32(A) and 250.32(B)(1); 300.3(B); 2008 cycle removed the new-work exception',
+      },
+      {
+        id: 'nec-250-30-system-bonding-jumper',
+        statement:
+          'NEC 250.30(A)(1) places the system bonding jumper of a grounded separately derived system at a single point from the source to the first system disconnecting means or overcurrent device. Where that system supplies a separate structure and overcurrent protection is at the origin, 250.32(B)(2)(a) sends the installation back to 250.32(B)(1). A second bond is the objectionable-current case in 250.6. 250.4(A)(5) says the earth shall not be considered an effective ground-fault current path.',
+        kind: 'technical',
+        checkedOn: '2026-09-30',
+        source: 'NFPA 70 (NEC) 2023, 250.30(A)(1), 250.32(B)(2)(a), 250.6, 250.4(A)(5)',
+      },
+      {
+        id: 'nec-250-122-ac-egc-upsize',
+        statement:
+          'Wire-type equipment grounding conductors are sized from NEC Table 250.122 based on the overcurrent device. 250.122(B) increases them in proportion when the ungrounded conductors are increased in size. NEC 690.45 waives a voltage-drop increase for PV circuits only; it does not apply on the AC side of the inverter.',
+        kind: 'technical',
+        checkedOn: '2026-09-30',
+        source: 'NFPA 70 (NEC) 2023, Table 250.122, 250.122(B), 690.45',
+      },
+      {
+        id: 'sungold-sph-npe-and-ac-ground',
+        statement:
+          'SunGoldPower SPH8-10KW User Manual V1.3: setting 63, Auto N-PE connection switch, defaults to DIS and ENA enables it; section 4.3 says to connect live, neutral, and ground on the AC output; section 4.7 bonds the grounding terminal to the grounding bar on a cable not smaller than 4 mm², kept close to the grounding point. SPH8048P and SPH10048P list 22 A max PV input, a 2-pole 25 A PV breaker, and 500 V max PV open-circuit voltage. The SG10KHB-48 manual calls the relay PE-N connect enable, “automatic switching of PE-N connections.” Maintenance on both says to replace a failed arrester; neither manual describes an internal SPD to rely on.',
+        kind: 'technical',
+        checkedOn: '2026-09-24',
+        source: 'SunGoldPower SPH8-10KW User Manual V1.3 (2025-09-09) and SG10KHB-48 user manual',
+        sourceUrl: 'https://cdn.shopify.com/s/files/1/0323/4090/2025/files/SPH8-10KW_User_Manual_V1.3_20250909.pdf?v=1773649595',
+      },
+    ],
+  },
+  {
     slug: 'one-ground-system',
     title: 'One Ground System, Not Two',
     claims: [

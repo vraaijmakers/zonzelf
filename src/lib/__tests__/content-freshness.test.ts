@@ -136,7 +136,9 @@ test('every registered guide slug is a real route under src/app/guides', async (
 
 test('allClaims and claimsFor agree with the registry', () => {
   assert.equal(allClaims().length, GUIDE_CLAIMS.reduce((n, g) => n + g.claims.length, 0))
-  assert.deepEqual(claimsFor('one-ground-system'), GUIDE_CLAIMS[0].claims)
+  const oneGround = GUIDE_CLAIMS.find(g => g.slug === 'one-ground-system')
+  assert.ok(oneGround)
+  assert.deepEqual(claimsFor('one-ground-system'), oneGround.claims)
   assert.deepEqual(claimsFor('a-guide-that-does-not-exist'), [])
 })
 
