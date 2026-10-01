@@ -17,6 +17,9 @@ import { fieldHelp } from '@/lib/datasheet-vocabulary'
 import { normalizeSurge, suggestedSurge, SURGE_SOURCE } from '@/lib/appliance-load'
 import { recommendedSystemVoltageForPower, dcCurrentFor, DC_CURRENT_CEILING_A } from '@/lib/system-voltage'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
+import { InverterShelf } from '@/components/calculators/CatalogPicker'
+import { inverterOptions } from '@/lib/catalog-picker'
+import { useInverterCatalog } from '@/lib/use-catalog'
 import { RegisterBadge } from '@/components/ProtectionOutput'
 
 /**
@@ -139,6 +142,11 @@ export default function InverterSizingPage() {
   const suggested = suggestedContinuousW(demand)
   const hasLoads = appliances.length > 0 && demand.continuousW > 0
 
+  // Published catalogue units, ranked against this house's demand. Plain
+  // derivation for the React Compiler, as elsewhere on this page.
+  const catalog = useInverterCatalog()
+  const options = inverterOptions(catalog.rows, hasLoads ? demand : null)
+
   const missing = REQUIRED.filter(k => unit[k] === null)
   const pvComplete = missing.length === 0
   const fit = unit.acContinuousW !== null
@@ -151,18 +159,24 @@ export default function InverterSizingPage() {
   const ceilingBelowWindow =
     unit.pvMaxInputV !== null && unit.mpptMaxV !== null && unit.pvMaxInputV < unit.mpptMaxV
 
+  // A catalogue pick carries its preset id when it IS a preset (so the
+  // commissioning map still recognises it), else "catalog-<n>". Reduced to
+  // two strings so the effect below re-runs on a new pick, not on every
+  // render that rebuilds the options array.
+  const picked = options.find(o => o.spec.brand === unit.brand && o.spec.model === unit.model)?.spec
+    ?? INVERTER_PRESETS.find(p => p.brand === unit.brand && p.model === unit.model)
+  const pickedId = picked?.id
+  const pickedSourceUrl = picked?.sourceUrl
+
   // Publish only once every field the array step reads actually exists. A
   // partial summary would let step 5 size a string against a null window.
   useEffect(() => {
     if (!pvComplete || unit.acContinuousW === null) return
-    const matched = INVERTER_PRESETS.find(
-      p => p.brand === unit.brand && p.model === unit.model,
-    )
     publishInverterSummary({
-      id: matched?.id,
+      id: pickedId,
       brand: unit.brand.trim() || undefined,
       model: unit.model.trim() || undefined,
-      sourceUrl: matched?.sourceUrl,
+      sourceUrl: pickedSourceUrl,
       acContinuousW: unit.acContinuousW,
       acSurgeW: unit.acSurgeW ?? 0,
       dcSystemVoltage: unit.dcSystemVoltage,
@@ -176,7 +190,7 @@ export default function InverterSizingPage() {
       pvMaxIscA: unit.pvMaxIscA ?? undefined,
       maxChargeCurrentA: unit.maxChargeCurrentA ?? undefined,
     })
-  }, [unit, pvComplete])
+  }, [unit, pvComplete, pickedId, pickedSourceUrl])
 
   const set = <K extends keyof UnitDraft>(key: K, value: UnitDraft[K]) =>
     setUnit(u => ({ ...u, [key]: value }))
@@ -199,9 +213,9 @@ export default function InverterSizingPage() {
       maxChargeCurrentA: preset.maxChargeCurrentA ?? null,
     })
 
-  const activePreset = INVERTER_PRESETS.find(
-    p => p.brand === unit.brand && p.model === unit.model,
-  )
+  const activeOption = options.find(o => o.spec.brand === unit.brand && o.spec.model === unit.model) ?? null
+  const activePreset = activeOption?.spec
+    ?? INVERTER_PRESETS.find(p => p.brand === unit.brand && p.model === unit.model)
 
   const setSurge = (id: number, surge: number) =>
     setAppliances(rows => rows.map(r => (r.id === id ? { ...r, surge } : r)))
@@ -515,40 +529,20 @@ export default function InverterSizingPage() {
               <CardTitle className="text-sm font-medium text-zon-body">Your unit</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 pt-1">
-              {INVERTER_PRESETS.length > 0 && (
-                <div className="rounded-lg bg-zon-rule-soft p-3">
-                  <p className="mb-2 text-xs font-medium text-zon-muted">
-                    Units we have already read the datasheet for
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {INVERTER_PRESETS.map(preset => {
-                      const active = unit.brand === preset.brand && unit.model === preset.model
-                      return (
-                        <button
-                          key={preset.id}
-                          onClick={() => applyPreset(preset)}
-                          aria-pressed={active}
-                          className={`rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
-                            active
-                              ? 'border-zon-gold bg-zon-gold text-zon-ink'
-                              : 'border-zon-rule hover:border-zon-gold-light'
-                          }`}
-                        >
-                          <span className="font-medium">{preset.model}</span>
-                          <span className="ml-1.5 text-xs text-zon-muted">
-                            {preset.brand} · {(preset.acContinuousW / 1000).toFixed(0)} kW
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <p className="mt-2 text-xs text-zon-muted">
-                    Picking one fills every field below from the manufacturer&apos;s own manual,
-                    so you can see what a completed set looks like — then check it against your
-                    own copy. It is a short list; typing your own datasheet in is the normal path,
-                    not the fallback.
-                  </p>
-                </div>
+              <InverterShelf
+                options={options}
+                loading={catalog.loading}
+                fromPresets={catalog.fromPresets}
+                activeId={activeOption?.id ?? null}
+                onPick={o => applyPreset(o.spec)}
+              />
+              {options.length > 0 && (
+                <p className="text-xs text-zon-muted">
+                  Picking one fills every field below from the manufacturer&apos;s own datasheet,
+                  which we read and checked before listing it — check it against your own copy all
+                  the same. The list is short on purpose; typing your own datasheet in is the normal
+                  path, not the fallback.
+                </p>
               )}
 
               <p className="text-xs text-zon-muted">
