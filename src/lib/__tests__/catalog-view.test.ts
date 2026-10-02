@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  catalogStatus, cecDisagreements, cheapestUnitPrice, dollarsPerWatt, parseInverterVerification,
-  parsePanelVerification, unitPrice, type ListingRow,
+  catalogStatus, cecDisagreements, cheapestUnitPrice, dollarsPerKwh, dollarsPerWatt, parseBatteryVerification,
+  parseInverterVerification, parsePanelVerification, unitPrice, type ListingRow,
 } from '../catalog-view'
 
 const NOW = new Date('2026-09-30T12:00:00Z')
@@ -126,4 +126,35 @@ test('the SG550WM datasheet and the CEC list disagree on the Voc coefficient', (
     'Imp: datasheet 13.45, CEC 13.11',
     'Voc temp. coefficient: datasheet -0.35, CEC -0.259',
   ])
+})
+
+// The EG4 WallMount 280Ah All Weather, as eg4electronics.com states it.
+const EG4_280: Record<string, string> = {
+  chemistry: 'lifepo4', voltage: '51.2', capacity_ah: '280', capacity_kwh: '14.34', dod_rated: '80',
+  datasheet_url: 'https://eg4electronics.com/categories/batteries/wpower-16-280-aw-powerpro-wallmount-all-weather/',
+}
+const EG4_MODEL_B = { brand: 'EG4', model: 'WallMount 280Ah All Weather Battery', mpn: 'EG4LL48V100AODWMBV2' }
+
+test('the real EG4 280Ah battery verifies', () => {
+  const r = parseBatteryVerification(form(EG4_280), EG4_MODEL_B)
+  assert.equal(r.ok, true)
+  assert.equal(r.ok && r.spec.chemistry, 'lifepo4')
+  assert.equal(r.ok && r.spec.capacity_kwh, 14.34)
+})
+
+test('a kWh figure that is not volts x amp-hours is refused', () => {
+  const r = parseBatteryVerification(form({ ...EG4_280, capacity_kwh: '28.68' }), EG4_MODEL_B)
+  assert.equal(r.ok, false)
+  assert.match(!r.ok ? r.errors.join(' ') : '', /14\.34/)
+})
+
+test('a battery needs a chemistry and a depth of discharge that is a percentage', () => {
+  const r = parseBatteryVerification(form({ ...EG4_280, chemistry: '', dod_rated: '180' }), EG4_MODEL_B)
+  assert.equal(r.ok, false)
+  assert.deepEqual(!r.ok && r.errors, ['Choose the chemistry.', 'Rated depth of discharge is a percentage between 1 and 100.'])
+})
+
+test('a battery pre-filled from the manufacturer page is a candidate, like a CEC panel', () => {
+  assert.equal(catalogStatus({ is_published: false, is_hidden: false }, { spec_source: 'manufacturer', verified_at: null }), 'candidate')
+  assert.equal(dollarsPerKwh(3124.99, 14.34)!.toFixed(0), '218')
 })

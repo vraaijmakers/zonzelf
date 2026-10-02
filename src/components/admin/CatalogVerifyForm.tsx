@@ -3,11 +3,13 @@
 import { useActionState, useRef, useState, useTransition } from 'react'
 import { verifySpecs, type VerifyState } from '@/app/admin/catalog/actions'
 import { readDatasheet } from '@/app/admin/catalog/read-datasheet'
-import { INVERTER_FIELDS, PANEL_FIELDS } from '@/lib/catalog-view'
+import { BATTERY_FIELDS, INVERTER_FIELDS, PANEL_FIELDS } from '@/lib/catalog-view'
 import type { Extraction } from '@/lib/datasheet-extract'
 
-// Raw Tailwind for state text, for the reason given in admin/batteries/page.tsx:
-// --zon-red/amber/green fall below 4.5:1 at 12-14px on paper.
+// Raw Tailwind for state text, deliberately: --zon-red/amber/green are
+// saturated at mid lightness and fall below 4.5:1 at 12-14px on paper. A
+// --zon-*-deep step per state would fix it everywhere — a design decision to
+// raise, not a shade to invent here (CLAUDE.md, design system rules).
 const SEVERITY_TEXT = { fail: 'text-red-700', warn: 'text-amber-700', ok: 'text-green-700' } as const
 
 /**
@@ -34,7 +36,7 @@ export default function CatalogVerifyForm({
   datasheetUrl,
 }: {
   id: number
-  category: 'panel' | 'inverter'
+  category: 'panel' | 'inverter' | 'battery'
   initial: Record<string, string | number | boolean | null>
   datasheetUrl: string | null
 }) {
@@ -52,7 +54,7 @@ export default function CatalogVerifyForm({
   const urlRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
-  const fields = category === 'panel' ? PANEL_FIELDS : INVERTER_FIELDS
+  const fields = category === 'panel' ? PANEL_FIELDS : category === 'battery' ? BATTERY_FIELDS : INVERTER_FIELDS
   const input = 'appearance-none w-full text-sm border rounded px-2 py-1 bg-zon-paper'
   const filledFrom = (name: string) => (read && !edited.has(name) && name in read.values ? read.sources[name] ?? 'read from the datasheet' : null)
   const fieldClass = (name: string) => `${input} mt-0.5 ${filledFrom(name) ? 'border-zon-gold bg-zon-gold-tint' : 'border-zon-rule'}`
@@ -144,6 +146,25 @@ export default function CatalogVerifyForm({
           </div>
         )}
       </div>
+
+      {category === 'battery' && (
+        <label className="block text-xs text-zon-muted max-w-xs">
+          Chemistry
+          <select
+            key={`chemistry-${formKey}`}
+            name="chemistry"
+            defaultValue={(values.chemistry as string) ?? ''}
+            onChange={() => markEdited('chemistry')}
+            className={fieldClass('chemistry')}
+          >
+            <option value="">Choose…</option>
+            <option value="lifepo4">LiFePO4 (lithium iron phosphate)</option>
+            <option value="agm">AGM</option>
+            <option value="gel">Gel</option>
+            <option value="flooded">Flooded lead-acid</option>
+          </select>
+        </label>
+      )}
 
       {category === 'inverter' && (
         <label className="block text-xs text-zon-muted max-w-xs">

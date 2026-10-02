@@ -7,13 +7,14 @@ import CatalogModelActions, { HeldPriceActions } from '@/components/admin/Catalo
 import { mergeInto } from '../actions'
 import { priceDisplay, formatAsOf } from '@/lib/battery-price'
 import {
-  CEC_EXPLAINED, INVERTER_FIELDS, PANEL_FIELDS, STATUS_HELP, STATUS_LABEL, catalogStatus, cecDisagreements, dollarsPerWatt, unitPrice,
-  type InverterSpecRow, type ListingRow, type PanelSpecRow,
+  BATTERY_FIELDS, CEC_EXPLAINED, INVERTER_FIELDS, PANEL_FIELDS, STATUS_HELP, STATUS_LABEL, catalogStatus, cecDisagreements,
+  dollarsPerKwh, dollarsPerWatt, unitPrice,
+  type BatterySpecRow, type InverterSpecRow, type ListingRow, type PanelSpecRow,
 } from '@/lib/catalog-view'
 
 type Model = {
   id: number
-  category: 'panel' | 'inverter'
+  category: 'panel' | 'inverter' | 'battery'
   brand: string
   model: string
   mpn: string | null
@@ -26,6 +27,9 @@ type Model = {
   component_listings: ListingRow[]
   panel_specs: PanelSpecRow | null
   inverter_specs: InverterSpecRow | null
+  battery_specs: BatterySpecRow | null
+  spec_disagreement: Record<string, { verified: unknown; scraped: unknown }> | null
+  spec_disagreement_at: string | null
 }
 
 type CecRow = {
@@ -55,14 +59,15 @@ export default async function CatalogModelPage(props: PageProps<'/admin/catalog/
     .select(`*,
       component_listings (id, retailer, url, title, pack_qty, min_order_qty, price_usd, price_scraped_at, held_price_usd, held_at),
       panel_specs (*),
-      inverter_specs (*)`)
+      inverter_specs (*),
+      battery_specs (*)`)
     .eq('id', id)
     .maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) notFound()
   const m = data as unknown as Model
 
-  const spec = m.category === 'panel' ? m.panel_specs : m.inverter_specs
+  const spec = m.category === 'panel' ? m.panel_specs : m.category === 'battery' ? m.battery_specs : m.inverter_specs
   const status = catalogStatus(m, spec)
   const verified = Boolean(spec?.verified_at)
   const watts = m.panel_specs?.watts_stc ?? null
@@ -86,10 +91,17 @@ export default async function CatalogModelPage(props: PageProps<'/admin/catalog/
     const specRecord = spec as unknown as Record<string, string | number | boolean | null>
     if (verified) Object.assign(initial, specRecord)
     else if (m.category === 'panel') for (const k of PHYSICAL) initial[k] = specRecord[k]
+    // Batteries pre-fill in full. Their figures are CAPACITY, not protection
+    // (CLAUDE.md's split), and were read off the manufacturer's own page —
+    // exactly what /admin/batteries asked a reviewer to spot-check. Not the
+    // CEC-on-a-panel case the rule above exists for.
+    else if (m.category === 'battery') Object.assign(initial, specRecord)
   }
 
   const gaps = verified && m.panel_specs && cec ? cecDisagreements(m.panel_specs, cec) : []
-  const fields = m.category === 'panel' ? PANEL_FIELDS : INVERTER_FIELDS
+  const fields = m.category === 'panel' ? PANEL_FIELDS : m.category === 'battery' ? BATTERY_FIELDS : INVERTER_FIELDS
+  const kwh = m.battery_specs?.capacity_kwh ?? null
+  const perLabel = m.category === 'panel' ? '$/W' : m.category === 'battery' ? '$/kWh' : null
   const now = new Date()
 
   return (
@@ -137,14 +149,14 @@ export default async function CatalogModelPage(props: PageProps<'/admin/catalog/
                 <th className="text-left font-normal px-3 py-2">Listing</th>
                 <th className="text-right font-normal px-3 py-2">Price</th>
                 <th className="text-right font-normal px-3 py-2">Per unit</th>
-                {m.category === 'panel' && <th className="text-right font-normal px-3 py-2">$/W</th>}
+                {perLabel && <th className="text-right font-normal px-3 py-2">{perLabel}</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-zon-rule-soft">
               {m.component_listings.map(l => {
                 const unit = unitPrice(l)
                 const shown = priceDisplay(l.price_usd, l.price_scraped_at, now)
-                const perW = dollarsPerWatt(unit, watts)
+                const per = m.category === 'panel' ? dollarsPerWatt(unit, watts) : m.category === 'battery' ? dollarsPerKwh(unit, kwh) : null
                 return (
                   <tr key={l.id} className="align-top">
                     <td className="px-3 py-2">
@@ -173,8 +185,10 @@ export default async function CatalogModelPage(props: PageProps<'/admin/catalog/
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">{unit !== null ? usd(unit) : '—'}</td>
-                    {m.category === 'panel' && (
-                      <td className="px-3 py-2 text-right whitespace-nowrap">{perW !== null ? `$${perW.toFixed(2)}` : '—'}</td>
+                    {perLabel && (
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        {per !== null ? `$${per.toFixed(m.category === 'panel' ? 2 : 0)}` : '—'}
+                      </td>
                     )}
                   </tr>
                 )
@@ -186,6 +200,24 @@ export default async function CatalogModelPage(props: PageProps<'/admin/catalog/
 
       <section>
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zon-muted mb-2">Specs</h2>
+        {m.spec_disagreement && (
+          <div className="text-sm bg-zon-red-tint border border-zon-red/30 rounded-lg px-4 py-3 mb-3 max-w-2xl">
+            <p className="font-medium text-zon-ink">
+              The source changed{m.spec_disagreement_at ? ` (seen ${new Date(m.spec_disagreement_at).toLocaleDateString()})` : ''}:
+              the manufacturer&apos;s page no longer matches the verified specs.
+            </p>
+            <ul className="list-disc pl-5 text-xs mt-1">
+              {Object.entries(m.spec_disagreement).map(([field, d]) => (
+                <li key={field}>{field}: verified {String(d.verified)}, page now says {String(d.scraped)}</li>
+              ))}
+            </ul>
+            <p className="text-xs mt-1">
+              Visitors still see the verified figures. Check the page:
+              {m.is_published ? ' if it is right, unpublish, correct the figures and verify again.' : ' if it is right, correct the figures below and verify again.'}
+              {' '}Re-verifying clears this notice.
+            </p>
+          </div>
+        )}
         <div className="text-sm text-zon-body mb-3 bg-zon-blue-tint border border-zon-blue/20 rounded-lg px-4 py-3 max-w-2xl space-y-1">
           <p>
             <span className="font-medium text-zon-ink">{STATUS_LABEL[status]}.</span>{' '}

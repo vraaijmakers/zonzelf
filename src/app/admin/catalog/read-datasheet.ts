@@ -59,7 +59,7 @@ export async function readDatasheet(id: number, url: string): Promise<ReadDatash
   const { data: model, error } = await supabase
     .from('component_models').select('category, brand, model, mpn').eq('id', id).single()
   if (error) return { ok: false, error: error.message }
-  const category = model.category as 'panel' | 'inverter'
+  const category = model.category as 'panel' | 'inverter' | 'battery'
 
   let pdf: { bytes: Uint8Array; pdfUrl: string }
   try {
