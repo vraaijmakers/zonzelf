@@ -15,6 +15,7 @@ import type { InverterKind, InverterSpec } from './inverter-sizing'
 import type { ReviewFlag } from './battery-review'
 import { reviewPanelSpec } from './panel-review'
 import { reviewInverterSpec } from './inverter-review'
+import { reviewBatteryModel } from './battery-review'
 import { priceDisplay } from './battery-price'
 
 // ---------------------------------------------------------------------------
@@ -77,6 +78,16 @@ export type InverterSpecRow = {
   verified_at: string | null
 }
 
+export type BatterySpecRow = {
+  chemistry: 'lifepo4' | 'agm' | 'gel' | 'flooded' | null
+  voltage: number | null
+  capacity_ah: number | null
+  capacity_kwh: number | null
+  dod_rated: number | null
+  spec_source: 'manufacturer' | 'retailer' | 'datasheet'
+  verified_at: string | null
+}
+
 // ---------------------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------------------
@@ -88,7 +99,8 @@ export type InverterSpecRow = {
  *   hidden      rejected by an admin; kept so the scraper cannot re-insert it
  *   published   live — only reachable from 'verified'
  *   verified    specs confirmed from the datasheet; ready to publish
- *   candidate   electricals pre-filled from the CEC list; needs the datasheet
+ *   candidate   specs pre-filled — a panel's from the CEC list, a battery's
+ *               from the manufacturer's page by a scraper; needs the datasheet
  *   unspecced   no electricals at all (every scraped inverter starts here)
  */
 export type CatalogStatus = 'hidden' | 'published' | 'verified' | 'candidate' | 'unspecced'
@@ -97,7 +109,7 @@ export const STATUS_LABEL: Record<CatalogStatus, string> = {
   hidden: 'Hidden',
   published: 'Published',
   verified: 'Verified — ready to publish',
-  candidate: 'Pre-filled from CEC — check datasheet',
+  candidate: 'Pre-filled — check datasheet',
   unspecced: 'No specs yet',
 }
 
@@ -114,15 +126,15 @@ export const CEC_EXPLAINED =
 export const STATUS_HELP: Record<CatalogStatus, { meaning: string; action: string }> = {
   candidate: {
     meaning:
-      'The scraper matched this panel to the CEC list by part number and copied the lab figures in. ' +
-      'Probably close, not yet checked. They are not the manufacturer’s datasheet, and the two can ' +
-      'differ: for the SG550WM the CEC list says the voltage rises less in the cold than the datasheet ' +
-      'does, which would let a string hold more panels than is safe.',
+      'The scraper filled the specs in, but nobody has checked them yet. For a panel they are the CEC list\u2019s ' +
+      'lab figures, matched by part number — not the manufacturer\u2019s datasheet, and the two can differ: for the ' +
+      'SG550WM the CEC list says the voltage rises less in the cold than the datasheet does, which would let a ' +
+      'string hold more panels than is safe. For a battery they were read off the manufacturer\u2019s own page.',
     action:
-      'Open the spec sheet and type the figures in from it, comparing against the CEC column. They agree: ' +
-      'verify, then publish. They differ a little: the datasheet wins — enter its figures and verify. ' +
-      'They differ a lot, or the sheet names a different panel: the match is wrong — hide it or leave it. ' +
-      'No trustworthy sheet: leave it; nothing breaks, it just is not offered to visitors.',
+      'Open the spec sheet and check the figures against it — Read from datasheet does the typing. They agree: ' +
+      'verify, then publish. They differ a little: the datasheet wins. They differ a lot, or the sheet names a ' +
+      'different product: the match is wrong — hide it or leave it. No trustworthy sheet: leave it; nothing ' +
+      'breaks, it just is not offered to visitors.',
   },
   unspecced: {
     meaning:
@@ -154,7 +166,7 @@ export function catalogStatus(
   if (model.is_hidden) return 'hidden'
   if (model.is_published) return 'published'
   if (spec?.verified_at) return 'verified'
-  if (spec?.spec_source === 'cec') return 'candidate'
+  if (spec?.spec_source === 'cec' || spec?.spec_source === 'manufacturer') return 'candidate'
   return 'unspecced'
 }
 
@@ -232,7 +244,15 @@ export const INVERTER_FIELDS: FieldSpec[] = [
   { name: 'max_charge_current_a', label: 'Max battery charge current (A)', required: false },
 ]
 
+export const BATTERY_FIELDS: FieldSpec[] = [
+  { name: 'voltage', label: 'Nominal voltage (V)', required: true },
+  { name: 'capacity_ah', label: 'Capacity (Ah)', required: true },
+  { name: 'capacity_kwh', label: 'Energy (kWh)', required: true },
+  { name: 'dod_rated', label: 'Rated depth of discharge (%)', required: false, integer: true },
+]
+
 const INVERTER_KINDS: InverterKind[] = ['hybrid', 'inverter-only', 'charge-controller']
+const CHEMISTRIES = ['lifepo4', 'agm', 'gel', 'flooded'] as const
 
 /** Reads the named numeric fields; blank is null, anything else must parse. */
 function readNumbers(fields: FieldSpec[], get: (name: string) => string | null) {
@@ -339,6 +359,53 @@ export function parseInverterVerification(
     return { ok: false, errors: failures.map(f => f.message), flags }
   }
   return { ok: true, flags, spec: { ...values, kind, datasheet_url } }
+}
+
+export type BatteryVerification = Record<string, number | string | null> & {
+  datasheet_url: string
+  chemistry: (typeof CHEMISTRIES)[number]
+}
+
+/**
+ * The battery verify form. Runs the same checks /admin/batteries ran on a
+ * scraped row (src/lib/battery-review.ts): kWh against V x Ah, the voltage
+ * family, a multi-pack listing posing as one battery, DoD for the chemistry.
+ * Price is not checked here — it belongs to listings, not to the battery.
+ */
+export function parseBatteryVerification(
+  get: (name: string) => string | null,
+  model: { brand: string; model: string; mpn: string | null },
+): VerifyResult<BatteryVerification> {
+  const { values, errors } = readNumbers(BATTERY_FIELDS, get)
+  const chemistry = get('chemistry') as BatteryVerification['chemistry'] | null
+  if (!chemistry || !CHEMISTRIES.includes(chemistry)) errors.push('Choose the chemistry.')
+  if (values.dod_rated !== null && values.dod_rated !== undefined && !(values.dod_rated >= 1 && values.dod_rated <= 100)) {
+    errors.push('Rated depth of discharge is a percentage between 1 and 100.')
+  }
+  const datasheet_url = readDatasheetUrl(get, errors)
+  if (errors.length > 0 || !datasheet_url || !chemistry) return { ok: false, errors, flags: [] }
+
+  const flags = reviewBatteryModel({
+    brand: model.brand,
+    model: model.model,
+    sku: model.mpn,
+    chemistry,
+    voltage: values.voltage!,
+    capacity_ah: values.capacity_ah!,
+    capacity_kwh: values.capacity_kwh!,
+    dod_rated: values.dod_rated ?? null,
+    price_usd: null,
+    source_url: datasheet_url,
+  }).filter(f => f.code !== 'source-domain')
+  const failures = flags.filter(f => f.severity === 'fail')
+  if (failures.length > 0) return { ok: false, errors: failures.map(f => f.message), flags }
+  return { ok: true, flags, spec: { ...values, chemistry, datasheet_url } }
+}
+
+/** $/kWh for a battery listing's unit price. */
+export function dollarsPerKwh(unitPriceUsd: number | null, kwh: number | null): number | null {
+  if (unitPriceUsd === null || !kwh) return null
+  return unitPriceUsd / kwh
 }
 
 // ---------------------------------------------------------------------------
