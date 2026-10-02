@@ -19,6 +19,7 @@
     "scrape:signaturesolar": "tsx --env-file-if-exists=.env.local scripts/scrape-signaturesolar.ts",
     "scrape:a1solarstore": "tsx --env-file-if-exists=.env.local scripts/scrape-a1solarstore.ts",
     "scrape:signaturesolar-catalog": "tsx --env-file-if-exists=.env.local scripts/scrape-signaturesolar-catalog.ts",
+    "scrape:sungoldpower-catalog": "tsx --env-file-if-exists=.env.local scripts/scrape-sungoldpower-catalog.ts",
     "import:cec-pv": "tsx --env-file-if-exists=.env.local scripts/import-cec-pv.ts"
   },
   "dependencies": {

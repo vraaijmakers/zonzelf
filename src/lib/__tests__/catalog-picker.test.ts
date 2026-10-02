@@ -40,6 +40,18 @@ test('the best offer is the cheapest current price per unit, and a pallet is div
   assert.equal(offer.link.href, `${SS}pallet/`)
 })
 
+// Sun Gold Power, 2026-10-01: SPH8048P $1,450 alone, $2,890 as a parallel pair.
+test('an inverter is offered as a single unit even when a pair is cheaper per unit', () => {
+  const listings = [listing({ url: `${SS}single/`, price_usd: 1450 }), listing({ url: `${SS}pair/`, price_usd: 2890, pack_qty: 2 })]
+  assert.equal(bestOffer(listings, null, NOW, { preferSingle: true })!.unitPrice, 1450)
+  assert.equal(bestOffer(listings, null, NOW)!.unitPrice, 1445)
+  // With no single listed, the pair is still better than no offer at all.
+  assert.equal(bestOffer([listings[1]], null, NOW, { preferSingle: true })!.packQty, 2)
+  // Nor when the single's price has gone stale.
+  const staleSingle = [{ ...listings[0], price_scraped_at: daysAgo(60) }, listings[1]]
+  assert.equal(bestOffer(staleSingle, null, NOW, { preferSingle: true })!.packQty, 2)
+})
+
 test('a stale price, a missing price, and a shop we cannot link never become the offer', () => {
   assert.equal(bestOffer([listing({ price_scraped_at: daysAgo(60) })], null, NOW), null)
   assert.equal(bestOffer([listing({ price_usd: null })], null, NOW), null)
