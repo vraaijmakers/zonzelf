@@ -43,45 +43,50 @@ function fieldsFor(category: ExtractCategory) {
 }
 
 /**
- * The structured-output schema: every form field as number-or-null, plus the
- * column the model read and one source note per field it filled.
+ * The structured-output schema.
+ *
+ * NO NULLABLE OR UNION TYPES, and that is a hard API limit rather than taste:
+ * structured outputs refuse a schema with more than 16 union-typed parameters
+ * ("exponential compilation cost"), and the first version — every form field
+ * as number-or-null — had 17 for a panel. So the figures come back as a LIST
+ * of readings, each naming its field: a value the sheet does not state is
+ * simply absent. The source label rides on each reading, so there is no
+ * separate notes array to keep in step with it.
  */
 export function extractionSchema(category: ExtractCategory) {
-  const values: Record<string, unknown> = {}
-  for (const f of fieldsFor(category)) {
-    values[f.name] = { type: ['number', 'null'], description: UNITS[f.name] ?? f.label }
-  }
-  if (category === 'panel') {
-    values.cell_type = { type: ['string', 'null'], description: 'e.g. Monocrystalline, N-type TOPCon, PERC' }
-    values.bifacial = { type: ['boolean', 'null'] }
-  } else {
-    values.kind = {
-      type: ['string', 'null'],
-      enum: ['hybrid', 'inverter-only', 'charge-controller', null],
-      description: 'hybrid = inverter + MPPT solar charger + battery charger in one box',
-    }
-  }
+  const fieldNames = fieldsFor(category).map(f => f.name)
+  const units = fieldNames.map(n => `${n}: ${UNITS[n] ?? n}`).join('; ')
+  const extra = category === 'panel'
+    ? {
+        cell_type: { type: 'string', description: 'e.g. Monocrystalline, N-type TOPCon, PERC; empty string if not stated' },
+        bifacial: { type: 'string', enum: ['yes', 'no', 'unknown'] },
+      }
+    : {
+        kind: {
+          type: 'string',
+          enum: ['hybrid', 'inverter-only', 'charge-controller', 'unknown'],
+          description: 'hybrid = inverter + MPPT solar charger + battery charger in one box',
+        },
+      }
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['found', 'column', 'values', 'notes', 'problems'],
+    required: ['found', 'column', 'readings', 'problems', ...Object.keys(extra)],
     properties: {
       found: { type: 'boolean', description: 'false if this datasheet does not cover the requested model' },
-      column: { type: ['string', 'null'], description: 'the exact model heading of the column you read, as printed' },
-      values: {
-        type: 'object',
-        additionalProperties: false,
-        required: Object.keys(values),
-        properties: values,
-      },
-      notes: {
+      column: { type: 'string', description: 'the exact model heading of the column you read, as printed; empty string if none' },
+      readings: {
         type: 'array',
-        description: 'one entry per non-null value: the field name and the label it was printed under',
+        description: `One entry per figure the sheet states for this model. Omit figures it does not state. Units — ${units}`,
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['field', 'source'],
-          properties: { field: { type: 'string' }, source: { type: 'string' } },
+          required: ['field', 'value', 'source'],
+          properties: {
+            field: { type: 'string', enum: fieldNames },
+            value: { type: 'number' },
+            source: { type: 'string', description: 'the printed label (and column) the value was read from' },
+          },
         },
       },
       problems: {
@@ -89,6 +94,7 @@ export function extractionSchema(category: ExtractCategory) {
         items: { type: 'string' },
         description: 'anything a reviewer must know: unreadable cells, ambiguous columns, values given only as ranges',
       },
+      ...extra,
     },
   } as const
 }
@@ -106,9 +112,9 @@ export function extractionPrompt(category: ExtractCategory, model: { brand: stri
       ? 'Use the STC figures for the FRONT side. Ignore bifacial-gain, BNPI, NOCT/NMOT and rear-power columns.'
       : 'Keep the absolute maximum PV input voltage separate from the MPPT operating range, and the usable input current separate from the short-circuit current. Currents are per tracker.',
     '',
-    'Copy numbers as printed; convert units only to the unit each field asks for. Leave a field null when the sheet does',
-    'not state it — never estimate, derive or assume a typical value. For each value you fill, add a note naming the',
-    'printed label it came from.',
+    'Copy numbers as printed; convert units only to the unit each field asks for. Leave out any figure the sheet does',
+    'not state it — never estimate, derive or assume a typical value. Give each figure as one reading, with the',
+    'printed label it came from as its source.',
   ].join('\n')
 }
 
@@ -139,7 +145,8 @@ export type Extraction = {
  */
 export function normalizeExtraction(raw: unknown, category: ExtractCategory): Extraction {
   const r = (raw ?? {}) as {
-    found?: unknown; column?: unknown; values?: Record<string, unknown>; notes?: unknown; problems?: unknown
+    found?: unknown; column?: unknown; readings?: unknown; problems?: unknown
+    cell_type?: unknown; bifacial?: unknown; kind?: unknown
   }
   const problems = Array.isArray(r.problems) ? r.problems.filter((p): p is string => typeof p === 'string') : []
   const column = typeof r.column === 'string' && r.column.trim() ? r.column.trim() : null
@@ -149,23 +156,31 @@ export function normalizeExtraction(raw: unknown, category: ExtractCategory): Ex
 
   const allowed = new Set(fieldsFor(category).map(f => f.name))
   const values: Record<string, string> = {}
-  for (const [k, v] of Object.entries(r.values ?? {})) {
-    if (allowed.has(k) && typeof v === 'number' && Number.isFinite(v)) values[k] = String(v)
-  }
-  if (category === 'panel') {
-    const cell = r.values?.cell_type
-    if (typeof cell === 'string' && cell.trim()) values.cell_type = cell.trim()
-    if (typeof r.values?.bifacial === 'boolean') values.bifacial = r.values.bifacial ? 'on' : ''
-  } else {
-    const kind = r.values?.kind
-    if (kind === 'hybrid' || kind === 'inverter-only' || kind === 'charge-controller') values.kind = kind
+  const sources: Record<string, string> = {}
+  const seen = new Set<string>()
+  for (const item of Array.isArray(r.readings) ? r.readings : []) {
+    const { field, value, source } = (item ?? {}) as { field?: unknown; value?: unknown; source?: unknown }
+    if (typeof field !== 'string' || !allowed.has(field)) continue
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue
+    // Two readings for one field means the model was unsure which cell is
+    // right. Neither is safe to pre-fill; the reviewer types it.
+    if (seen.has(field)) {
+      delete values[field]
+      delete sources[field]
+      problems.push(`Two different readings for ${field} — left empty, read it off the sheet.`)
+      continue
+    }
+    seen.add(field)
+    values[field] = String(value)
+    if (typeof source === 'string' && source.trim()) sources[field] = source.trim()
   }
 
-  const sources: Record<string, string> = {}
-  if (Array.isArray(r.notes)) {
-    for (const n of r.notes as { field?: unknown; source?: unknown }[]) {
-      if (typeof n?.field === 'string' && typeof n?.source === 'string' && n.field in values) sources[n.field] = n.source
-    }
+  if (category === 'panel') {
+    if (typeof r.cell_type === 'string' && r.cell_type.trim()) values.cell_type = r.cell_type.trim()
+    if (r.bifacial === 'yes') values.bifacial = 'on'
+    else if (r.bifacial === 'no') values.bifacial = ''
+  } else if (r.kind === 'hybrid' || r.kind === 'inverter-only' || r.kind === 'charge-controller') {
+    values.kind = r.kind
   }
   return { found: true, column, values, sources, problems }
 }

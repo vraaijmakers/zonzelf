@@ -80,7 +80,7 @@ export async function readDatasheet(id: number, url: string): Promise<ReadDatash
       fallbacks: 'default',
       // Built per category at runtime, so its static type is wider than the
       // helper's generic; normalizeExtraction() checks the parsed result.
-      output_config: { format: jsonSchemaOutputFormat(extractionSchema(category) as Parameters<typeof jsonSchemaOutputFormat>[0]) },
+      output_config: { format: jsonSchemaOutputFormat(extractionSchema(category) as unknown as Parameters<typeof jsonSchemaOutputFormat>[0]) },
       messages: [{
         role: 'user',
         content: [

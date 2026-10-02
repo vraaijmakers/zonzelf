@@ -4,21 +4,20 @@ import { extractionPrompt, extractionSchema, normalizeExtraction, pdfLinkInHtml 
 import { INVERTER_FIELDS, PANEL_FIELDS } from '../catalog-view'
 
 // The Seraphim SRP-4x0-BTE-BG sheet (2026-09-30), SRP-440-BTE-BG column, Front STC.
+const r = (field: string, value: number, source = `${field} label`) => ({ field, value, source })
 const SERAPHIM_440 = {
   found: true,
   column: 'SRP-440-BTE-BG',
-  values: {
-    watts_stc: 440, voc_stc: 35.38, vmp_stc: 29.41, isc_stc: 15.8, imp_stc: 14.97,
-    beta_voc_pct: -0.25, beta_pmax_pct: -0.29, beta_vmp_pct: null, alpha_isc_pct: 0.046,
-    max_series_fuse_a: null, length_mm: 1762, width_mm: 1134, thickness_mm: 30, weight_kg: null,
-    cell_type: 'N-type', bifacial: true,
-  },
-  notes: [
-    { field: 'voc_stc', source: 'Open Circuit Voltage - Voc(V), SRP-440-BTE-BG Front STC' },
-    { field: 'beta_voc_pct', source: 'Voc Temperature Coefficient' },
-    { field: 'not_a_field', source: 'x' },
+  readings: [
+    r('watts_stc', 440), r('voc_stc', 35.38, 'Open Circuit Voltage - Voc(V), SRP-440-BTE-BG Front STC'),
+    r('vmp_stc', 29.41), r('isc_stc', 15.8), r('imp_stc', 14.97),
+    r('beta_voc_pct', -0.25, 'Voc Temperature Coefficient'), r('beta_pmax_pct', -0.29), r('alpha_isc_pct', 0.046),
+    r('length_mm', 1762), r('width_mm', 1134), r('thickness_mm', 30),
+    r('not_a_field', 1),
   ],
   problems: [],
+  cell_type: 'N-type',
+  bifacial: 'yes',
 }
 
 test('a read column fills the form as strings, with the label each came from', () => {
@@ -30,9 +29,15 @@ test('a read column fills the form as strings, with the label each came from', (
   assert.equal(e.values.bifacial, 'on')
   assert.equal(e.values.cell_type, 'N-type')
   assert.equal(e.sources.voc_stc, 'Open Circuit Voltage - Voc(V), SRP-440-BTE-BG Front STC')
-  // Nulls stay empty for the reviewer; a note for an unknown field is dropped.
+  // Unstated figures stay empty for the reviewer; unknown fields are dropped.
   assert.equal('weight_kg' in e.values, false)
-  assert.equal('not_a_field' in e.sources, false)
+  assert.equal('not_a_field' in e.values, false)
+})
+
+test('two readings for one field leave it empty, with a problem raised', () => {
+  const e = normalizeExtraction({ ...SERAPHIM_440, readings: [r('voc_stc', 35.38), r('voc_stc', 35.46)] }, 'panel')
+  assert.equal('voc_stc' in e.values, false)
+  assert.match(e.problems.join(' '), /Two different readings for voc_stc/)
 })
 
 test('"not on this sheet" fills nothing, whatever values came with it', () => {
@@ -44,28 +49,44 @@ test('"not on this sheet" fills nothing, whatever values came with it', () => {
 
 test('fields outside the category, strings posing as numbers, and junk are dropped', () => {
   const e = normalizeExtraction({
-    found: true, column: 'X', notes: [], problems: [],
-    values: { voc_stc: '35.38', isc_stc: Number.NaN, ac_continuous_w: 6000, vmp_stc: 29.41 },
+    found: true, column: 'X', problems: [], cell_type: '', bifacial: 'unknown',
+    readings: [{ field: 'voc_stc', value: '35.38' }, r('isc_stc', Number.NaN), r('ac_continuous_w', 6000), r('vmp_stc', 29.41)],
   }, 'panel')
   assert.deepEqual(e.values, { vmp_stc: '29.41' })
 })
 
 test('an inverter kind outside the three known kinds is not passed through', () => {
-  const base = { found: true, column: '6000XP', notes: [], problems: [], values: { ac_continuous_w: 6000 } }
-  assert.equal(normalizeExtraction({ ...base, values: { ...base.values, kind: 'hybrid' } }, 'inverter').values.kind, 'hybrid')
-  assert.equal('kind' in normalizeExtraction({ ...base, values: { ...base.values, kind: 'grid-tie' } }, 'inverter').values, false)
+  const base = { found: true, column: '6000XP', problems: [], readings: [r('ac_continuous_w', 6000)] }
+  assert.equal(normalizeExtraction({ ...base, kind: 'hybrid' }, 'inverter').values.kind, 'hybrid')
+  assert.equal('kind' in normalizeExtraction({ ...base, kind: 'unknown' }, 'inverter').values, false)
+  assert.equal('kind' in normalizeExtraction({ ...base, kind: 'grid-tie' }, 'inverter').values, false)
 })
 
 test('a malformed answer is treated as not found, not as an empty success', () => {
   assert.equal(normalizeExtraction(null, 'panel').found, false)
-  assert.equal(normalizeExtraction({ values: { voc_stc: 40 } }, 'panel').found, false)
+  assert.equal(normalizeExtraction({ readings: [r('voc_stc', 40)] }, 'panel').found, false)
 })
 
-test('the schema asks for every form field, and nothing else', () => {
-  const panel = extractionSchema('panel').properties.values
-  assert.deepEqual([...panel.required].sort(), [...PANEL_FIELDS.map(f => f.name), 'cell_type', 'bifacial'].sort())
-  const inverter = extractionSchema('inverter').properties.values
-  assert.deepEqual([...inverter.required].sort(), [...INVERTER_FIELDS.map(f => f.name), 'kind'].sort())
+test('the schema can name every form field, and nothing else', () => {
+  const panel = extractionSchema('panel').properties.readings.items.properties.field.enum
+  assert.deepEqual([...panel].sort(), PANEL_FIELDS.map(f => f.name).sort())
+  const inverter = extractionSchema('inverter').properties.readings.items.properties.field.enum
+  assert.deepEqual([...inverter].sort(), INVERTER_FIELDS.map(f => f.name).sort())
+})
+
+// The API refuses a structured-output schema with more than 16 union-typed
+// parameters; the first version had 17 nullable fields and was rejected on
+// its first real call (2026-10-01). Keep it at zero, not merely under 16.
+test('the schema has no nullable or union types at all', () => {
+  const unions: string[] = []
+  const walk = (node: unknown, path: string) => {
+    if (!node || typeof node !== 'object') return
+    const n = node as Record<string, unknown>
+    if (Array.isArray(n.type) || 'anyOf' in n || 'oneOf' in n) unions.push(path)
+    for (const [k, v] of Object.entries(n)) walk(v, `${path}.${k}`)
+  }
+  for (const c of ['panel', 'inverter'] as const) walk(extractionSchema(c), c)
+  assert.deepEqual(unions, [])
 })
 
 test('the prompt names the exact part number and forbids a neighbouring column', () => {
