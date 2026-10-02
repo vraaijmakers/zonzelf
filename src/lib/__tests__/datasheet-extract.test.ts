@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { extractionPrompt, extractionSchema, normalizeExtraction, pdfLinkInHtml } from '../datasheet-extract'
-import { INVERTER_FIELDS, PANEL_FIELDS } from '../catalog-view'
+import { BATTERY_FIELDS, INVERTER_FIELDS, PANEL_FIELDS } from '../catalog-view'
 
 // The Seraphim SRP-4x0-BTE-BG sheet (2026-09-30), SRP-440-BTE-BG column, Front STC.
 const r = (field: string, value: number, source = `${field} label`) => ({ field, value, source })
@@ -72,6 +72,15 @@ test('the schema can name every form field, and nothing else', () => {
   assert.deepEqual([...panel].sort(), PANEL_FIELDS.map(f => f.name).sort())
   const inverter = extractionSchema('inverter').properties.readings.items.properties.field.enum
   assert.deepEqual([...inverter].sort(), INVERTER_FIELDS.map(f => f.name).sort())
+  const battery = extractionSchema('battery').properties.readings.items.properties.field.enum
+  assert.deepEqual([...battery].sort(), BATTERY_FIELDS.map(f => f.name).sort())
+})
+
+test('a battery read carries its chemistry, and "unknown" fills nothing', () => {
+  const base = { found: true, column: 'SG48100P', problems: [], readings: [r('voltage', 51.2), r('capacity_ah', 100), r('capacity_kwh', 5.12)] }
+  assert.equal(normalizeExtraction({ ...base, chemistry: 'lifepo4' }, 'battery').values.chemistry, 'lifepo4')
+  assert.equal('chemistry' in normalizeExtraction({ ...base, chemistry: 'unknown' }, 'battery').values, false)
+  assert.equal(normalizeExtraction({ ...base, chemistry: 'lifepo4' }, 'battery').values.capacity_kwh, '5.12')
 })
 
 // The API refuses a structured-output schema with more than 16 union-typed
@@ -85,7 +94,7 @@ test('the schema has no nullable or union types at all', () => {
     if (Array.isArray(n.type) || 'anyOf' in n || 'oneOf' in n) unions.push(path)
     for (const [k, v] of Object.entries(n)) walk(v, `${path}.${k}`)
   }
-  for (const c of ['panel', 'inverter'] as const) walk(extractionSchema(c), c)
+  for (const c of ['panel', 'inverter', 'battery'] as const) walk(extractionSchema(c), c)
   assert.deepEqual(unions, [])
 })
 

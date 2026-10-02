@@ -16,9 +16,9 @@
 // Pure: schema, prompt, link resolution and the shape check live here so CI
 // can test them; the network calls live in the server action.
 
-import { INVERTER_FIELDS, PANEL_FIELDS } from './catalog-view'
+import { BATTERY_FIELDS, INVERTER_FIELDS, PANEL_FIELDS } from './catalog-view'
 
-export type ExtractCategory = 'panel' | 'inverter'
+export type ExtractCategory = 'panel' | 'inverter' | 'battery'
 
 /** Datasheets above this are refused rather than sent. */
 export const MAX_DATASHEET_BYTES = 20 * 1024 * 1024
@@ -36,10 +36,13 @@ const UNITS: Record<string, string> = {
   mppt_start_v: 'volts — start-up voltage', mppt_count: 'number of independent MPPT trackers',
   pv_max_power_w: 'watts — maximum PV array power', pv_max_current_a: 'amps PER TRACKER — max USABLE input current',
   pv_max_isc_a: 'amps PER TRACKER — max short-circuit current', max_charge_current_a: 'amps — max battery charge current',
+  voltage: 'volts — NOMINAL pack voltage (e.g. 51.2), not the charge or cut-off voltage',
+  capacity_ah: 'amp-hours, nominal, ONE unit (not a multi-pack)', capacity_kwh: 'kilowatt-hours, nominal energy of ONE unit',
+  dod_rated: 'percent — the rated or recommended depth of discharge',
 }
 
 function fieldsFor(category: ExtractCategory) {
-  return category === 'panel' ? PANEL_FIELDS : INVERTER_FIELDS
+  return category === 'panel' ? PANEL_FIELDS : category === 'battery' ? BATTERY_FIELDS : INVERTER_FIELDS
 }
 
 /**
@@ -60,6 +63,10 @@ export function extractionSchema(category: ExtractCategory) {
     ? {
         cell_type: { type: 'string', description: 'e.g. Monocrystalline, N-type TOPCon, PERC; empty string if not stated' },
         bifacial: { type: 'string', enum: ['yes', 'no', 'unknown'] },
+      }
+    : category === 'battery'
+    ? {
+        chemistry: { type: 'string', enum: ['lifepo4', 'agm', 'gel', 'flooded', 'unknown'], description: 'lifepo4 = LiFePO4 / lithium iron phosphate' },
       }
     : {
         kind: {
@@ -110,6 +117,8 @@ export function extractionPrompt(category: ExtractCategory, model: { brand: stri
     '',
     category === 'panel'
       ? 'Use the STC figures for the FRONT side. Ignore bifacial-gain, BNPI, NOCT/NMOT and rear-power columns.'
+      : category === 'battery'
+      ? 'Give the figures for ONE battery unit: nominal voltage, capacity and energy — not a system of several units, and not charge or cut-off voltages.'
       : 'Keep the absolute maximum PV input voltage separate from the MPPT operating range, and the usable input current separate from the short-circuit current. Currents are per tracker.',
     '',
     'Copy numbers as printed; convert units only to the unit each field asks for. Leave out any figure the sheet does',
@@ -179,6 +188,9 @@ export function normalizeExtraction(raw: unknown, category: ExtractCategory): Ex
     if (typeof r.cell_type === 'string' && r.cell_type.trim()) values.cell_type = r.cell_type.trim()
     if (r.bifacial === 'yes') values.bifacial = 'on'
     else if (r.bifacial === 'no') values.bifacial = ''
+  } else if (category === 'battery') {
+    const c = (r as { chemistry?: unknown }).chemistry
+    if (c === 'lifepo4' || c === 'agm' || c === 'gel' || c === 'flooded') values.chemistry = c
   } else if (r.kind === 'hybrid' || r.kind === 'inverter-only' || r.kind === 'charge-controller') {
     values.kind = r.kind
   }
