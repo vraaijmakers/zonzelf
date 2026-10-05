@@ -35,6 +35,40 @@ import { nominalSystemVoltage } from './battery-chemistry'
 
 export type BatteryComms = 'can' | 'rs485' | 'rs232'
 
+/**
+ * How a BANK of these packs is cabled, by the labels printed on the panel.
+ *
+ * Every vendor does this differently, and the manual usually shows the
+ * sockets without ever saying which one faces the inverter. A visitor at the
+ * rack with three packs and a bag of patch cables needs: which socket on
+ * which pack goes to the inverter, which pair chains pack to pack, and what
+ * each pack's address switch must read. Record the labels as silkscreened,
+ * not as the manual's prose names them — the panel is what they are looking at.
+ */
+export interface BmsWiring {
+  /** Socket on the MASTER pack that faces the inverter, per bus, as labelled. */
+  upstream: Partial<Record<'can' | 'rs485', string>>
+  /**
+   * Pack-to-pack link sockets, as labelled. `in` faces the previous pack,
+   * `out` the next. When `interchangeable`, the two carry identical signals
+   * and the in/out split is only a convention that keeps the chain readable.
+   */
+  link: { in: string; out: string; interchangeable: boolean }
+  /**
+   * Binary DIP address. `lsbSwitch` is the switch worth 1 — vendors disagree
+   * on which end that is, which is how a pack ends up on the wrong address.
+   */
+  addressing: {
+    kind: 'dip-binary'
+    switches: number
+    lsbSwitch: 1
+    /** Address of the pack cabled to the inverter. */
+    masterAddress: number
+  }
+  /** Where in the manual each of the above was read. */
+  source: string
+}
+
 export interface BatteryPreset {
   id: string
   brand: string
@@ -82,6 +116,8 @@ export interface BatteryPreset {
   comms: BatteryComms[]
   canBaud?: number
   rs485Baud?: number
+  /** Omit until the panel labels have been read off the manufacturer's manual. */
+  bmsWiring?: BmsWiring
 
   chargeMinC: number
   chargeMaxC: number
@@ -160,6 +196,18 @@ export const BATTERY_PRESETS: BatteryPreset[] = [
     comms: ['can', 'rs485', 'rs232'],
     canBaud: 500_000,
     rs485Baud: 9600,
+    // The panel (§5.1) prints RS485A over the CAN double socket and RS485B /
+    // RS485C over the other. §7.2.1 names the first the "CAN and RS485
+    // interface" and the second the "Parallel communication port", and the
+    // §7.2.2 table gives B and C identical signals. §7.3.2 puts monitoring
+    // addresses at 2–63, leaving 1 to the master. §9.5's table is binary with
+    // switch #1 worth 1 (address 3 = #1 ON, #2 ON).
+    bmsWiring: {
+      upstream: { can: 'CAN', rs485: 'RS485A' },
+      link: { in: 'RS485B', out: 'RS485C', interchangeable: true },
+      addressing: { kind: 'dip-binary', switches: 6, lsbSwitch: 1, masterAddress: 1 },
+      source: 'SG48100P user manual §5.1 (panel), §7.2 (interfaces), §7.3.2, §9.5 (DIP)',
+    },
     chargeMinC: 0,
     chargeMaxC: 45,
     dischargeMinC: -20,

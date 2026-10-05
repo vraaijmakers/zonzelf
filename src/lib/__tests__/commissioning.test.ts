@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   commissioningPairing, commissioningMap, parallelCountFor, SPH_L16, SPH_WORK_MODES,
+  bankWiring, dipFor,
   type CommissioningStep, type SettingRow,
 } from '../commissioning'
 import { findBatteryPreset } from '../battery-preset'
@@ -135,7 +136,7 @@ test('the comms step prints both pin tables so they can be compared', () => {
   const step = stepOf('comms')
   assert.equal(step.pinouts!.length, 3)
   const inv = step.pinouts!.find(p => /Inverter/.test(p.title))!
-  const bat = step.pinouts!.find(p => /RS485 socket/.test(p.title))!
+  const bat = step.pinouts!.find(p => /RS485 sockets/.test(p.title))!
   // The whole point: identical pins at both ends, so a patch cable is correct.
   assert.equal(inv.rows.find(r => r.signal === 'RS485-A')!.pins, '2, 7')
   assert.equal(bat.rows.find(r => r.signal === 'RS485-A')!.pins, '2, 7')
@@ -235,4 +236,63 @@ test('the L16 table numbers are the ones in the SPH manual, not the pack sheet',
   assert.equal(SPH_L16.factoryBatteryType, 'GEL')
   const pack = findBatteryPreset(PACK)!
   assert.notEqual(pack.recommendedChargeV, SPH_L16.boostV)
+})
+
+test('DIP positions match rows printed in the SG48100P manual §9.5, switch #1 first', () => {
+  // Copied from the manual's table, #1 → #6, not recomputed.
+  assert.deepEqual(dipFor(1, 6), ['ON', 'OFF', 'OFF', 'OFF', 'OFF', 'OFF'])
+  assert.deepEqual(dipFor(3, 6), ['ON', 'ON', 'OFF', 'OFF', 'OFF', 'OFF'])
+  assert.deepEqual(dipFor(22, 6), ['OFF', 'ON', 'ON', 'OFF', 'ON', 'OFF'])
+  assert.deepEqual(dipFor(32, 6), ['OFF', 'OFF', 'OFF', 'OFF', 'OFF', 'ON'])
+  assert.deepEqual(dipFor(63, 6), ['ON', 'ON', 'ON', 'ON', 'ON', 'ON'])
+  assert.throws(() => dipFor(64, 6))
+})
+
+test('a three-pack bank: master faces the inverter, B/C chain the rest, the ends stay empty', () => {
+  const pack = findBatteryPreset(PACK)!
+  const bank = bankWiring(pack, 3)
+  assert.deepEqual(bank.map(r => [r.pack, r.role, r.address]),
+    [[1, 'master', 1], [2, 'slave', 2], [3, 'slave', 3]])
+  const to = (p: number, label: string) => bank[p - 1].sockets.find(s => s.label === label)!.to
+
+  assert.equal(to(1, 'CAN'), 'inverter RS485/CAN port')
+  assert.match(to(1, 'RS485A'), /^empty/)
+  assert.match(to(1, 'RS485B'), /^empty/)
+  assert.equal(to(1, 'RS485C'), 'pack 2 RS485B')
+  assert.equal(to(2, 'RS485B'), 'pack 1 RS485C')
+  assert.equal(to(2, 'RS485C'), 'pack 3 RS485B')
+  assert.match(to(3, 'RS485C'), /end of chain/)
+  for (const p of [2, 3]) {
+    assert.match(to(p, 'CAN'), /^empty/)
+    assert.match(to(p, 'RS485A'), /^empty/)
+  }
+  // The mistake this table exists to prevent: the inverter on the link bus.
+  for (const row of bank) {
+    for (const s of row.sockets) {
+      if (s.label === 'RS485B' || s.label === 'RS485C') assert.doesNotMatch(s.to, /inverter/)
+    }
+  }
+})
+
+test('the comms step carries the bank table when the bank size is known', () => {
+  const two = stepOf('comms', SPH10, { parallelCount: 2 })
+  assert.equal(two.bank!.length, 2)
+  assert.ok(two.actions!.some(a => /master/.test(a)))
+  assert.ok(two.actions!.some(a => /RS485C on each pack into RS485B/.test(a)))
+  assert.ok(two.actions!.some(a => /do not loop it back/.test(a)))
+
+  const one = stepOf('comms', SPH10, { parallelCount: 1 })
+  assert.equal(one.bank!.length, 1)
+  assert.ok(!one.actions!.some(a => /Pack to pack/.test(a)), 'one pack has no chain')
+
+  const unknown = stepOf('comms')
+  assert.equal(unknown.bank, undefined, 'no invented bank size')
+  assert.ok(unknown.actions!.some(a => /Pack to pack/.test(a)), 'still explains chaining')
+})
+
+test('the bank table never exceeds what the pack allows in parallel', () => {
+  const pack = findBatteryPreset(PACK)!
+  const bank = bankWiring(pack, 200)
+  assert.equal(bank.length, pack.maxParallel)
+  assert.equal(bank.at(-1)!.address, 63)
 })

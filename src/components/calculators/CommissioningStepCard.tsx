@@ -57,6 +57,54 @@ export default function CommissioningStepCard({
           </ol>
         )}
 
+        {step.bank && step.bank.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="sr-only">
+                Address and cabling for each battery pack in the bank
+              </caption>
+              <thead>
+                <tr className="border-b border-zon-rule text-left text-xs uppercase tracking-wide text-zon-muted">
+                  <th scope="col" className="py-2 pr-3 font-medium">Pack</th>
+                  <th scope="col" className="py-2 pr-3 font-medium">Address</th>
+                  <th scope="col" className="py-2 pr-3 font-medium">DIP #1 → #{step.bank[0].dip.length}</th>
+                  <th scope="col" className="py-2 font-medium">Sockets</th>
+                </tr>
+              </thead>
+              <tbody>
+                {step.bank.map(row => (
+                  <tr key={row.pack} className="border-b border-zon-rule-soft align-top">
+                    <td className="py-2 pr-3 text-zon-ink">
+                      {row.pack}
+                      {row.role === 'master' && (
+                        <span className="mt-0.5 block text-[10px] text-zon-gold-deep">master</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 font-mono font-semibold text-zon-ink">{row.address}</td>
+                    <td className="py-2 pr-3 font-mono text-xs text-zon-ink">
+                      {row.dip.map(s => (s === 'ON' ? '■' : '□')).join(' ')}
+                      <span className="sr-only">{row.dip.join(', ')}</span>
+                    </td>
+                    <td className="py-2">
+                      <ul className="space-y-0.5">
+                        {row.sockets.map(s => (
+                          <li key={s.label} className="text-zon-body">
+                            <span className="font-mono text-zon-ink">{s.label}</span>{' '}
+                            <span className={s.to.startsWith('empty') ? 'text-zon-muted' : undefined}>
+                              → {s.to}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-1 text-[10px] text-zon-muted">■ ON · □ OFF, switch #1 first</p>
+          </div>
+        )}
+
         {step.pinouts && (
           <div className="grid gap-3 sm:grid-cols-3">
             {step.pinouts.map(t => (
