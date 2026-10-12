@@ -87,7 +87,13 @@ export default function Navbar() {
                   Admin
                 </Link>
               )}
-              <span className="text-sm text-zon-body max-w-[12rem] truncate">{user.email}</span>
+              <Link
+                href="/account"
+                title="Your account"
+                className="text-sm text-zon-body hover:text-zon-ink max-w-[12rem] truncate transition-colors"
+              >
+                {user.email}
+              </Link>
               <SignOutButton className="text-sm text-zon-body hover:text-zon-ink transition-colors" />
             </>
           ) : (
@@ -133,7 +139,13 @@ export default function Navbar() {
           )}
           {user ? (
             <div className="flex items-center justify-between pt-2 border-t mt-1">
-              <span className="text-sm text-zon-body truncate">{user.email}</span>
+              <Link
+                href="/account"
+                onClick={() => setOpen(false)}
+                className="text-sm text-zon-body hover:text-zon-ink truncate transition-colors"
+              >
+                {user.email}
+              </Link>
               <SignOutButton className="text-sm text-zon-body hover:text-zon-ink transition-colors" />
             </div>
           ) : (

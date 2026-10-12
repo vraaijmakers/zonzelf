@@ -8,7 +8,7 @@ import { worstSeverity } from '../battery-review'
 
 const PAGES = {
   inverter: 'src/app/calculators/inverter/page.tsx',
-  panel: 'src/app/calculators/strings/page.tsx',
+  panel: 'src/app/calculators/strings/ArrayWiringCalculator.tsx',
 } as const
 
 /**

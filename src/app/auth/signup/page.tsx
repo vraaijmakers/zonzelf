@@ -2,13 +2,15 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
+import LoginForm from '@/components/auth/LoginForm'
 
-// Accounts are deliberately closed. This route stays reachable rather than 404ing,
-// because it has been linked from the nav, the footer, and the load calculator, and a
-// bookmark or a stale link should land on an explanation rather than an error. It no
-// longer renders LoginForm: a form here would keep creating users, which is the finding
-// this closure exists to fix. See the roadmap item
-// "GDPR: account deletion path, or stop collecting emails".
+export const metadata = {
+  title: 'Create an account — ZonZelf',
+}
+
+// The only door that creates an account, and it does not open without the
+// terms box ticked. Sign-ups were closed until an account could be deleted
+// without an operator; /account is that path.
 export default async function SignupPage(props: PageProps<'/auth/signup'>) {
   const params = await props.searchParams
   const next = sanitizeNextPath(typeof params.next === 'string' ? params.next : null)
@@ -23,25 +25,22 @@ export default async function SignupPage(props: PageProps<'/auth/signup'>) {
 
   return (
     <div className="max-w-sm mx-auto px-4 py-20">
-      <h1 className="text-2xl font-bold mb-2">Accounts are not open yet</h1>
-      <p className="text-sm text-zon-body mb-4">
-        ZonZelf is not taking sign-ups. There is no dashboard for an account to hold yet, so
-        collecting your email address would give you nothing and us something to look after.
+      <h1 className="text-2xl font-bold text-zon-ink mb-2">Create a free account</h1>
+      <p className="text-sm text-zon-body mb-2">
+        An account opens the last three steps of the sizing chain: array wiring, cable and fuse
+        sizing, and your whole system in one place.
       </p>
-      <p className="text-sm text-zon-body mb-6">
-        Nothing here needs an account. The{' '}
-        <Link href="/calculators/load" className="underline hover:no-underline">
-          calculators
-        </Link>{' '}
-        and{' '}
-        <Link href="/guides" className="underline hover:no-underline">
-          guides
-        </Link>{' '}
-        all work without one, and will stay that way.
+      <p className="text-sm text-zon-muted mb-6">
+        We&apos;ll email you a link — no password to remember. Your email address and a record
+        of this agreement are all we store, and you can delete the account yourself at any time.
       </p>
-      <p className="text-sm text-zon-muted">
+      <LoginForm next={next} mode="signup" />
+      <p className="text-sm text-zon-muted mt-6">
         Already have an account?{' '}
-        <Link href="/auth/login" className="underline hover:no-underline">
+        <Link
+          href={`/auth/login?next=${encodeURIComponent(next)}`}
+          className="underline hover:no-underline"
+        >
           Sign in
         </Link>
         .

@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { Zap, Battery, Sun, Cable, Plug, PanelsTopLeft, ClipboardList, ChevronRight, Caravan } from 'lucide-react'
+import { Zap, Battery, Sun, Cable, Plug, PanelsTopLeft, ClipboardList, ChevronRight, Caravan, Lock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { CALC_STEPS, TOTAL_STEPS, type StepId } from '@/lib/calc-steps'
+import { CALC_STEPS, TOTAL_STEPS, needsAccount, type StepId } from '@/lib/calc-steps'
 import { SizingStoryTeaser } from '@/components/guides/SizingStory'
 import { SIZING_STORY_HREF } from '@/lib/sizing-story'
 import { BOAT_RV_GUIDE_HREF, DOES_NOT_TRANSFER } from '@/lib/mobile-scope'
@@ -52,6 +52,7 @@ export default function CalculatorsPage() {
         <p className="text-zon-body">
           {TOTAL_STEPS} steps from your appliances to a system that works in December. Each one
           feeds the next, so start at the top — the numbers carry forward on their own.
+          The first four are open to everyone; the last three need a free account.
         </p>
         <p className="mt-2 text-sm text-zon-muted">
           New here?{' '}
@@ -142,6 +143,12 @@ export default function CalculatorsPage() {
               </CardHeader>
               <CardContent>
                 <CardDescription>{description}</CardDescription>
+                {built && needsAccount(step.id) && (
+                  <p className="mt-2 flex items-center gap-1 text-xs text-zon-muted">
+                    <Lock className="h-3 w-3" aria-hidden="true" />
+                    Needs a free account
+                  </p>
+                )}
               </CardContent>
             </Card>
           )

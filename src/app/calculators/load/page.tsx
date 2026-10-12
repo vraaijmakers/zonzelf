@@ -536,12 +536,10 @@ export default function LoadCalculatorPage() {
                 <h3 className="text-lg font-bold text-center mb-2">Label Scan — not available yet</h3>
                 <p className="text-sm text-zon-body text-center mb-4">
                   The plan is to let you photograph each appliance nameplate and have ZonZelf read
-                  the wattage off it. It is not finished, and accounts are not open, so there is
-                  nothing to sign up for yet.
+                  the wattage off it. It is not finished, so there is nothing to switch on yet.
                 </p>
                 <p className="text-sm text-zon-body text-center mb-5">
-                  Enter the wattage by hand for now — the presets below cover most appliances, and
-                  the calculator does not need an account.
+                  Enter the wattage by hand for now — the presets below cover most appliances.
                 </p>
                 <button
                   onClick={() => setShowProPrompt(false)}
