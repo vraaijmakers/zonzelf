@@ -21,10 +21,6 @@ export default function AccountDeletedPage() {
         <Link href="/guides" className="underline hover:no-underline">
           guides
         </Link>{' '}
-        and the first four{' '}
-        <Link href="/calculators" className="underline hover:no-underline">
-          calculator steps
-        </Link>{' '}
         still work without an account.
       </p>
     </div>

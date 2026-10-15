@@ -26,8 +26,6 @@ import {
   BATTERY_PRESETS, findBatteryPreset, presetVoltageFamily, type BatteryPreset,
 } from '@/lib/battery-preset'
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
-import TermsGate from '@/components/auth/TermsGate'
-import type { TermsAccess } from '@/lib/terms'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { createClient } from '@/lib/supabase/client'
 import { BATTERY_SHELF_SELECT, toShelfItem, type BatteryShelfRow } from '@/lib/battery-catalog'
@@ -117,7 +115,7 @@ const BATTERY_TYPES: BatteryType[] = [
   },
 ]
 
-export default function BatteryCalculator({ protectionAccess }: { protectionAccess: TermsAccess }) {
+export default function BatteryCalculator() {
   const [savedKwh, setDailyKwh, kwhMeta] = usePersistentState('zonzelf:battery:dailyKwh', 3.5)
   const [days, setDays] = usePersistentState('zonzelf:battery:days', 2)
   const [voltage, setVoltage, voltageMeta] = usePersistentState('zonzelf:battery:voltage', 24)
@@ -1012,22 +1010,13 @@ export default function BatteryCalculator({ protectionAccess }: { protectionAcce
         </div>
 
         <div className="min-w-0 space-y-4 lg:col-span-2">
-          {protectionAccess === 'granted' ? (
-            <ProtectionOutput view={cutoffView}>
-              <p className="text-xs text-zon-muted">
-                <Link href="/guides/depth-of-discharge" className="hover:underline text-zon-gold-deep">
-                  How deep can you drain a battery? →
-                </Link>
-              </p>
-            </ProtectionOutput>
-          ) : (
-            <TermsGate
-              variant="card"
-              access={protectionAccess}
-              next="/calculators/battery"
-              title={cutoffView.title}
-            />
-          )}
+          <ProtectionOutput view={cutoffView}>
+            <p className="text-xs text-zon-muted">
+              <Link href="/guides/depth-of-discharge" className="hover:underline text-zon-gold-deep">
+                How deep can you drain a battery? →
+              </Link>
+            </p>
+          </ProtectionOutput>
 
           {annualRecharge && worstRecharge && panelSummary ? (
             <RechargeWarning

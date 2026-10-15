@@ -44,10 +44,8 @@ export default function TermsPage() {
 
       <Section title="Accounts">
         <p>
-          The guides and the calculator steps that size a system (loads, battery, inverter and
-          panels) are open without an account. You need an account, and to have agreed to these
-          terms, to use the steps whose results bear on safety (array wiring, cable and fuse
-          sizing, and the system page), and for monitoring, the dashboard, and roadmap
+          The guides are open without an account. You need an account, and to have agreed to
+          these terms, to use the calculators, and for monitoring, the dashboard, and roadmap
           contributions. We record which version of these terms you agreed to, and when. You
           are responsible for keeping your login credentials secure and for all activity under
           your account. Tell us if you believe your account has been compromised.

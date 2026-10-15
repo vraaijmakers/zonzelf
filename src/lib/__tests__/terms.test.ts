@@ -8,7 +8,7 @@ import {
   termsAccess,
 } from '../terms'
 import { shippedProtection } from '../calc-register'
-import { ACCOUNT_STEPS, stepById } from '../calc-steps'
+import { CALC_STEPS } from '../calc-steps'
 
 test('a visitor with no account is anonymous whatever else is passed', () => {
   assert.equal(termsAccess(null, []), 'anonymous')
@@ -39,24 +39,25 @@ test('the printed date and the recorded version are the same day', () => {
   assert.equal(printed, TERMS_VERSION)
 })
 
-// The gate is a server check in each page.tsx. A protection output on a page
-// that never asks is the failure this whole layer exists to prevent, so a new
-// protection page that forgets the check fails here rather than in production.
-test('every page that carries a protection output checks terms access', () => {
-  const pages = new Set(shippedProtection().map(o => o.page))
-  assert.ok(pages.size > 0)
+// The gate is a server check in each page.tsx. A calculator step that renders
+// without asking is the failure this whole layer exists to prevent, so a new
+// step that forgets the check fails here rather than in production.
+test('every calculator step checks terms access and renders the gate', () => {
+  const pages = CALC_STEPS.flatMap(s => (s.href ? [s.href] : []))
+  assert.equal(pages.length, CALC_STEPS.length)
   for (const page of pages) {
     const source = readFileSync(new URL(`../../app${page}/page.tsx`, import.meta.url), 'utf8')
     assert.match(source, /getTermsAccess\(\)/, `${page} does not check terms access`)
+    assert.match(source, /<TermsGate /, `${page} does not render the gate`)
     assert.doesNotMatch(source, /^'use client'/, `${page} must stay a Server Component`)
   }
 })
 
-test('every step advertised as needing an account is a wholly gated page', () => {
-  for (const id of ACCOUNT_STEPS) {
-    const { href } = stepById(id)
-    assert.ok(href, `${id} has no page`)
-    const source = readFileSync(new URL(`../../app${href}/page.tsx`, import.meta.url), 'utf8')
-    assert.match(source, /<TermsGate /, `${href} does not render the gate`)
+// Belt and braces: every page the register says carries a protection output is
+// one of those steps.
+test('every protection output lives on a gated calculator step', () => {
+  const steps = new Set(CALC_STEPS.map(s => s.href))
+  for (const o of shippedProtection()) {
+    assert.ok(steps.has(o.page), `${o.id} is on ${o.page}, which is not a calculator step`)
   }
 })

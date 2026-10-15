@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { TERMS_VERSION, termsAccess, type TermsAccess } from '@/lib/terms'
 
 /**
- * Server-side check for the protection steps. Called from the page itself, not
+ * Server-side check for the calculator steps. Called from the page itself, not
  * a layout: Next does not re-run a layout on navigation, and a layout that
  * swaps its children does not stop them rendering (see the "Layouts and auth
  * checks" section of Next's authentication guide).

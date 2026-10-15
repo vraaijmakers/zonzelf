@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       // The sign-up form sends the terms version its box was ticked against.
       // Recorded here, once the link is opened, because before this there was
       // no account to record it for. If it does not save, the reader is asked
-      // again at the first protection step rather than waved through.
+      // again at the first calculator step rather than waved through.
       if (isCurrentTermsVersion(searchParams.get('terms'))) {
         await recordTermsAcceptance(supabase)
       }

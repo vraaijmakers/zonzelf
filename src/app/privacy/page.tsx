@@ -30,7 +30,7 @@ export default function PrivacyPage() {
       </p>
 
       <Section title="What we collect">
-        <p>If you just browse guides and use calculators without an account, we don&apos;t collect any personal data — calculator inputs stay in your browser.</p>
+        <p>If you just read the guides without an account, we don&apos;t collect any personal data. With an account, what you type into the calculators still stays in your browser and is never sent to us.</p>
         <p>If you create an account, we collect:</p>
         <ul className="list-disc pl-6 space-y-1">
           <li><strong>Account data:</strong> your email address, via our authentication provider (Supabase).</li>
@@ -98,9 +98,8 @@ export default function PrivacyPage() {
 
       <Section title="Your rights">
         <p>
-          Most of ZonZelf works without an account, and without one we hold no personal data
-          about you: the guides and the first four calculator steps are open to everyone. An
-          account is needed for the array wiring, cable sizing and system steps.
+          The guides work without an account, and without one we hold no personal data about
+          you. An account is needed for the calculators.
         </p>
         <p>
           If you have an account, your{' '}

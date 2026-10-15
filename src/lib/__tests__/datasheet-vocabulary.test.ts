@@ -7,7 +7,7 @@ import { reviewInverterSpec } from '../inverter-review'
 import { worstSeverity } from '../battery-review'
 
 const PAGES = {
-  inverter: 'src/app/calculators/inverter/page.tsx',
+  inverter: 'src/app/calculators/inverter/InverterCalculator.tsx',
   panel: 'src/app/calculators/strings/ArrayWiringCalculator.tsx',
 } as const
 

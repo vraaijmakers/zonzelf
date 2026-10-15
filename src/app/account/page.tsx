@@ -91,8 +91,8 @@ export default async function AccountPage() {
         {!error && !current && (
           <div className="rounded-lg border border-zon-gold-light bg-zon-gold-tint p-4">
             <p className="mb-3">
-              You have not agreed to the current terms, so array wiring, cable sizing and the
-              system page are closed to you for now.
+              You have not agreed to the current terms, so the calculators are closed to you
+              for now.
             </p>
             <AcceptTermsForm next="/account" />
           </div>

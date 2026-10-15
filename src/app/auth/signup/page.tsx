@@ -27,8 +27,8 @@ export default async function SignupPage(props: PageProps<'/auth/signup'>) {
     <div className="max-w-sm mx-auto px-4 py-20">
       <h1 className="text-2xl font-bold text-zon-ink mb-2">Create a free account</h1>
       <p className="text-sm text-zon-body mb-2">
-        An account opens the last three steps of the sizing chain: array wiring, cable and fuse
-        sizing, and your whole system in one place.
+        An account opens the calculators: all seven steps from your appliances to cable sizes
+        and inverter settings. The guides stay open without one.
       </p>
       <p className="text-sm text-zon-muted mb-6">
         We&apos;ll email you a link — no password to remember. Your email address and a record

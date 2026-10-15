@@ -3,12 +3,10 @@
  *
  * WHY THIS FILE EXISTS
  * --------------------
- * The capacity steps of the sizing chain (loads, battery, inverter, panels)
- * are open to everyone. The protection steps (array wiring, cable and fuse
- * sizing, commissioning) and the battery cutoff are shown only to a signed-in
- * reader who has ticked "I agree" against the CURRENT version of the terms.
- * See src/lib/calc-register.ts for the capacity / protection split, and the
- * terms_acceptances migration for where an acceptance is recorded.
+ * Every step of the sizing chain is shown only to a signed-in reader who has
+ * ticked "I agree" against the CURRENT version of the terms. The guides stay
+ * open. See the terms_acceptances migration for where an acceptance is
+ * recorded.
  *
  * This module is pure so it can be tested and imported from either side of
  * the server boundary. The database read lives in terms-access.ts.

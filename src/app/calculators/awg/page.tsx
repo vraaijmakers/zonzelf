@@ -7,8 +7,8 @@ export const metadata = {
   description: 'Which cable sizes your run allows, and the fuse or breaker that protects them.',
 }
 
-// A protection step: shown only to a signed-in reader who has agreed to the
-// current terms. The check is here, in the page, on every request — see
+// Every calculator step is shown only to a signed-in reader who has agreed to
+// the current terms. The check is here, in the page, on every request — see
 // src/lib/terms-access.ts for why it is not in a layout.
 export default async function Page() {
   const access = await getTermsAccess()

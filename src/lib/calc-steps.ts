@@ -84,18 +84,6 @@ export const CALC_STEPS: readonly CalcStep[] = [
 
 export const TOTAL_STEPS = CALC_STEPS.length
 
-/**
- * The steps that need a free account and agreement to the current terms. These
- * are the ones made of protection outputs (see calc-register.ts); the four
- * before them size a system and stay open to everyone. The check itself is in
- * each step's page.tsx — this list is for telling the reader in advance.
- */
-export const ACCOUNT_STEPS: readonly StepId[] = ['array', 'protection', 'system']
-
-export function needsAccount(id: StepId): boolean {
-  return ACCOUNT_STEPS.includes(id)
-}
-
 export function stepById(id: StepId): CalcStep {
   const step = CALC_STEPS.find(s => s.id === id)
   if (!step) throw new Error(`Unknown calculator step: ${id}`)

@@ -41,7 +41,7 @@ export default async function LoginPage(props: PageProps<'/auth/login'>) {
         >
           Create a free account
         </Link>
-        . The guides and the first four calculator steps do not need one.
+        . The calculators need one; the guides do not.
       </p>
     </div>
   )
