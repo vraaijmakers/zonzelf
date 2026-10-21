@@ -10,7 +10,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin'
 import { createClient } from '@/lib/supabase/server'
-import { parseInverterVerification, parsePanelVerification } from '@/lib/catalog-view'
+import { parseBatteryVerification, parseInverterVerification, parsePanelVerification } from '@/lib/catalog-view'
 import type { ReviewFlag } from '@/lib/battery-review'
 
 export type VerifyState = { status: 'idle' | 'error' | 'ok'; errors: string[]; flags: ReviewFlag[] }
@@ -23,10 +23,16 @@ function refresh(id?: number) {
 async function modelFor(id: number) {
   const supabase = await createClient()
   const { data, error } = await supabase
-    .from('component_models').select('id, category, brand, model, is_published').eq('id', id).single()
+    .from('component_models').select('id, category, brand, model, mpn, is_published').eq('id', id).single()
   if (error) throw new Error(error.message)
-  return { supabase, model: data as { id: number; category: 'panel' | 'inverter'; brand: string; model: string; is_published: boolean } }
+  return {
+    supabase,
+    model: data as { id: number; category: Category; brand: string; model: string; mpn: string | null; is_published: boolean },
+  }
 }
+
+type Category = 'panel' | 'inverter' | 'battery'
+const SPEC_TABLE: Record<Category, string> = { panel: 'panel_specs', inverter: 'inverter_specs', battery: 'battery_specs' }
 
 /**
  * Records specs read off the manufacturer's datasheet and marks them verified.
@@ -44,13 +50,13 @@ export async function verifySpecs(id: number, _prev: VerifyState, formData: Form
     const v = formData.get(name)
     return typeof v === 'string' ? v : null
   }
-  const result = model.category === 'panel'
-    ? parsePanelVerification(get, model)
+  const result = model.category === 'panel' ? parsePanelVerification(get, model)
+    : model.category === 'battery' ? parseBatteryVerification(get, model)
     : parseInverterVerification(get, model)
   if (!result.ok) return { status: 'error', errors: result.errors, flags: result.flags }
 
   const { datasheet_url, ...spec } = result.spec
-  const table = model.category === 'panel' ? 'panel_specs' : 'inverter_specs'
+  const table = SPEC_TABLE[model.category]
   const extra = model.category === 'panel'
     ? { cell_type: get('cell_type')?.trim() || null, bifacial: get('bifacial') === 'on' }
     : {}
@@ -64,9 +70,12 @@ export async function verifySpecs(id: number, _prev: VerifyState, formData: Form
   }, { onConflict: 'component_model_id' })
   if (error) return { status: 'error', errors: [`That didn't save: ${error.message}`], flags: result.flags }
 
-  // The link the figures were read from becomes the model's citation.
+  // The link the figures were read from becomes the model's citation, and a
+  // scraper disagreement is answered by this re-verification.
   const { error: linkError } = await supabase
-    .from('component_models').update({ spec_sheet_url: datasheet_url }).eq('id', id)
+    .from('component_models')
+    .update({ spec_sheet_url: datasheet_url, spec_disagreement: null, spec_disagreement_at: null })
+    .eq('id', id)
   if (linkError) return { status: 'error', errors: [`Specs saved, but the datasheet link didn't: ${linkError.message}`], flags: result.flags }
 
   refresh(id)
@@ -77,9 +86,8 @@ export async function verifySpecs(id: number, _prev: VerifyState, formData: Form
 export async function unverifySpecs(id: number) {
   await requireAdmin()
   const { supabase, model } = await modelFor(id)
-  const table = model.category === 'panel' ? 'panel_specs' : 'inverter_specs'
   const { error } = await supabase
-    .from(table).update({ verified_at: null, verified_by: null }).eq('component_model_id', id)
+    .from(SPEC_TABLE[model.category]).update({ verified_at: null, verified_by: null }).eq('component_model_id', id)
   if (error) throw new Error(error.message)
   refresh(id)
 }

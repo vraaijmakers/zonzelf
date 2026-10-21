@@ -2,24 +2,20 @@
 // logic stays in each brand's own file — sites differ too much (see EG4 vs.
 // Victron vs. SunGoldPower) for a one-size-fits-all scraper shape.
 //
-// THE PUBLISHED-ROW REVIEW GATE lives here, in gateWrite(). Until
-// 2026-09-09 this file upserted `on conflict (source_url)`, which rewrote an
-// already-published row's specs and price on every re-run with is_published
-// left true — a live row on /calculators/battery changing with no human in the
-// loop, which is exactly what the unpublished-by-default design exists to
-// prevent. Nothing here writes over a published row any more: it proposes, and
-// an admin applies in /admin/batteries. See
-// supabase/migrations/20260909000001_battery_model_revisions.sql.
+// WHERE BATTERIES GO, since 2026-10-02: the component catalogue, not
+// battery_models. upsertBatteries() and updateScrapedFields() keep the names
+// and signatures the five battery scrapers call, and route each record through
+// src/lib/battery-catalog.ts into scripts/lib/catalog-write.ts — the writer
+// panels and inverters already use. The protections the old review gate gave
+// (gateWrite(), battery_model_revisions) carry over in the catalogue's terms:
+// rows land unpublished, a verified spec row is never written (a disagreeing
+// scrape is flagged on the model instead), and a price that jumps more than
+// 30% on a published model is held. battery_models is frozen as the rollback;
+// see supabase/migrations/20261002000001_component_catalog_batteries.sql.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import {
-  SCRAPED_FIELDS,
-  diffScrapedFields,
-  proposalFrom,
-  sameProposal,
-  type FieldChange,
-  type ScrapedRecord,
-} from '../../src/lib/battery-revision'
+import { toCatalogBattery } from '../../src/lib/battery-catalog'
+import { writeListing } from './catalog-write'
 import {
   assessScrape,
   formatScrapeHealth,
@@ -115,30 +111,6 @@ export function reportScrapeHealth(run: ScrapeRun): ScrapeHealth {
   return health
 }
 
-type ExistingRow = ScrapedRecord & { id: number; is_published: boolean; image_url: string | null }
-
-// image_url is selected alongside the gated fields but is not one of them:
-// syncImageUrl() needs to know what is stored to avoid a pointless write.
-const EXISTING_COLUMNS = ['id', 'is_published', 'image_url', ...SCRAPED_FIELDS].join(', ')
-
-function summarize(changes: FieldChange[]): string {
-  return changes.map(c => c.field).join(', ')
-}
-
-/**
- * Did this scrape actually read a price off the page?
- *
- * Only then may price_scraped_at move. scrape-eg4.ts and the other
- * manufacturer scrapers send `price_usd: null` because their sources state no
- * price, and diffScrapedFields() drops nulls ("silence is not a correction") —
- * so without this check every EG4 run would re-date a price it never looked
- * at, which is the failure the column was added to prevent. See
- * supabase/migrations/20260914000001_battery_models_price_scraped_at.sql.
- */
-function assertsPrice(patch: ScrapedRecord): boolean {
-  return patch.price_usd != null
-}
-
 export function tallyOutcomes(outcomes: ScrapeOutcome[]): string {
   const counts = new Map<ScrapeOutcome, number>()
   for (const outcome of outcomes) counts.set(outcome, (counts.get(outcome) ?? 0) + 1)
@@ -146,266 +118,60 @@ export function tallyOutcomes(outcomes: ScrapeOutcome[]): string {
 }
 
 /**
- * Routes one scraped record at an existing row: writes it if the row is not
- * live, proposes it if it is.
- */
-async function gateWrite(
-  supabase: SupabaseClient,
-  existing: ExistingRow,
-  patch: ScrapedRecord,
-  source: string,
-): Promise<ScrapeOutcome> {
-  const label = `${existing.brand} ${existing.model}`
-  const changes = diffScrapedFields(existing, patch)
-  const now = new Date().toISOString()
-
-  if (changes.length === 0) {
-    // Nothing to review, but "we looked on this date and the page still agreed"
-    // is worth recording — it's what makes a stale row visible later.
-    const { error } = await supabase
-      .from('battery_models')
-      .update({
-        scraped_at: now,
-        // Nothing changed, so a price in this patch equals the live one: the
-        // reseller still quotes it today and the row can say so.
-        ...(assertsPrice(patch) ? { price_scraped_at: now } : {}),
-      })
-      .eq('id', existing.id)
-    if (error) {
-      console.error(`  ✗ ${label}: touching scraped_at failed: ${error.message}`)
-      return 'failed'
-    }
-    console.log(`  = ${label} — unchanged`)
-    return 'unchanged'
-  }
-
-  const { proposed, previous } = proposalFrom(changes)
-
-  if (!existing.is_published) {
-    // Not live: write in place. The row is already sitting in the review queue,
-    // so a second queue in front of it would just be a queue in front of a queue.
-    const { error } = await supabase
-      .from('battery_models')
-      .update({
-        ...proposed,
-        scraped_at: now,
-        // Written in place, so whatever price this patch carries is the live
-        // one as of now — whether it changed or merely held.
-        ...(assertsPrice(patch) ? { price_scraped_at: now } : {}),
-      })
-      .eq('id', existing.id)
-    if (error) {
-      console.error(`  ✗ ${label}: update failed: ${error.message}`)
-      return 'failed'
-    }
-    // An open proposal from back when this row was published now describes a
-    // state that no longer exists. Neither accepted nor refused — superseded.
-    const { error: supersedeError } = await supabase
-      .from('battery_model_revisions')
-      .update({ status: 'superseded', reviewed_at: now })
-      .eq('battery_model_id', existing.id)
-      .eq('status', 'pending')
-    if (supersedeError) {
-      console.error(`  ! ${label}: couldn't supersede open proposals: ${supersedeError.message}`)
-    }
-    console.log(`  ✓ ${label} — updated in place, unpublished (${summarize(changes)})`)
-    return 'updated'
-  }
-
-  // Live row. Propose; never write.
-  const { data: lastRejected, error: rejectedError } = await supabase
-    .from('battery_model_revisions')
-    .select('proposed')
-    .eq('battery_model_id', existing.id)
-    .eq('status', 'rejected')
-    .order('reviewed_at', { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle()
-  // Rule 7 — don't swallow it, but don't let a failed lookup silence a change
-  // either. Failing toward "propose" costs the reviewer one duplicate; failing
-  // toward "skip" is the bug this whole file is fixing.
-  if (rejectedError) {
-    console.error(`  ! ${label}: rejected-proposal lookup failed (${rejectedError.message}) — proposing anyway`)
-  }
-  if (lastRejected && sameProposal(lastRejected.proposed as Record<string, unknown>, proposed)) {
-    console.log(`  – ${label} — same change a reviewer already rejected (${summarize(changes)}); not re-proposing`)
-    return 'suppressed'
-  }
-
-  // One open proposal per battery (partial unique index): replace, don't stack.
-  const { error: clearError } = await supabase
-    .from('battery_model_revisions')
-    .delete()
-    .eq('battery_model_id', existing.id)
-    .eq('status', 'pending')
-  if (clearError) {
-    console.error(`  ✗ ${label}: clearing the open proposal failed: ${clearError.message}`)
-    return 'failed'
-  }
-
-  const { error: insertError } = await supabase
-    .from('battery_model_revisions')
-    .insert({ battery_model_id: existing.id, proposed, previous, source, scraped_at: now })
-  if (insertError) {
-    console.error(`  ✗ ${label}: proposal failed: ${insertError.message}`)
-    return 'failed'
-  }
-  // battery_models.scraped_at deliberately NOT touched here. It dates the live
-  // values, and the live values were not re-confirmed — the source disagrees
-  // with them. The revision carries its own scraped_at.
-  //
-  // price_scraped_at is the one exception, and only when the disagreement is
-  // about something else: if the source quoted a price and it MATCHED, the
-  // live price was re-confirmed even though the retailer_url (say) moved.
-  // Leaving it stale would age out a price a scrape just verified. When the
-  // price is itself what changed, it stays put — the new price is in the
-  // proposal, and applying that is what dates it.
-  if (assertsPrice(patch) && !changes.some(c => c.field === 'price_usd')) {
-    const { error: priceDateError } = await supabase
-      .from('battery_models')
-      .update({ price_scraped_at: now })
-      .eq('id', existing.id)
-    if (priceDateError) {
-      console.error(`  ! ${label}: re-dating the confirmed price failed: ${priceDateError.message}`)
-    }
-  }
-
-  console.log(`  → ${label} — PUBLISHED row, change proposed for review (${summarize(changes)})`)
-  return 'proposed'
-}
-
-/**
- * Writes the product photo straight onto the row, live or not.
- *
- * THE ONE FIELD THAT BYPASSES THE GATE, and the reasoning is in migration
- * 20260924000001: image_url is admin-only decoration that cannot misinform a
- * visitor, and gating it would have opened an image-only proposal against
- * every published row the first time this ran — noise on top of the queue this
- * column exists to make readable. Everything a visitor actually sees still
- * goes through gateWrite().
- *
- * Null is silence, not a correction, exactly as in diffScrapedFields(): a
- * vendor page that stopped emitting og:image has not withdrawn the photo.
- */
-async function syncImageUrl(
-  supabase: SupabaseClient,
-  existing: { id: number; image_url: string | null; brand: string; model: string },
-  image_url: string | null | undefined,
-): Promise<void> {
-  if (!image_url || image_url === existing.image_url) return
-  const { error } = await supabase
-    .from('battery_models')
-    .update({ image_url })
-    .eq('id', existing.id)
-  if (error) {
-    // Rule 7 — say so, but a missing thumbnail must never fail a scrape that
-    // got the specs right.
-    console.error(`  ! ${existing.brand} ${existing.model}: storing the product photo failed: ${error.message}`)
-    return
-  }
-  // Deliberately not one of the outcome markers (= + ✓ → – ✗): this write is
-  // outside the gate, so it is not one of the outcomes the tally counts.
-  console.log(`  · ${existing.brand} ${existing.model} — product photo ${existing.image_url ? 'updated' : 'added'}`)
-}
-
-async function findRows(
-  supabase: SupabaseClient,
-  match: { column: 'source_url' | 'sku'; value: string },
-): Promise<{ rows: ExistingRow[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('battery_models')
-    .select(EXISTING_COLUMNS)
-    .eq(match.column, match.value)
-  if (error) return { rows: [], error: error.message }
-  return { rows: (data ?? []) as unknown as ExistingRow[], error: null }
-}
-
-/**
- * Insert-or-gate on source_url, which is unique. For scrapers that produce a
- * whole battery record from a manufacturer or reseller spec page.
- *
- * `source` names the scraper ('eg4', 'victron', …) and is stored on any
- * proposal — a price disagreement reads very differently depending on whether
- * the manufacturer or the reseller raised it.
+ * Writes scraped batteries into the component catalogue. `source` names the
+ * scraper for the log ('eg4', 'victron', …).
  */
 export async function upsertBatteries(
   supabase: SupabaseClient,
   batteries: ParsedBattery[],
   source: string,
 ): Promise<ScrapeOutcome[]> {
-  console.log(`\nWriting ${batteries.length} row(s) through the review gate...`)
+  console.log(`\nWriting ${batteries.length} batter${batteries.length === 1 ? 'y' : 'ies'} from ${source} into the catalogue...`)
   const outcomes: ScrapeOutcome[] = []
-
-  for (const battery of batteries) {
-    const label = `${battery.brand} ${battery.model}`
-    const { rows, error } = await findRows(supabase, { column: 'source_url', value: battery.source_url })
-    if (error) {
-      console.error(`  ✗ ${label}: lookup failed: ${error}`)
-      outcomes.push('failed')
-      continue
-    }
-
-    if (rows.length === 0) {
-      const insertedAt = new Date().toISOString()
-      const { error: insertError } = await supabase
-        .from('battery_models')
-        .insert({
-          ...battery,
-          scraped_at: insertedAt,
-          // A brand-new row's price, where the source states one, is as fresh
-          // as the row itself. Manufacturer scrapes send null and stay undated.
-          ...(assertsPrice(battery) ? { price_scraped_at: insertedAt } : {}),
-          is_published: false,
-        })
-      if (insertError) {
-        console.error(`  ✗ ${label}: insert failed: ${insertError.message}`)
-        outcomes.push('failed')
-        continue
-      }
-      console.log(`  + ${label} (${battery.voltage}V ${battery.capacity_ah}Ah) — new, unpublished`)
-      outcomes.push('inserted')
-      continue
-    }
-
-    for (const row of rows) {
-      outcomes.push(await gateWrite(supabase, row, battery, source))
-      await syncImageUrl(supabase, { ...row, brand: battery.brand, model: battery.model }, battery.image_url)
-    }
-  }
-
+  for (const battery of batteries) outcomes.push(await writeListing(supabase, toCatalogBattery(battery)))
   console.log(`\nDone: ${tallyOutcomes(outcomes)}.`)
-  if (outcomes.some(o => o === 'inserted' || o === 'updated')) {
-    console.log('New and updated rows are unpublished, pending review in /admin/batteries.')
-  }
-  if (outcomes.includes('proposed')) {
-    console.log('Published rows were NOT changed — their proposals wait for an admin in /admin/batteries.')
-  }
+  if (outcomes.includes('inserted')) console.log('New batteries are unpublished, waiting in /admin/catalog.')
   return outcomes
 }
 
 /**
- * Gate-only variant for scrapers that fill fields in on rows another scraper
- * created, and must never insert (see scrape-signaturesolar.ts, which adds a
- * reseller price to manufacturer-scraped EG4 rows).
+ * A reseller price for a battery another scraper created (scrape-signaturesolar.ts
+ * prices EG4's batteries). Never creates a battery: it finds the catalogue
+ * model by SKU and writes the listing onto it, or reports it missing.
  */
 export async function updateScrapedFields(
   supabase: SupabaseClient,
-  match: { column: 'source_url' | 'sku'; value: string },
-  patch: ScrapedRecord,
+  match: { column: 'sku'; value: string },
+  patch: { price_usd: number | null; retailer: string; retailer_url: string },
   source: string,
 ): Promise<ScrapeOutcome[]> {
-  const { rows, error } = await findRows(supabase, match)
+  const { data: model, error } = await supabase
+    .from('component_models').select('id, brand, model, mpn, spec_sheet_url')
+    .eq('category', 'battery').eq('mpn_key', match.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+    .maybeSingle()
   if (error) {
-    console.error(`  ✗ lookup by ${match.column}=${match.value} failed: ${error}`)
+    console.error(`  ✗ ${source}: lookup by sku ${match.value} failed: ${error.message}`)
     return ['failed']
   }
-  if (rows.length === 0) {
-    console.warn(`  ? no battery_models row with ${match.column} ${match.value} — nothing written`)
+  if (!model) {
+    console.warn(`  ? no catalogue battery with sku ${match.value} — nothing written`)
     return ['missing']
   }
-  const outcomes: ScrapeOutcome[] = []
-  for (const row of rows) {
-    outcomes.push(await gateWrite(supabase, row, patch, source))
-  }
-  return outcomes
+  const outcome = await writeListing(supabase, {
+    category: 'battery',
+    brand: model.brand,
+    model: model.model,
+    mpn: model.mpn,
+    spec_sheet_url: model.spec_sheet_url,
+    image_url: null,
+    retailer: patch.retailer,
+    retailer_product_id: match.value,
+    url: patch.retailer_url,
+    title: `${model.brand} ${model.model}`,
+    retailer_category: null,
+    pack_qty: 1,
+    min_order_qty: 1,
+    price_usd: patch.price_usd,
+  })
+  return [outcome]
 }

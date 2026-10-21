@@ -28,6 +28,7 @@ import {
 import ProtectionOutput, { RegisterBadge } from '@/components/ProtectionOutput'
 import CalculatorChrome, { AnswerAnchor } from '@/components/calculators/CalculatorChrome'
 import { createClient } from '@/lib/supabase/client'
+import { BATTERY_SHELF_SELECT, toShelfItem, type BatteryShelfRow } from '@/lib/battery-catalog'
 import { priceDisplay, formatAsOf } from '@/lib/battery-price'
 import { bankFit } from '@/lib/battery-bank-fit'
 import { buyLink, anyPaid, relFor } from '@/lib/affiliate'
@@ -300,15 +301,20 @@ export default function BatterySizingPage() {
   useEffect(() => {
     let cancelled = false
     const supabase = createClient()
+    // The component catalogue since 2026-10-02 (battery_models is frozen).
+    // RLS returns published models only; toShelfItem() flattens each into the
+    // row shape this shelf was written against.
     supabase
-      .from('battery_models')
-      .select('id, brand, model, voltage, capacity_ah, capacity_kwh, price_usd, price_scraped_at, source_url, retailer_url')
-      .eq('chemistry', battery.id)
-      .order('capacity_kwh', { ascending: true })
+      .from('component_models')
+      .select(BATTERY_SHELF_SELECT)
+      .eq('category', 'battery')
+      .eq('is_published', true)
+      .eq('battery_specs.chemistry', battery.id)
       .then(({ data, error }) => {
         if (cancelled) return
         if (error) console.error('Failed to load battery models:', error.message)
-        setAllModels(error ? [] : (data ?? []))
+        const items = error ? [] : ((data ?? []) as unknown as BatteryShelfRow[]).map(r => toShelfItem(r))
+        setAllModels(items.sort((a, b) => a.capacity_kwh - b.capacity_kwh))
         setModelsLoading(false)
       })
     return () => { cancelled = true }

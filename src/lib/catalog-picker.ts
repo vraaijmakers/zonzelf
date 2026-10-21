@@ -95,7 +95,19 @@ export function bestOffer(
   listings: CatalogListingRow[],
   specSheetUrl: string | null,
   now = new Date(),
+  { preferSingle = false }: { preferSingle?: boolean } = {},
 ): Offer | null {
+  // An inverter is bought one at a time; a "parallel pair" listing is a
+  // different system (two units, wired together), so its per-unit price must
+  // not stand in for the single's. Sun Gold Power lists the SPH8048P at $1,450
+  // alone and $2,890 as a pair — $1,445 each — and the pair was winning.
+  // Panels are the opposite: buying them in packs IS the normal purchase.
+  // If no single has a current, linkable price, a pack is still better than
+  // no offer at all.
+  if (preferSingle) {
+    const single = bestOffer(listings.filter(l => l.pack_qty === 1), specSheetUrl, now)
+    if (single) return single
+  }
   let best: Offer | null = null
   for (const l of listings) {
     if (l.price_usd === null || l.pack_qty < 1) continue
@@ -209,7 +221,7 @@ export function inverterOptions(rows: CatalogInverterRow[], demand: PeakDemand |
         : fit.surge === 'unknown' ? 'unknown'
           : fit.continuous === 'tight' ? 'tight' : 'yes'
     }
-    options.push({ id, spec, offer: bestOffer(r.component_listings, r.spec_sheet_url, now), covers })
+    options.push({ id, spec, offer: bestOffer(r.component_listings, r.spec_sheet_url, now, { preferSingle: true }), covers })
   }
   // Units that cover the house first, then the smallest that does — the
   // cheapest adequate box, not the biggest one — then by price.

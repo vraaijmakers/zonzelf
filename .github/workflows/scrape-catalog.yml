@@ -26,10 +26,10 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: 'Run one step instead of both'
+        description: 'Run one step instead of all'
         type: choice
         default: all
-        options: [all, cec-pv, signaturesolar-catalog]
+        options: [all, cec-pv, signaturesolar-catalog, sungoldpower-catalog]
 
 concurrency:
   group: scrape-catalog
@@ -84,12 +84,22 @@ jobs:
         continue-on-error: true
         run: npm run scrape:signaturesolar-catalog
 
+      # Sun Gold Power's own store: the manufacturer of the SG550WM / SPH8048P /
+      # SPH10048P, which Signature Solar does not sell. Eight collection
+      # requests, not a crawl — a minute or two.
+      - name: Sun Gold Power — panels and inverters
+        id: sungoldpower
+        if: env.ONLY == 'all' || env.ONLY == 'sungoldpower-catalog'
+        continue-on-error: true
+        run: npm run scrape:sungoldpower-catalog
+
       - name: Report
         if: always()
         env:
           RESULTS: |
             cec-pv=${{ steps.cec.outcome }}
             signaturesolar-catalog=${{ steps.signaturesolar.outcome }}
+            sungoldpower-catalog=${{ steps.sungoldpower.outcome }}
         run: |
           {
             echo "### Component catalogue re-scrape"

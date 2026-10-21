@@ -245,8 +245,11 @@ zonzelf-app/
 telemetry), `/api/scrape` (content aggregation).
 
 `/admin` **is** built — `src/app/admin/` has the gated layout, the roadmap board, and the
-battery review queue, with Server Actions in `actions.ts` files that each re-check
-`requireAdmin()`. The tree above is abridged; read the directory rather than trusting it.
+component catalogue (`/admin/catalog`: panels, inverters and batteries — verify specs from the
+manufacturer's datasheet, then publish; the database refuses to publish anything unverified),
+with Server Actions in `actions.ts` files that each re-check `requireAdmin()`. Batteries moved
+into the catalogue on 2026-10-02; `battery_models` is frozen as the rollback and
+`/admin/batteries` redirects. The tree above is abridged; read the directory rather than trusting it.
 
 ### The admin portal
 

@@ -27,14 +27,26 @@ export type ScrapedPanelFields = {
   bifacial: boolean | null
 }
 
+export type ScrapedBatteryFields = {
+  chemistry: 'lifepo4' | 'agm' | 'gel' | 'flooded'
+  voltage: number
+  capacity_ah: number
+  capacity_kwh: number
+  dod_rated: number | null
+}
+
 export type ScrapedListing = {
-  category: 'panel' | 'inverter'
+  category: 'panel' | 'inverter' | 'battery'
   brand: string
   model: string
   mpn: string | null
   spec_sheet_url: string | null
   image_url: string | null
-  retailer: string
+  /**
+   * Null for a source that states specs but sells nothing — EG4's and
+   * Victron's own sites. The model and its specs are written; no listing.
+   */
+  retailer: string | null
   retailer_product_id: string
   url: string
   title: string
@@ -42,7 +54,10 @@ export type ScrapedListing = {
   pack_qty: number
   min_order_qty: number
   price_usd: number | null
+  /** Dates a NEW listing's price; defaults to now. The battery carry-over keeps the original date. */
+  price_scraped_at?: string | null
   panel?: ScrapedPanelFields
+  battery?: ScrapedBatteryFields
 }
 
 type ModelRow = { id: number; is_published: boolean; spec_sheet_url: string | null; image_url: string | null }
@@ -216,15 +231,64 @@ async function writePanelSpec(supabase: SupabaseClient, modelId: number, item: S
   }
 }
 
+const BATTERY_SPEC_FIELDS = ['chemistry', 'voltage', 'capacity_ah', 'capacity_kwh', 'dod_rated'] as const
+
+/**
+ * Battery specs come from the manufacturer's page, so unlike a panel's CEC
+ * candidate they can CHANGE under a verified row (a revised datasheet, a
+ * relabelled capacity). The battery review gate used to turn that into a
+ * proposal; the catalogue never writes a verified spec row, so the difference
+ * is recorded on the model as spec_disagreement for an admin instead —
+ * silence would be the bug the gate was built to prevent.
+ */
+async function writeBatterySpec(supabase: SupabaseClient, modelId: number, b: ScrapedBatteryFields, label: string) {
+  const { data: existing, error } = await supabase
+    .from('battery_specs').select('verified_at, chemistry, voltage, capacity_ah, capacity_kwh, dod_rated')
+    .eq('component_model_id', modelId).maybeSingle()
+  if (error) throw new Error(`battery_specs lookup: ${error.message}`)
+
+  if (existing?.verified_at) {
+    const diff: Record<string, { verified: unknown; scraped: unknown }> = {}
+    for (const f of BATTERY_SPEC_FIELDS) {
+      const scraped = b[f]
+      // Silence is not a correction: a field the source no longer states is
+      // not a disagreement.
+      if (scraped === null || scraped === undefined) continue
+      const verified = (existing as Record<string, unknown>)[f]
+      const same = typeof scraped === 'number' && typeof verified === 'number'
+        ? Math.abs(scraped - verified) < 0.005
+        : scraped === verified
+      if (!same) diff[f] = { verified, scraped }
+    }
+    const disagreement = Object.keys(diff).length > 0 ? diff : null
+    const { error: flagError } = await supabase.from('component_models')
+      .update({ spec_disagreement: disagreement, spec_disagreement_at: disagreement ? new Date().toISOString() : null })
+      .eq('id', modelId)
+    if (flagError) throw new Error(`spec_disagreement write: ${flagError.message}`)
+    if (disagreement) console.log(`      ! ${label}: source now disagrees with verified specs (${Object.keys(diff).join(', ')}) — flagged for review`)
+    return
+  }
+
+  const { error: upsertError } = await supabase.from('battery_specs').upsert(
+    { component_model_id: modelId, ...b, spec_source: 'manufacturer' },
+    { onConflict: 'component_model_id' },
+  )
+  if (upsertError) throw new Error(`battery_specs write: ${upsertError.message}`)
+}
+
 export async function writeListing(supabase: SupabaseClient, item: ScrapedListing): Promise<ScrapeOutcome> {
   const label = `${item.brand} ${item.model}${item.pack_qty > 1 ? ` ×${item.pack_qty}` : ''}`
   try {
-    const { data: listing, error: listingError } = await supabase
-      .from('component_listings').select('id, component_model_id, price_usd')
-      .eq('retailer', item.retailer).eq('retailer_product_id', item.retailer_product_id).maybeSingle()
-    if (listingError) throw new Error(`listing lookup: ${listingError.message}`)
+    let listing: ListingRow | null = null
+    if (item.retailer !== null) {
+      const { data, error: listingError } = await supabase
+        .from('component_listings').select('id, component_model_id, price_usd')
+        .eq('retailer', item.retailer).eq('retailer_product_id', item.retailer_product_id).maybeSingle()
+      if (listingError) throw new Error(`listing lookup: ${listingError.message}`)
+      listing = data as ListingRow | null
+    }
 
-    const { model, created } = await findOrCreateModel(supabase, item, listing as ListingRow | null)
+    const { model, created } = await findOrCreateModel(supabase, item, listing)
     const now = new Date().toISOString()
 
     // Model housekeeping. The photo is admin decoration and always follows the
@@ -246,14 +310,18 @@ export async function writeListing(supabase: SupabaseClient, item: ScrapedListin
     }
 
     let outcome: ScrapeOutcome
-    if (!listing) {
+    if (item.retailer === null) {
+      // A manufacturer's own page: specs and a citation, nothing to buy.
+      console.log(`  ${created ? '+' : '='} ${label} — ${created ? 'new model' : 'seen'} (manufacturer source, no shop listing)`)
+      outcome = created ? 'inserted' : 'unchanged'
+    } else if (!listing) {
       const { error } = await supabase.from('component_listings').insert({
         component_model_id: model.id,
         retailer: item.retailer,
         retailer_product_id: item.retailer_product_id,
         ...listingFields,
         price_usd: item.price_usd,
-        price_scraped_at: item.price_usd !== null ? now : null,
+        price_scraped_at: item.price_usd !== null ? (item.price_scraped_at ?? now) : null,
       })
       if (error) throw new Error(`listing insert: ${error.message}`)
       console.log(`  + ${label} — ${created ? 'new model' : `new listing on model ${model.id}`}${item.price_usd !== null ? `, $${item.price_usd}` : ''}`)
@@ -282,6 +350,7 @@ export async function writeListing(supabase: SupabaseClient, item: ScrapedListin
     }
 
     if (item.category === 'panel' && item.panel) await writePanelSpec(supabase, model.id, item)
+    if (item.category === 'battery' && item.battery) await writeBatterySpec(supabase, model.id, item.battery, label)
     return outcome
   } catch (err) {
     console.error(`  ✗ ${label}: ${(err as Error).message}`)
