@@ -153,8 +153,28 @@ split is to stop treating four calculators as one undifferentiated liability pro
 Showing the derivation of a **wrong** number documents the error rather than excusing it, so
 the phase-0 correctness items are prerequisites for the framing work, not alternatives to it.
 
-GDPR still applies to EU visitors even with a US entity — the live signup with no deletion
-path, and household photos going to Anthropic via `/api/scan-label`, are real findings today.
+**The terms gate, 2026-10-12, widened 2026-10-14 — a second layer, not a replacement for
+the rule above.** Every calculator step is shown only to a signed-in reader who has ticked
+"I agree" against the current terms; the guides and the `/calculators` index stay public.
+(The first cut gated only the protection steps and left capacity open; Vincent chose to gate
+all seven.) `/auth/signup` is the only door that creates an account and will not submit
+without the tick; each acceptance is a row in `terms_acceptances` (who, which version, when —
+the last two set by the database, not the browser).
+
+- The check is `getTermsAccess()` in each step's **`page.tsx`** (a Server Component wrapping
+  the client calculator), never a layout. `src/lib/__tests__/terms.test.ts` fails if a step
+  in `CALC_STEPS` does not make it.
+- Changing `/terms` or `/disclaimer` materially means bumping `TERMS_VERSION` in
+  `src/lib/terms.ts`. Every account is then asked to agree again; nothing else changes.
+- The calculators run in the browser, so the gate controls what is *shown*, not what the
+  JavaScript bundle contains. Its job is evidence of assent, not secrecy.
+- What it does **not** do: bind anyone who never clicked (a family member, a later owner),
+  excuse a known-wrong number, or stand in for the derivation rule. This is not a paid tier
+  and must not grow "Pro" UI.
+
+GDPR still applies to EU visitors even with a US entity — household photos going to Anthropic
+via `/api/scan-label` are a real finding today. The deletion path exists: `/account` lets a
+reader delete their own account (`delete_own_account()`), which is what let sign-ups reopen.
 The EU Product Liability Directive (2024/2853, software-as-product, strict liability,
 transposition due 9 Dec 2026) is out of scope for a US entity, but would return if EU users
 were ever commercially *targeted*.
@@ -226,7 +246,8 @@ zonzelf-app/
 │   │   ├── globals.css     # Tailwind v4 theme + design tokens
 │   │   ├── page.tsx        # landing page
 │   │   ├── guides/         # knowledge base (public)
-│   │   ├── calculators/    # load, battery, panels, awg (public)
+│   │   ├── calculators/    # index public; every step needs an account + agreed terms
+│   │   ├── account/        # what we store, terms record, self-service deletion
 │   │   └── api/
 │   │       └── scan-label/ # Anthropic vision — component label OCR (Pro-gated)
 │   ├── components/

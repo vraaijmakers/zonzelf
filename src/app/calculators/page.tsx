@@ -52,6 +52,7 @@ export default function CalculatorsPage() {
         <p className="text-zon-body">
           {TOTAL_STEPS} steps from your appliances to a system that works in December. Each one
           feeds the next, so start at the top — the numbers carry forward on their own.
+          They need a free account; the guides do not.
         </p>
         <p className="mt-2 text-sm text-zon-muted">
           New here?{' '}

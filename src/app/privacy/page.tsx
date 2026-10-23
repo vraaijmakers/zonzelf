@@ -21,7 +21,7 @@ export default function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm text-gray-500 mb-6">Last updated: 28 September 2026</p>
+      <p className="text-sm text-gray-500 mb-6">Last updated: 12 October 2026</p>
 
       <p className="text-gray-700 leading-relaxed">
         This page explains what data ZonZelf collects when you use the site, why, and what
@@ -30,10 +30,11 @@ export default function PrivacyPage() {
       </p>
 
       <Section title="What we collect">
-        <p>If you just browse guides and use calculators without an account, we don&apos;t collect any personal data — calculator inputs stay in your browser.</p>
+        <p>If you just read the guides without an account, we don&apos;t collect any personal data. With an account, what you type into the calculators still stays in your browser and is never sent to us.</p>
         <p>If you create an account, we collect:</p>
         <ul className="list-disc pl-6 space-y-1">
           <li><strong>Account data:</strong> your email address, via our authentication provider (Supabase).</li>
+          <li><strong>Terms record:</strong> which version of the Terms of Service you agreed to, and the date and time you agreed. We keep this as evidence of the agreement for as long as the account exists.</li>
           <li><strong>Project data:</strong> anything you save to your dashboard — system specs, roadmap items, saved calculator results.</li>
           <li><strong>Monitoring data:</strong> once live monitoring is available, the solar/battery readings your own monitoring agent sends us (e.g. via <code className="text-sm bg-gray-100 px-1 rounded">/api/ingest</code>), so we can display them back to you and, if you opt in, contribute anonymized readings to community averages.</li>
         </ul>
@@ -97,17 +98,21 @@ export default function PrivacyPage() {
 
       <Section title="Your rights">
         <p>
-          ZonZelf is not opening accounts at the moment, so for almost every visitor there is no
-          account and no stored personal data to exercise rights over: the calculators and guides
-          run without one. There is no dashboard yet, and no self-service deletion flow — so
-          rather than promise one, we have closed sign-ups until it exists.
+          The guides work without an account, and without one we hold no personal data about
+          you. An account is needed for the calculators.
         </p>
         <p>
-          If you already hold an account from an earlier version of the site, you can request
-          access to or deletion of it and its associated data by emailing{' '}
+          If you have an account, your{' '}
+          <Link href="/account" className="text-yellow-700 hover:underline">account page</Link>{' '}
+          shows everything we store about you, and lets you delete the account yourself. Deletion
+          is immediate and removes your email address and your terms record from our database.
+        </p>
+        <p>
+          You can also ask us to do it, or request a copy or a correction of your data, by
+          emailing{' '}
           <a href="mailto:privacy@zonzelf.com" className="text-yellow-700 hover:underline">
             privacy@zonzelf.com
-          </a>, and we will action it by hand. If you are in the EU/EEA, you have rights under the GDPR, including
+          </a>. If you are in the EU/EEA, you have rights under the GDPR, including
           access, correction, deletion, and data portability.
         </p>
       </Section>

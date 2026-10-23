@@ -2,6 +2,7 @@
 // qualified legal counsel before ZonZelf relies on this in production. The governing-law
 // clause needs a confirmed legal entity/jurisdiction before launch.
 import Link from 'next/link'
+import { TERMS_LAST_UPDATED } from '@/lib/terms'
 
 export const metadata = {
   title: 'Terms of Service — ZonZelf',
@@ -21,7 +22,7 @@ export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold mb-2">Terms of Service</h1>
-      <p className="text-sm text-gray-500 mb-6">Last updated: 8 September 2026</p>
+      <p className="text-sm text-gray-500 mb-6">Last updated: {TERMS_LAST_UPDATED}</p>
 
       <p className="text-gray-700 leading-relaxed">
         These terms govern your use of ZonZelf (zonzelf.com / zonzelf.app), a community
@@ -43,7 +44,9 @@ export default function TermsPage() {
 
       <Section title="Accounts">
         <p>
-          You need an account to use monitoring, the dashboard, and roadmap contributions. You
+          The guides are open without an account. You need an account, and to have agreed to
+          these terms, to use the calculators, and for monitoring, the dashboard, and roadmap
+          contributions. We record which version of these terms you agreed to, and when. You
           are responsible for keeping your login credentials secure and for all activity under
           your account. Tell us if you believe your account has been compromised.
         </p>
@@ -102,8 +105,9 @@ export default function TermsPage() {
       <Section title="Changes to these terms">
         <p>
           We may update these terms as the service evolves. We&apos;ll post the updated version
-          here with a new &quot;last updated&quot; date; continued use after a change means you
-          accept the update.
+          here with a new &quot;last updated&quot; date. If you have an account, we will ask you
+          to agree to the updated terms before you next use the steps that need one; for
+          everything else, continued use after a change means you accept the update.
         </p>
       </Section>
 

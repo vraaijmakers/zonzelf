@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
+import { isCurrentTermsVersion } from '@/lib/terms'
+import { recordTermsAcceptance } from '@/lib/terms-access'
 
 export async function GET(request: Request) {
   const { searchParams, origin: rawOrigin } = new URL(request.url)
@@ -19,6 +21,13 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
+      // The sign-up form sends the terms version its box was ticked against.
+      // Recorded here, once the link is opened, because before this there was
+      // no account to record it for. If it does not save, the reader is asked
+      // again at the first calculator step rather than waved through.
+      if (isCurrentTermsVersion(searchParams.get('terms'))) {
+        await recordTermsAcceptance(supabase)
+      }
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
