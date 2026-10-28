@@ -9,9 +9,12 @@ name: Scrape — batteries
 # row's specs and price, so a battery listed on /calculators/battery could
 # change with nobody in the loop, and every EG4 re-scrape wiped the affiliate
 # price scrape-signaturesolar.ts had filled in. A weekly job would have
-# automated that. Now a published row's change lands in battery_model_revisions
-# as a proposal and an admin applies it in /admin/batteries, so the worst a
-# scheduled run can do is queue something for review.
+# automated that. Since 2026-10-02 the scrapers write the component catalogue
+# (scripts/lib/scrape-common.ts → catalog-write.ts): new batteries land
+# unpublished, a verified battery's specs are never overwritten (a disagreeing
+# page is flagged "source changed" in /admin/catalog), and a price that jumps
+# more than 30% on a published battery is held — so the worst a scheduled run
+# can do is queue something for review.
 #
 # WHAT MAKES A RUN FAIL. Nothing here reads the scraper output — each scraper
 # judges itself through src/lib/scrape-health.ts and exits non-zero when it
@@ -164,8 +167,8 @@ jobs:
               echo "| $name | $icon |"
             done
             echo ""
-            echo "New and changed rows are unpublished or queued as proposals — nothing reaches"
-            echo "a visitor until an admin applies them in /admin/batteries."
+            echo "New batteries are unpublished, changed specs on verified ones are flagged, and"
+            echo "big price jumps are held — all waiting in /admin/catalog?category=battery."
           } >> "$GITHUB_STEP_SUMMARY"
 
           if echo "$RESULTS" | grep -q '=failure'; then

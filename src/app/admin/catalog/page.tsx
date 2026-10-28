@@ -2,13 +2,13 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import ProductPhoto from '@/components/admin/ProductPhoto'
 import {
-  CEC_EXPLAINED, STATUS_HELP, STATUS_LABEL, catalogStatus, cheapestUnitPrice, dollarsPerWatt,
+  CEC_EXPLAINED, STATUS_HELP, STATUS_LABEL, catalogStatus, cheapestUnitPrice, dollarsPerKwh, dollarsPerWatt,
   type CatalogStatus, type ListingRow,
 } from '@/lib/catalog-view'
 
 type ModelRow = {
   id: number
-  category: 'panel' | 'inverter'
+  category: 'panel' | 'inverter' | 'battery'
   brand: string
   model: string
   mpn: string | null
@@ -18,6 +18,8 @@ type ModelRow = {
   component_listings: ListingRow[]
   panel_specs: { watts_stc: number | null; spec_source: string; verified_at: string | null } | null
   inverter_specs: { ac_continuous_w: number | null; spec_source: string; verified_at: string | null } | null
+  battery_specs: { capacity_kwh: number | null; spec_source: string; verified_at: string | null } | null
+  spec_disagreement: Record<string, unknown> | null
 }
 
 // Work order: what needs a human first. Hidden last, and out of "all".
@@ -39,6 +41,7 @@ const STATUS_CHIP: Record<CatalogStatus, string> = {
 }
 
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+const fmtPer = (v: number | null, unit: string) => (v === null ? null : `$${v.toFixed(unit === 'W' ? 2 : 0)}/${unit}`)
 
 export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'>) {
   const params = await props.searchParams
@@ -50,22 +53,27 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('component_models')
-    .select(`id, category, brand, model, mpn, image_url, is_published, is_hidden,
+    .select(`id, category, brand, model, mpn, image_url, is_published, is_hidden, spec_disagreement,
       component_listings (id, retailer, url, title, pack_qty, min_order_qty, price_usd, price_scraped_at, held_price_usd, held_at),
       panel_specs (watts_stc, spec_source, verified_at),
-      inverter_specs (ac_continuous_w, spec_source, verified_at)`)
+      inverter_specs (ac_continuous_w, spec_source, verified_at),
+      battery_specs (capacity_kwh, spec_source, verified_at)`)
     .order('brand')
     .order('model')
 
   const now = new Date()
   const all = ((data ?? []) as unknown as ModelRow[]).map(m => {
-    const spec = m.category === 'panel' ? m.panel_specs : m.inverter_specs
+    const spec = m.category === 'panel' ? m.panel_specs : m.category === 'battery' ? m.battery_specs : m.inverter_specs
     const cheapest = cheapestUnitPrice(m.component_listings, now)
     return {
       m,
       status: catalogStatus(m, spec),
       cheapest,
-      perWatt: m.category === 'panel' ? dollarsPerWatt(cheapest?.price ?? null, m.panel_specs?.watts_stc ?? null) : null,
+      perUnit: m.category === 'panel'
+        ? fmtPer(dollarsPerWatt(cheapest?.price ?? null, m.panel_specs?.watts_stc ?? null), 'W')
+        : m.category === 'battery'
+          ? fmtPer(dollarsPerKwh(cheapest?.price ?? null, m.battery_specs?.capacity_kwh ?? null), 'kWh')
+          : null,
       held: m.component_listings.filter(l => l.held_price_usd !== null).length,
     }
   })
@@ -79,6 +87,7 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
     .filter(r => (tab === 'all' ? r.status !== 'hidden' : r.status === tab))
     .filter(r => !q || `${r.m.brand} ${r.m.model} ${r.m.mpn ?? ''}`.toLowerCase().includes(q))
   const heldTotal = all.reduce((n, r) => n + r.held, 0)
+  const changedTotal = all.filter(r => r.m.spec_disagreement).length
 
   const href = (over: Record<string, string>) => {
     const p = new URLSearchParams({ ...(tab !== 'all' && { status: tab }), ...(category && { category }), ...(q && { q }), ...over })
@@ -91,7 +100,7 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
     <div>
       <h1 className="text-2xl font-bold mb-1">Component Catalogue</h1>
       <p className="text-sm text-zon-body mb-4 max-w-2xl">
-        Panels and inverters the weekly scrape found. Nothing here reaches a visitor until you
+        Panels, inverters and batteries the weekly scrapes found. Nothing here reaches a visitor until you
         open a model, check its specs against the <strong>manufacturer&apos;s datasheet</strong>,
         verify them, and publish. The database refuses to publish anything unverified.
       </p>
@@ -117,6 +126,13 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
         </p>
       )}
 
+      {changedTotal > 0 && (
+        <p className="text-sm bg-zon-red-tint border border-zon-red/30 rounded-lg px-4 py-2 mb-4 max-w-2xl">
+          {changedTotal} verified product{changedTotal === 1 ? '' : 's'} no longer match{changedTotal === 1 ? 'es' : ''} what the
+          manufacturer&apos;s page says — marked &ldquo;source changed&rdquo; below. The live specs are unchanged until you re-verify.
+        </p>
+      )}
+
       {error && <p className="text-sm text-zon-red mb-4">Couldn&apos;t load the catalogue: {error.message}</p>}
 
       <form action="/admin/catalog" className="flex flex-wrap items-center gap-2 mb-3">
@@ -132,9 +148,10 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
           defaultValue={category}
           className="appearance-none text-sm border border-zon-rule rounded px-3 py-1.5 bg-zon-paper"
         >
-          <option value="">Panels and inverters</option>
+          <option value="">All components</option>
           <option value="panel">Panels</option>
           <option value="inverter">Inverters</option>
+          <option value="battery">Batteries</option>
         </select>
         <button className="text-sm border border-zon-rule rounded px-3 py-1.5 bg-zon-paper hover:bg-zon-rule-soft">
           Filter
@@ -156,7 +173,7 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
       {rows.length === 0 && !error && <p className="text-sm text-zon-muted">Nothing matches.</p>}
 
       <ul className="bg-zon-paper border border-zon-rule rounded-lg divide-y divide-zon-rule-soft">
-        {rows.map(({ m, status, cheapest, perWatt, held }) => (
+        {rows.map(({ m, status, cheapest, perUnit, held }) => (
           <li key={m.id}>
             <Link href={`/admin/catalog/${m.id}`} className="flex items-center gap-3 px-3 py-2 hover:bg-zon-cream">
               <ProductPhoto src={m.image_url} alt={`${m.brand} ${m.model}`} size="sm" />
@@ -167,6 +184,11 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
                   <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${STATUS_CHIP[status]}`}>
                     {STATUS_LABEL[status]}
                   </span>
+                  {m.spec_disagreement && (
+                    <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 bg-zon-red-tint text-zon-ink">
+                      source changed
+                    </span>
+                  )}
                   {held > 0 && (
                     <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 bg-zon-amber-tint text-zon-ink">
                       held price
@@ -181,7 +203,7 @@ export default async function AdminCatalogPage(props: PageProps<'/admin/catalog'
                 {cheapest ? (
                   <>
                     <div className="text-zon-ink">{usd(cheapest.price)}<span className="text-xs text-zon-muted"> /unit</span></div>
-                    {perWatt !== null && <div className="text-xs text-zon-muted">${perWatt.toFixed(2)}/W</div>}
+                    {perUnit !== null && <div className="text-xs text-zon-muted">{perUnit}</div>}
                   </>
                 ) : (
                   <span className="text-xs text-zon-muted">no current price</span>
