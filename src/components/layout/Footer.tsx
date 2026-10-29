@@ -4,7 +4,7 @@ import Logo from '@/components/layout/Logo'
 
 export default function Footer() {
   return (
-    <footer className="border-t bg-zon-cream mt-auto">
+    <footer className="border-t bg-zon-cream mt-auto print:hidden">
       <div className="max-w-6xl mx-auto px-4 py-10 grid grid-cols-2 md:grid-cols-5 gap-8">
         <div className="col-span-2 md:col-span-1">
           <Logo className="mb-2" />

@@ -50,7 +50,7 @@ export default function AccessibilityWidget() {
     // publish its height; without this the widget sits on top of the Next
     // button. --zon-action-bar-h is unset everywhere else, so this is bottom-4.
     <div
-      className="fixed right-4 z-50"
+      className="fixed right-4 z-50 print:hidden"
       style={{ bottom: 'calc(1rem + var(--zon-action-bar-h, 0px))' }}
     >
       {open && (

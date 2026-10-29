@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { AlertTriangle, Info, ClipboardList, ArrowRight } from 'lucide-react'
+import { AlertTriangle, Info, ClipboardList, ArrowRight, Printer } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   useLoadSummary, useBatterySummary, useInverterSummary, usePanelSummary, useArraySummary,
@@ -268,6 +268,21 @@ export default function SystemPage() {
                     </Link>{' '}
                     is the starting point for anything else.
                   </p>
+
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zon-gold-light bg-zon-gold-tint px-4 py-3">
+                    <Printer className="h-5 w-5 shrink-0 text-zon-gold-deep" aria-hidden="true" />
+                    <p className="min-w-0 flex-1 text-sm text-zon-body">
+                      Going on site? Print the whole procedure as a cheat sheet: a wiring diagram
+                      for your bank, each pack&apos;s address, the settings and the checks.
+                    </p>
+                    <Link
+                      href="/calculators/system/cheat-sheet"
+                      data-umami-event="cheat-sheet-create"
+                      className="inline-flex items-center gap-1 rounded-lg bg-zon-gold px-3 py-2 text-sm font-medium text-zon-ink hover:bg-zon-gold-deep"
+                    >
+                      Create cheat sheet <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </div>
 
                   <div className="rounded-lg border border-zon-rule bg-zon-cream px-4 py-3">
                     <label htmlFor="system-generator-kw" className="block text-sm font-medium text-zon-ink">

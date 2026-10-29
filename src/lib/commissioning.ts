@@ -112,8 +112,12 @@ export interface BankRow {
   address: number
   /** Switch positions #1..#n, e.g. ['ON','OFF','OFF','OFF','OFF','OFF']. */
   dip: ('ON' | 'OFF')[]
-  /** What goes in each labelled socket on this pack. Empty sockets are listed too. */
-  sockets: { label: string; to: string }[]
+  /**
+   * What goes in each labelled socket on this pack. Empty sockets are listed
+   * too. `kind` says which panel group the socket belongs to: the sockets
+   * that can face the inverter, or the pack-to-pack link pair.
+   */
+  sockets: { label: string; kind: 'upstream' | 'link'; to: string }[]
 }
 
 export interface FaultCode {
@@ -278,33 +282,43 @@ function commsStep(pair: CommissioningPair, input: CommissioningInput): Commissi
   const n = input.parallelCount
   const up = w.upstream
   const many = n === undefined || n > 1
+  const lead = w.preferredBus
+  const other = lead === 'rs485' ? 'can' : 'rs485'
+  const leadSocket = up[lead] ?? up[other]
+  const otherSocket = up[lead] ? up[other] : undefined
+  const busName = (b: 'can' | 'rs485') => (b === 'can' ? 'CAN' : '485')
   const bus =
-    `CAN runs at ${battery.canBaud ? battery.canBaud / 1000 + ' kbit/s' : '500 kbit/s'}, ` +
-    `RS485 at ${battery.rs485Baud ?? 9600} baud. Either bus works; CAN is the shorter path ` +
-    'because it needs only two pins. Whichever you cable, item 32 in the next step must say the same.'
+    `RS485 runs at ${battery.rs485Baud ?? 9600} baud, CAN at ` +
+    `${battery.canBaud ? battery.canBaud / 1000 + ' kbit/s' : '500 kbit/s'}. Item 32 in the next ` +
+    `step must name the bus you cabled: ${busName(lead)} for ${leadSocket}` +
+    (otherSocket ? `, ${busName(other)} for ${otherSocket}.` : '.')
 
   const actions = [
     many
       ? `Pick one pack to be the master — the only pack that talks to the inverter. Give it address ${w.addressing.masterAddress} (${dipWords(dipFor(w.addressing.masterAddress, w.addressing.switches))}, manual §9.5) and number the others ${w.addressing.masterAddress + 1}, ${w.addressing.masterAddress + 2}… in the order they sit in the chain. Two packs on the same address is the classic chained-bank fault.`
       : `Set the pack's DIP switch to address ${w.addressing.masterAddress} — ${dipWords(dipFor(w.addressing.masterAddress, w.addressing.switches))} (${battery.model} manual §9.5).`,
-    'Set the DIP switches with the packs switched off. The manual does not say when the BMS reads them; switching off first means it does not matter.',
-    `Inverter to master: one RJ45 cable from the inverter's RS485/CAN port into the master's ${up.can ?? up.rs485} socket` +
-      (up.can && up.rs485 ? ` (or its ${up.rs485} socket, if you choose RS485 instead).` : '.'),
+    'Set the DIP switches with the packs switched off. The manual does not say when the BMS reads them; switching off first means it does not matter. Check the switch body for which end is #1 and which way is ON.',
+    `Inverter to master: one straight-through patch cable from the inverter's RS485/CAN port into the master's ${leadSocket} socket. On this socket every pin matches the inverter's, so an ordinary network cable is exactly right — just not a crossover cable.`,
     bus,
   ]
   if (many) {
     actions.push(
       `Pack to pack: ${w.link.out} on each pack into ${w.link.in} on the next, one cable per link, in address order. ` +
         (w.link.interchangeable
-          ? `${w.link.in} and ${w.link.out} carry identical signals, so either works — the in/out split only keeps the chain easy to follow. `
+          ? `${w.link.out} and ${w.link.in} carry identical signals, so either direction works — the convention only keeps the chain easy to follow. `
           : '') +
         `The last pack's ${w.link.out} stays empty; do not loop it back to the master.`,
-      `The ${[up.can, up.rs485].filter(Boolean).join(' and ')} sockets on every pack except the master stay empty. The inverter cable never goes into ${w.link.in} or ${w.link.out} — that is the link bus between packs, not the inverter port.`,
+      `The ${[up.can, up.rs485].filter(Boolean).join(' and ')} sockets on every pack except the master stay empty. The inverter cable never goes into ${w.link.out} or ${w.link.in} — that is the link bus between packs, not the inverter port.`,
     )
   }
   actions.push(
-    'Compare the pin tables below before buying a special cable — on this pairing every signal lands on the same pin at both ends, so a straight-through patch cable is wired correctly for both buses.',
+    'Use the inverter port labelled RS485/CAN. Not WIFI — its pin 1 carries 5 V — and not Parallel, which links two inverters.',
   )
+  if (otherSocket) {
+    actions.push(
+      `Using ${otherSocket} instead: pins 4 and 5 match, but the pack puts GND on pin 7, which is RS485-A on the inverter. A full eight-wire cable will very likely still work; the clean version connects only pins 4 and 5.`,
+    )
+  }
 
   return {
     id: 'comms',
@@ -378,21 +392,23 @@ export function bankWiring(battery: BatteryPreset, count: number): BankRow[] {
   const n = Math.max(1, Math.min(Math.floor(count), battery.maxParallel))
   const up = w.upstream
   const upLabels = [up.can, up.rs485].filter((l): l is string => !!l)
+  const lead = up[w.preferredBus] ?? up.can ?? up.rs485
   return Array.from({ length: n }, (_, i) => {
     const pack = i + 1
     const master = pack === 1
     const address = w.addressing.masterAddress + i
-    const sockets = upLabels.map(label => ({
+    const sockets: BankRow['sockets'] = upLabels.map(label => ({
       label,
+      kind: 'upstream' as const,
       to: !master
         ? 'empty'
-        : label === (up.can ?? up.rs485)
+        : label === lead
           ? 'inverter RS485/CAN port'
-          : `empty — use instead of ${up.can ?? up.rs485} only if you chose this bus`,
+          : `empty — use instead of ${lead} only if you chose this bus`,
     }))
     sockets.push(
-      { label: w.link.in, to: master ? 'empty' : `pack ${pack - 1} ${w.link.out}` },
-      { label: w.link.out, to: pack === n ? 'empty — end of chain' : `pack ${pack + 1} ${w.link.in}` },
+      { label: w.link.out, kind: 'link', to: pack === n ? 'empty — end of chain' : `pack ${pack + 1} ${w.link.in}` },
+      { label: w.link.in, kind: 'link', to: master ? 'empty' : `pack ${pack - 1} ${w.link.out}` },
     )
     return {
       pack,
@@ -437,7 +453,7 @@ function settingsStep(pair: CommissioningPair, input: CommissioningInput): Commi
         why: `${battery.voltage} V LiFePO4 is ${battery.seriesCount} × 3.2 V. Factory default is ${SPH_L16.factoryBatteryType} — a lead-acid profile on a lithium pack.`,
       },
       {
-        item: '32', name: 'RS485 comm function', value: 'CAN (or 485)',
+        item: '32', name: 'RS485 comm function', value: '485 (or CAN)',
         why: 'Must match the bus you cabled in the previous step.',
       },
       {

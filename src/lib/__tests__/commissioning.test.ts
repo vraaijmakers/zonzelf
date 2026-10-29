@@ -255,13 +255,14 @@ test('a three-pack bank: master faces the inverter, B/C chain the rest, the ends
     [[1, 'master', 1], [2, 'slave', 2], [3, 'slave', 3]])
   const to = (p: number, label: string) => bank[p - 1].sockets.find(s => s.label === label)!.to
 
-  assert.equal(to(1, 'CAN'), 'inverter RS485/CAN port')
-  assert.match(to(1, 'RS485A'), /^empty/)
-  assert.match(to(1, 'RS485B'), /^empty/)
-  assert.equal(to(1, 'RS485C'), 'pack 2 RS485B')
-  assert.equal(to(2, 'RS485B'), 'pack 1 RS485C')
-  assert.equal(to(2, 'RS485C'), 'pack 3 RS485B')
-  assert.match(to(3, 'RS485C'), /end of chain/)
+  // RS485A leads: it is the socket that matches the SPH port on every pin.
+  assert.equal(to(1, 'RS485A'), 'inverter RS485/CAN port')
+  assert.match(to(1, 'CAN'), /^empty — use instead of RS485A/)
+  assert.match(to(1, 'RS485C'), /^empty/)
+  assert.equal(to(1, 'RS485B'), 'pack 2 RS485C')
+  assert.equal(to(2, 'RS485C'), 'pack 1 RS485B')
+  assert.equal(to(2, 'RS485B'), 'pack 3 RS485C')
+  assert.match(to(3, 'RS485B'), /end of chain/)
   for (const p of [2, 3]) {
     assert.match(to(p, 'CAN'), /^empty/)
     assert.match(to(p, 'RS485A'), /^empty/)
@@ -278,7 +279,7 @@ test('the comms step carries the bank table when the bank size is known', () => 
   const two = stepOf('comms', SPH10, { parallelCount: 2 })
   assert.equal(two.bank!.length, 2)
   assert.ok(two.actions!.some(a => /master/.test(a)))
-  assert.ok(two.actions!.some(a => /RS485C on each pack into RS485B/.test(a)))
+  assert.ok(two.actions!.some(a => /RS485B on each pack into RS485C/.test(a)))
   assert.ok(two.actions!.some(a => /do not loop it back/.test(a)))
 
   const one = stepOf('comms', SPH10, { parallelCount: 1 })
@@ -295,4 +296,14 @@ test('the bank table never exceeds what the pack allows in parallel', () => {
   const bank = bankWiring(pack, 200)
   assert.equal(bank.length, pack.maxParallel)
   assert.equal(bank.at(-1)!.address, 63)
+})
+
+test('the comms step leads with the socket that matches pin-for-pin, and says why CAN does not', () => {
+  const step = stepOf('comms', SPH10, { parallelCount: 5 })
+  assert.ok(step.actions!.some(a => /master's RS485A socket/.test(a)))
+  assert.ok(step.actions!.some(a => /pin 7/.test(a) && /CAN/.test(a)),
+    'the CAN socket puts GND where the inverter has RS485-A')
+  assert.ok(!step.actions!.some(a => /correctly for both buses/.test(a)),
+    'the old claim that both sockets match was wrong for CAN')
+  assert.ok(step.actions!.some(a => /Not WIFI/.test(a)))
 })

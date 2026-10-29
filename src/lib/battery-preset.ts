@@ -49,6 +49,11 @@ export interface BmsWiring {
   /** Socket on the MASTER pack that faces the inverter, per bus, as labelled. */
   upstream: Partial<Record<'can' | 'rs485', string>>
   /**
+   * The bus the procedure leads with. Pick the one whose socket matches the
+   * inverter pin-for-pin, so a plain patch cable is exactly right.
+   */
+  preferredBus: 'can' | 'rs485'
+  /**
    * Pack-to-pack link sockets, as labelled. `in` faces the previous pack,
    * `out` the next. When `interchangeable`, the two carry identical signals
    * and the in/out split is only a convention that keeps the chain readable.
@@ -202,9 +207,15 @@ export const BATTERY_PRESETS: BatteryPreset[] = [
     // §7.2.2 table gives B and C identical signals. §7.3.2 puts monitoring
     // addresses at 2–63, leaving 1 to the master. §9.5's table is binary with
     // switch #1 worth 1 (address 3 = #1 ON, #2 ON).
+    //
+    // RS485 leads because RS485A matches the SPH port on every pin. The CAN
+    // socket puts GND on pin 7, which is RS485-A on the SPH side.
+    // B out → next pack's C is the direction an owner chose on site; the two
+    // carry identical signals, so either is correct.
     bmsWiring: {
       upstream: { can: 'CAN', rs485: 'RS485A' },
-      link: { in: 'RS485B', out: 'RS485C', interchangeable: true },
+      preferredBus: 'rs485',
+      link: { out: 'RS485B', in: 'RS485C', interchangeable: true },
       addressing: { kind: 'dip-binary', switches: 6, lsbSwitch: 1, masterAddress: 1 },
       source: 'SG48100P user manual §5.1 (panel), §7.2 (interfaces), §7.3.2, §9.5 (DIP)',
     },
