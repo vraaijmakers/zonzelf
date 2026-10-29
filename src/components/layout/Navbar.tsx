@@ -48,7 +48,7 @@ export default function Navbar() {
   }, [])
 
   return (
-    <header className="border-b bg-zon-paper sticky top-0 z-50">
+    <header className="border-b bg-zon-paper sticky top-0 z-50 print:hidden">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
         <Logo />
 

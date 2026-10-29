@@ -291,3 +291,9 @@ html[data-a11y-motion="reduce"] *::after {
   stroke-dasharray: 6 4;
   animation: zon-flow-dash 0.6s linear infinite;
 }
+/* Printable field sheets (/calculators/system/cheat-sheet). Letter with a
+   narrow margin, and keep the gold/empty-socket fills: they carry meaning. */
+@media print {
+  @page { size: letter; margin: 0.45in; }
+  .cheat-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

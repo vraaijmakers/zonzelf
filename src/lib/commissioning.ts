@@ -104,6 +104,22 @@ export interface PinTable {
   rows: { signal: string; pins: string }[]
 }
 
+/** One pack's row in the bank wiring table. */
+export interface BankRow {
+  /** 1-based position in the chain; pack 1 is the one cabled to the inverter. */
+  pack: number
+  role: 'master' | 'slave'
+  address: number
+  /** Switch positions #1..#n, e.g. ['ON','OFF','OFF','OFF','OFF','OFF']. */
+  dip: ('ON' | 'OFF')[]
+  /**
+   * What goes in each labelled socket on this pack. Empty sockets are listed
+   * too. `kind` says which panel group the socket belongs to: the sockets
+   * that can face the inverter, or the pack-to-pack link pair.
+   */
+  sockets: { label: string; kind: 'upstream' | 'link'; to: string }[]
+}
+
 export interface FaultCode {
   code: string
   name: string
@@ -120,6 +136,8 @@ export interface CommissioningStep {
   /** Ordered instructions. */
   actions?: string[]
   pinouts?: PinTable[]
+  /** Per-pack cabling and address, when the bank size is known. */
+  bank?: BankRow[]
   settings?: SettingRow[]
   /** Protection outputs that belong at this point in the sequence. */
   views?: ProtectionView[]
@@ -196,7 +214,7 @@ export function commissioningMap(
 ): CommissioningMap {
   const steps = [
     orderOfOperationsStep(),
-    commsStep(pair),
+    commsStep(pair, input),
     settingsStep(pair, input),
     arrayStep(pair, input),
     verifyStep(pair),
@@ -246,25 +264,70 @@ function orderOfOperationsStep(): CommissioningStep {
  * "use the supplied cable", because for THIS pairing they happen to match
  * pin-for-pin on both buses and the reader can see that for themselves.
  *
- * The battery sheet numbers its two RJ45 sockets 1–8 and 9–16 continuously;
+ * The battery sheet numbers its RJ45 sockets 1–8 and 9–16 continuously;
  * its own parallel-port table gives both numberings for identical signals
  * (1,8 ≡ 9,16 = RS485-B), which is what establishes that 9–16 is simply the
  * second socket's pins 1–8.
+ *
+ * WHY A PER-PACK TABLE. The pack has three RS485 sockets — A, B and C — and
+ * neither manual says which one faces the inverter. Standing at a rack of
+ * three packs, "connect the matching port" is not an instruction. The panel
+ * labels, the master address and the chain all come from the preset's
+ * bmsWiring, so another vendor's pack is a data row, not a code change.
  */
-function commsStep(pair: CommissioningPair): CommissioningStep {
+function commsStep(pair: CommissioningPair, input: CommissioningInput): CommissioningStep {
   const { battery } = pair
+  const w = battery.bmsWiring
+  if (!w) throw new Error(`${battery.model} is admitted without bmsWiring`)
+  const n = input.parallelCount
+  const up = w.upstream
+  const many = n === undefined || n > 1
+  const lead = w.preferredBus
+  const other = lead === 'rs485' ? 'can' : 'rs485'
+  const leadSocket = up[lead] ?? up[other]
+  const otherSocket = up[lead] ? up[other] : undefined
+  const busName = (b: 'can' | 'rs485') => (b === 'can' ? 'CAN' : '485')
+  const bus =
+    `RS485 runs at ${battery.rs485Baud ?? 9600} baud, CAN at ` +
+    `${battery.canBaud ? battery.canBaud / 1000 + ' kbit/s' : '500 kbit/s'}. Item 32 in the next ` +
+    `step must name the bus you cabled: ${busName(lead)} for ${leadSocket}` +
+    (otherSocket ? `, ${busName(other)} for ${otherSocket}.` : '.')
+
+  const actions = [
+    many
+      ? `Pick one pack to be the master — the only pack that talks to the inverter. Give it address ${w.addressing.masterAddress} (${dipWords(dipFor(w.addressing.masterAddress, w.addressing.switches))}, manual §9.5) and number the others ${w.addressing.masterAddress + 1}, ${w.addressing.masterAddress + 2}… in the order they sit in the chain. Two packs on the same address is the classic chained-bank fault.`
+      : `Set the pack's DIP switch to address ${w.addressing.masterAddress} — ${dipWords(dipFor(w.addressing.masterAddress, w.addressing.switches))} (${battery.model} manual §9.5).`,
+    'Set the DIP switches with the packs switched off. The manual does not say when the BMS reads them; switching off first means it does not matter. Check the switch body for which end is #1 and which way is ON.',
+    `Inverter to master: one straight-through patch cable from the inverter's RS485/CAN port into the master's ${leadSocket} socket. On this socket every pin matches the inverter's, so an ordinary network cable is exactly right — just not a crossover cable.`,
+    bus,
+  ]
+  if (many) {
+    actions.push(
+      `Pack to pack: ${w.link.out} on each pack into ${w.link.in} on the next, one cable per link, in address order. ` +
+        (w.link.interchangeable
+          ? `${w.link.out} and ${w.link.in} carry identical signals, so either direction works — the convention only keeps the chain easy to follow. `
+          : '') +
+        `The last pack's ${w.link.out} stays empty; do not loop it back to the master.`,
+      `The ${[up.can, up.rs485].filter(Boolean).join(' and ')} sockets on every pack except the master stay empty. The inverter cable never goes into ${w.link.out} or ${w.link.in} — that is the link bus between packs, not the inverter port.`,
+    )
+  }
+  actions.push(
+    'Use the inverter port labelled RS485/CAN. Not WIFI — its pin 1 carries 5 V — and not Parallel, which links two inverters.',
+  )
+  if (otherSocket) {
+    actions.push(
+      `Using ${otherSocket} instead: pins 4 and 5 match, but the pack puts GND on pin 7, which is RS485-A on the inverter. A full eight-wire cable will very likely still work; the clean version connects only pins 4 and 5.`,
+    )
+  }
+
   return {
     id: 'comms',
-    title: 'Connect the BMS communication cable',
+    title: many ? 'Connect the BMS communication cables' : 'Connect the BMS communication cable',
     purpose:
       'Closed-loop is the whole point: with the BMS talking, the pack governs charge ' +
       'voltage and current, and nobody has to pick between the two sheets.',
-    actions: [
-      `Set the pack's DIP switch to address 1 — switch #1 ON, #2 through #6 OFF (${battery.model} manual §9.5).`,
-      'Run one RJ45 cable from the inverter\'s RS485/CAN port to the matching port on the battery.',
-      `CAN runs at ${battery.canBaud ? battery.canBaud / 1000 + ' kbit/s' : '500 kbit/s'}, RS485 at ${battery.rs485Baud ?? 9600} baud. Either bus works; CAN is the shorter path because it needs only two pins.`,
-      'Compare the two pin tables below before buying a special cable — on this pairing every signal lands on the same pin at both ends, so a straight-through patch cable is wired correctly for both buses.',
-    ],
+    actions,
+    bank: n !== undefined ? bankWiring(battery, n) : undefined,
     pinouts: [
       {
         title: 'Inverter RS485/CAN port',
@@ -277,8 +340,8 @@ function commsStep(pair: CommissioningPair): CommissioningStep {
         ],
       },
       {
-        title: `${battery.model} RS485 socket`,
-        source: 'SG48100P user manual §7.2.2',
+        title: `${battery.model} RS485 sockets (A, B and C)`,
+        source: 'SG48100P user manual §7.2.2 — printed there as pins 9–16 on the second socket of a pair',
         rows: [
           { signal: 'RS485-B', pins: '1, 8' },
           { signal: 'RS485-A', pins: '2, 7' },
@@ -302,6 +365,59 @@ function commsStep(pair: CommissioningPair): CommissioningStep {
       'not talk, the protocol may need matching at the factory or the inverter may need a ' +
       'firmware update. That is a phone call to the manufacturer, not a setting.',
   }
+}
+
+/** Switch positions #1..#switches for a binary address, switch #1 worth 1. */
+export function dipFor(address: number, switches: number): ('ON' | 'OFF')[] {
+  if (!Number.isInteger(address) || address < 0 || address >= 2 ** switches) {
+    throw new Error(`address ${address} does not fit ${switches} switches`)
+  }
+  return Array.from({ length: switches }, (_, i) => ((address >> i) & 1 ? 'ON' : 'OFF'))
+}
+
+function dipWords(dip: ('ON' | 'OFF')[]): string {
+  const on = dip.flatMap((s, i) => (s === 'ON' ? [`#${i + 1}`] : []))
+  if (on.length === 0) return 'every switch OFF'
+  return `${on.join(', ')} ON, the rest OFF`
+}
+
+/**
+ * Who plugs into what, pack by pack. Pack 1 is the master. Sockets that stay
+ * empty are listed as empty on purpose — "leave it empty" is the instruction
+ * people are missing when they hesitate over the third socket.
+ */
+export function bankWiring(battery: BatteryPreset, count: number): BankRow[] {
+  const w = battery.bmsWiring
+  if (!w) return []
+  const n = Math.max(1, Math.min(Math.floor(count), battery.maxParallel))
+  const up = w.upstream
+  const upLabels = [up.can, up.rs485].filter((l): l is string => !!l)
+  const lead = up[w.preferredBus] ?? up.can ?? up.rs485
+  return Array.from({ length: n }, (_, i) => {
+    const pack = i + 1
+    const master = pack === 1
+    const address = w.addressing.masterAddress + i
+    const sockets: BankRow['sockets'] = upLabels.map(label => ({
+      label,
+      kind: 'upstream' as const,
+      to: !master
+        ? 'empty'
+        : label === lead
+          ? 'inverter RS485/CAN port'
+          : `empty — use instead of ${lead} only if you chose this bus`,
+    }))
+    sockets.push(
+      { label: w.link.out, kind: 'link', to: pack === n ? 'empty — end of chain' : `pack ${pack + 1} ${w.link.in}` },
+      { label: w.link.in, kind: 'link', to: master ? 'empty' : `pack ${pack - 1} ${w.link.out}` },
+    )
+    return {
+      pack,
+      role: master ? 'master' : 'slave',
+      address,
+      dip: dipFor(address, w.addressing.switches),
+      sockets,
+    }
+  })
 }
 
 /* ── Step 3 ─────────────────────────────────────────────────────────────── */
@@ -337,7 +453,7 @@ function settingsStep(pair: CommissioningPair, input: CommissioningInput): Commi
         why: `${battery.voltage} V LiFePO4 is ${battery.seriesCount} × 3.2 V. Factory default is ${SPH_L16.factoryBatteryType} — a lead-acid profile on a lithium pack.`,
       },
       {
-        item: '32', name: 'RS485 comm function', value: 'CAN (or 485)',
+        item: '32', name: 'RS485 comm function', value: '485 (or CAN)',
         why: 'Must match the bus you cabled in the previous step.',
       },
       {
@@ -458,6 +574,7 @@ function verifyStep(pair: CommissioningPair): CommissioningStep {
     checks: [
       'BMS battery voltage and SOC appear on the status screens.',
       'No fault 58 and no fault 03.',
+      `On every pack, the green RUN light is on and the red ALM light is off (${battery.model} manual §5.2). ALM means that pack is reporting a fault of its own; look there before blaming the inverter.`,
       `First full charge tapers and stops below the pack's ${battery.chargeLimitV} V charge limit` +
         (battery.fullChargeV ? `, with full-charge judgment at ${battery.fullChargeV} V` : '') + '.',
       `Resting SOC settles inside the ${battery.socMinPct}–${battery.socMaxPct}% working range.`,
